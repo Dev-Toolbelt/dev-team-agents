@@ -65,7 +65,7 @@ record belongs on — dot-prefixed names are machine-local as a class, and so ar
 record that two machines appending to would need merge semantics for), and the notification queue
 `notifications.jsonl` with its `notifications-seen.json` (what this machine's hooks noticed and this
 machine's app has shown), the `task-board/` directory of per-session task-board records (ADR-0018:
-what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each integration, from this machine), and `entitlement.json` (the signed account entitlement cached on this machine with its clock skew, ADR-0029), and `account-session.json` (which account this machine is signed in as, and which secret backend holds its refresh token, ADR-0029), and `command-usage.json` (how often this machine's user ran each devteam command, which decides the commands the banner reveals, ADR-0030). `credentials.local.json` is machine-local by classification but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store (ADR-0024). Never re-derive that rule at a call site.
+what this machine's agent sessions planned), and `integrations-status.json` (the last connection test of each integration, from this machine), and `entitlement.json` (the signed account entitlement cached on this machine with its clock skew, ADR-0029), and `account-session.json` (which account this machine is signed in as, and which secret backend holds its refresh token, ADR-0029), and `command-usage.json` (how often this machine's user ran each devteam command, which decides the commands the banner reveals, ADR-0030), and `global-skills-lock.json` (what `devteam skills install` put into this machine's user-level skill roots, from which source, with which content hash, ADR-0040). `credentials.local.json` is machine-local by classification but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store (ADR-0024). Never re-derive that rule at a call site.
 
 `devteam export` archives the portable subtree by default (excludes `machine-id`, `machines/`,
 `locks/`, `quarantine/`, and every machine-local record at any depth); `--all` includes the
@@ -361,7 +361,7 @@ of those directories; its unit is the physical **root**, each listing the provid
 
 **Payload shapes (JSON output):**
 
-- `skills list`: `{provider, roots: [{id, path, exists, providers, install_target_for}], skills: [{name, description, root, root_path, path, providers, is_symlink, link_target, managed, status, error}], count}`
+- `skills list`: `{provider, roots: [{id, path, exists, providers, install_target_for}], skills: [{name, description, root, root_path, path, providers, is_symlink, link_target, managed, status, error, provenance}], count}` — `provenance` is `null` or `{source, kind, link, sha256, installed_at, modified}` (ADR-0040)
 - `skills show`: a `skills list` record plus `body`, `files`, `files_truncated`
 - `skills install`: `{name, description, source, linked, source_kind, installed: [{root, path, providers, replaced, quarantined_to}], also_present: [{root, path}]}`
 - `skills remove`: `{name, root, path, providers, action: "unlinked"|"quarantined", quarantined_to, link_target}`

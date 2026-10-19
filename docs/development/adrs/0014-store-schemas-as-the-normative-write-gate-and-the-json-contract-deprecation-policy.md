@@ -1,8 +1,9 @@
 # ADR-0014: Store schemas as the normative write gate and the JSON contract deprecation policy
 
-**Date:** 2026-09-28
-**Status:** Accepted
-**Deciders:** dev-team-agents maintainers
+**Date:** 2026-09-28  
+**Status:** Accepted  
+**Deciders:** dev-team-agents maintainers  
+**Applies to:** `scripts/lib/devteam/compat.py`, `scripts/lib/devteam/output.py`, `tests/test_json_contract.py`  
 
 ## Context
 

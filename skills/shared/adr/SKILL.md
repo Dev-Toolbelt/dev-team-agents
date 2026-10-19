@@ -1,6 +1,6 @@
 ---
 name: adr
-description: Architecture Decision Records — MADR format.
+description: Architecture Decision Records — MADR format, index, and the paths each decision governs.
 ---
 
 # Architecture Decision Records (ADR)
@@ -27,6 +27,7 @@ docs/development/adrs/
 **Status**: [Proposed | Accepted | Deprecated | Superseded by ADR-XXX]
 **Date**: YYYY-MM-DD
 **Deciders**: [names or roles involved]
+**Applies to**: [optional — path globs in backticks, see § Applies To]
 
 ## Context
 
@@ -111,6 +112,18 @@ This creates `<adr-dir>/NNNN-title-slug.md` — four digits, no prefix, or `ADR-
 - `new-adr.sh` appends the row with `Proposed` and two placeholders; filling them is part of writing the ADR. A placeholder left behind is an ADR nothing will find.
 - The index is created on demand: the first `new-adr.sh` run that finds it missing writes the header and a placeholder row (`[status]`, `[keywords]`, `[read it when]`) for every existing ADR, so the series stays reachable while the cells are filled. An existing index is never regenerated; a `README.md` with no `## Index` table is left untouched and the row is printed for a manual add.
 - `scripts/index-lint.sh` (run by the `Stop` hook when a session touches the ADR directory) reports an ADR with no row, a row pointing at a missing file, unfilled placeholders, and Keywords below four terms.
+
+## Applies To
+
+An optional header line naming the paths a decision governs, so a later change to them is not made blind to it:
+
+```markdown
+**Applies to:** `scripts/lib/devteam/bind.py`, `scripts/install-*.sh`
+```
+
+- Patterns are globs matched against repo-relative paths: `*` matches any run of characters, including `/`, and `?` one character; every other character is literal (no `[ab]` classes). Only the backticked code spans on the line count.
+- Add it when the decision constrains specific code — a module, an installer, a schema. Leave it out for decisions about process or tooling choices with no fixed location.
+- `scripts/hooks/stop/03h-adr-scope-check.sh` reads it: when a session touches a matching path of an `Accepted` ADR and not the ADR itself, the agent is told once to re-read the ADR, then amend or supersede it if the change departs from it. Superseded and Proposed ADRs are ignored.
 
 ## When to Write an ADR
 

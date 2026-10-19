@@ -3,6 +3,7 @@
 **Date:** 2026-10-17  
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
+**Applies to:** `scripts/index-lint.sh`, `scripts/lib/index_lint.py`, `scripts/hooks/stop/03g-index-lint.sh`, `scripts/new-adr.sh`  
 **Relates to:** [ADR-0036](0036-path-scoped-and-severity-graded-rules-in-the-reuse-registry-enforced-at-stop-by-exit-2.md) (reuse-lint), [ADR-0037](0037-spec-status-scenario-ids-and-a-mechanical-spec-lint-close-the-spec-driven-loop.md) (spec-lint)
 
 ## Context

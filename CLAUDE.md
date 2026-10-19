@@ -78,7 +78,7 @@ Every task that changes functionality in this repository ends with a review-and-
 | **Scope** | When the plan is approved, save `git status --porcelain` and `git diff` to the scratchpad as the baseline; the scope is the current diff minus that baseline. Reviewer prompts name the touched files and hunks and say everything else is out of scope |
 | **Reviewers** | This repo's own map, not the shipped classifier: `code-reviewer` always — when it classifies the diff as `BOTH`, spawn `backend-reviewer` and `frontend-reviewer` instead; `security-specialist` when `scripts/`, hooks, the CLI, credentials or installers are touched; `software-architect` when a canonical rule, provider-facing behavior or an ADR Trigger Rule case is touched; `qa-specialist` when a spec or acceptance criteria exist. Spawned in parallel under `skills/architecture/orchestration/SKILL.md` § Spawn Integrity — a reviewer that did not run means the task is not done |
 | **Fix** | Apply in-scope BLOCKING and SUGGESTION findings without asking. A fix beyond the approved plan (new file, behavior change, anything provider-facing) goes through `AskUserQuestion`; NITs and out-of-scope items are listed |
-| **Re-verify** | `helpers/agent-lint.sh`, `helpers/size-limits.sh`, `helpers/plugin-lint.sh` when `plugins/` changed, `helpers/orphan-skill-scan.sh` when `agents/` or `skills/` changed, and tests per `skills/shared/scoped-test-execution/SKILL.md`. At most **one** re-review, limited to the fixed hunks; BLOCKING items it still finds are reported as open and asked about |
+| **Re-verify** | `helpers/agent-lint.sh`, `helpers/size-limits.sh`, `helpers/plugin-lint.sh` when `plugins/` changed, `helpers/orphan-skill-scan.sh` when `agents/` or `skills/` changed, and tests per `skills/shared/scoped-test-execution/SKILL.md`. At most **one** re-review, limited to the fixed hunks; BLOCKING items it still finds are reported as open and asked about. This cap wins over the shipped Review Loop (`skills/shared/review-result/SKILL.md`) for this pass |
 | **Done** | Only after the review returned and its fixes landed — wrap-up and the session-summary entry come after it. The close carries a table built from returned run banners and `review-result` markers: reviewer · findings · applied · left open. Zero findings is a valid result |
 
 Commits and pushes still happen only when the user asks.
@@ -195,13 +195,13 @@ A rule that applies to more than one agent lives in exactly **one** skill. Agent
 | Which tests to execute when finishing a task — scoped to the touched code, full suite only on explicit user request | `skills/shared/scoped-test-execution/SKILL.md`, made mandatory for every agent by `skills/shared/project-context/SKILL.md` § Test Execution | Nothing — loading project-context is the enforcement. Add a per-agent load line only where the agent runs tests and its role changes the scope derivation; never restate the exception, and never add a second escalation criterion (suite speed, refactor width, shared code) |
 | Memory layers — which artifact holds what, and the three-question routing that picks one | `skills/shared/project-context/SKILL.md` § Memory Layers | Nothing — loading project-context is the enforcement. Never add a sixth layer or a per-agent memory file: one finding lands in one layer, referenced from others, never copied |
 | Wiki specification — entry format, `Tags` retrieval key (4–10 terms, checked by `scripts/index-lint.sh` from the `03g` Stop hook), dynamic domain folders, index rows, never-delete. Every project gets one at `docs/wiki/`; `setup-assistant` creates `wiki/README.md` on FIRST_RUN as a **retrieval index** (one row per entry: `path \| keywords \| read-it-when`), the only part loaded unconditionally, greppable so context cost stays flat as it grows | `skills/shared/docs-sync/references/wiki-format.md` | Load it before writing an entry — one without its index row is unreachable, so that is an incomplete write. The **read** path (keyword lookup against the index) belongs to project-context § Context Loading Order and is the only part that lives elsewhere |
-| ADR directory and ADR index — the directory is whatever `new-adr.sh --dir` resolves (`docs/development/adrs/`, else an existing `docs/adr/`), and `<adr-dir>/README.md` is the ADRs' retrieval index, one `ADR · Status · Keywords · Read it when` row per ADR | `skills/shared/adr/SKILL.md` § File Location, § ADR Index | Read the directory from `--dir`, never hardcode it; add or update the row in the same edit as the ADR |
+| ADR directory and ADR index — the directory is whatever `new-adr.sh --dir` resolves (`docs/development/adrs/`, else an existing `docs/adr/`), and `<adr-dir>/README.md` is the ADRs' retrieval index, one `ADR · Status · Keywords · Read it when` row per ADR; an ADR's optional `**Applies to:**` globs name the paths it governs | `skills/shared/adr/SKILL.md` § File Location, § ADR Index, § Applies To | Read the directory from `--dir`, never hardcode it; add or update the row in the same edit as the ADR; never restate the `Applies to` matching rules |
 | Document Lifecycle — plans carry a `**Status:**` line with evidence; superseded documents and point-in-time snapshots carry a historical banner; nothing is deleted | `skills/shared/docs-sync/SKILL.md` § Document Lifecycle | Reference it; never write a second marker format |
 | No-Destruction Rule — a health check creates, moves, or adapts; it never deletes | `skills/shared/setup-health-check/SKILL.md` § No-Destruction Rule | Load it and delegate. Never write a per-check exemption: the rule holds for zero-byte markers too, because a rule with a judgment call in it eventually gets the judgment wrong |
 | Reuse guidelines registry — reuse/standardization rules as `docs/development/reuse-guidelines.md` (Structural layer, see Memory Layers below), optionally path-`scope`d and `advisory`, plus the review/lint gates (ADR-0036) | `skills/shared/reuse-guidelines/SKILL.md` | Load it and run the gate; never restate the table format or copy rows into review output — reference the row's `name` |
 | Spec layer — per-feature `docs/specs/<feature>.md` (`status`, Given/When/Then with stable `S<n>` IDs, `touches`/`depends_on`), sprint-task resolution (`TASK-NNN` → spec + `Covers`), retroactive specs for built features (`/devteam:spec`), `[spec:<feature>#S<n>]` test traceability, `scripts/spec-lint.sh` (ADR-0037), auto-contract gate (`templates/contract-template.md`), execution scope-lock, living-spec Amendment Log, and the end-of-work Spec Sync Gate (`[SPEC-DRIFT]` blocks deploy) | `skills/shared/spec-gate/SKILL.md`, `templates/spec-template.md` | Load it wherever the table applies — product-analyst (Step 5b), software-architect (contract/amendment), coding agents (scope-lock, business amendments), qa-specialist (sync gate). Never restate the format, gate condition, or amendment rules |
 | Task List Mirroring — an approved plan's Steps become each provider's native task list, moved in step with Progress Reporting; the only way a plan reaches the task board | `skills/shared/plan-mode/SKILL.md` § Task List Mirroring | Nothing — loading plan-mode is the enforcement; `agent-lint.sh` (`PLAN_MODE_LOADERS`, `PLAN_MODE_COMMAND_EXEMPT`) fails when the section, an agent's plan-mode load or a plan-gated command's pointer disappears |
-| Review result marker — every review or QA pass ends with `<!-- review-result: findings=N -->`, the only way the task board learns a review's outcome | `skills/shared/review-result/SKILL.md` | Name it from `## Before You Finish` in one sentence; `agent-lint.sh` (`REVIEW_RESULT_AGENTS`) fails a reviewer or QA agent that omits it |
+| Review result marker — every review or QA pass ends with `<!-- review-result: findings=N -->`, the only way the task board learns a review's outcome; findings go in its Findings Table, a clean verdict carries a `**Verified:**` line, and the fix-and-re-review loop is its § Review Loop | `skills/shared/review-result/SKILL.md` | Name it from `## Before You Finish` in one sentence; commands that apply findings point at § Review Loop and never restate its cap or terminal states; `agent-lint.sh` (`REVIEW_RESULT_AGENTS`) fails a reviewer or QA agent that omits it |
 | Periodic status-table check-in while background sub-agents work — table format, `ScheduleWakeup` cadence, and the `credentials.local.json` gate (`work_feedback_active`, `work_feedback_interval_minutes`) | `skills/shared/work-feedback/SKILL.md` | Orchestrators load it from `skills/architecture/orchestration/SKILL.md` § Spawn Integrity, check 6. Never restate the gate check, loop mechanics, or table format |
 | Sub-agent Question Relay — a sub-agent cannot ask the user; it ends its report with an `## Open Decisions` block and the orchestrator asks, then continues the same sub-agent with the answers | `skills/shared/interaction-patterns/SKILL.md` § Sub-agent Question Relay | Reference it wherever a spawned agent's workflow needs a user decision or approval; never write a per-command relay loop |
 | Test Gate — how `TESTS_REQUIRED` is resolved: whichever of `CLAUDE.md` / `AGENTS.md` carries the key; two different values go to the Contradiction Guard; absent means `yes` | `skills/shared/auto-routing/SKILL.md` § Test Gate | Point to it in one line; a spawned agent uses the value its command resolved and never re-derives it |
@@ -270,116 +270,7 @@ Commands are subject to the same authoring discipline as agents: **max ~200 line
 
 ## File Structure
 
-```
-dev-team-agents/
-├── agents/          ← agent definitions (.md)
-├── app/             ← Electron desktop client, a pure CLI client (ADR-0015); DEV-ONLY, dropped by install.sh's KEEP_ROOT
-├── skills/          ← modular skill knowledge
-│   ├── shared/      ← foundational rules used by all agents
-│   ├── architecture/
-│   ├── database/
-│   ├── design/
-│   ├── devops/      ← one skill per platform
-│   ├── integrations/ ← platform/integration-specific reference skills
-│   ├── legacy/      ← survival guides for legacy codebases (jquery)
-│   ├── mobile/
-│   ├── security/
-│   ├── skill-creator/ ← user-invocable skill-authoring skill
-│   ├── testing/
-│   └── ui-libraries/ ← UI component library reference skills
-├── commands/        ← devteam slash commands (installed to .claude/commands/devteam/, invoked as /devteam:<name>)
-├── templates/       ← document templates: adr-template.md, plan-template.md, runbook-template.md
-├── CLAUDE-md/       ← companion sections of this file (preferences, notifications, user-data,
-│                      versioning, hooks, commands, cli)
-├── plugins/         ← optional per-project integrations; see plugins/README.md and ADR-0019
-│   ├── _schema/plugin.schema.json  ← manifest schema
-│   └── graphify/    ← reference plugin: code graph builder
-├── docs/            ← repository-level reports and internal docs (NOT installed to user projects)
-│   ├── agents.md · agents.pt-BR.md            ← canonical agent reference
-│   ├── installation.md · installation.pt-BR.md ← installation and advanced options guide
-│   ├── install-claude.md · install-codex.md · install-opencode.md ← per-provider install guides
-│   ├── providers.md     ← provider matrix and tier → model id map
-│   └── reports/         ← audit reports and fingerprint index
-├── helpers/         ← DEV-ONLY authoring tools, never shipped (see "Two helpers directories" below)
-│   ├── agent-lint.sh              ← agent frontmatter (name/description/tier/model) +
-│   │                                model↔tiers.json↔run-banner drift + skill
-│   │                                identity (name == dir, unique) + quiz-first +
-│   │                                orchestration roster ↔ agents/ (name + tier, both ways)
-│   ├── size-limits.sh             ← agents 211 (200 content + run-banner + Before You Finish) · commands 200 · skills 500
-│   ├── orphan-skill-scan.sh       ← repairs broken skill paths; never deletes
-│   ├── orphan-template-scan.sh    ← template references must RESOLVE, not just be mentioned
-│   ├── plugin-lint.sh             ← validates plugin manifests against schema; runs in CI
-│   ├── gen-cpanel-uapi-reference.sh ← regenerates the cPanel skill's generated UAPI
-│   │                                reference from the official OpenAPI spec (`--check` = drift)
-│   └── archive-index.sh · check-fingerprint-uniqueness.sh ← report-index rotation and
-│                                    global fingerprint uniqueness across live + archives
-├── opencode/        ← opencode provider plugin source (plugin/dev-team-agents.ts); stripped at install,
-│                      fetched on demand by install-opencode.sh / install-provider.sh
-├── scripts/
-│   ├── cli/devteam  ← v3 CLI entry point (python3); see CLAUDE-md/cli.md
-│   ├── install.sh · update.sh · rollback.sh   ← install / update / rollback lifecycle
-│   ├── install-cli.sh                ← macOS/Linux CLI bootstrap into ~/.local (ADR-0028); stripped from the package
-│   ├── install-provider.sh · install-opencode.sh · install-codex.sh ← multi-provider installers
-│   ├── render-provider.sh         ← renders the canonical source into a provider-specific tree
-│   ├── check-codex-compat.sh      ← lints rendered Codex output for forbidden terms
-│   ├── migrate-to-root.sh         ← migrates .claude/dev-team-agents/ → .dev-team-agents/
-│   ├── fix-symlinks.sh · check-updates.sh (on-demand v2 update check) · new-adr.sh
-│   ├── graphify-refresh.sh (deprecated wrapper) · validate-commit-msg.sh · reuse-lint.sh · spec-lint.sh · index-lint.sh · design-token-lint.sh
-│   ├── lib/         ← render-engine data, shared install logic, and the v3 CLI package
-│   │   ├── devteam/ ← v3 CLI implementation: paths · lock · jsonio · project · registry ·
-│   │   │              versions · providers · gitignore · bind · migrate · doctor ·
-│   │   │              quarantine · update · output · errors · global_skills · integrations · permissions · plugins · cli
-│   │   ├── tiers.json             ← CANONICAL tier → provider model id map (+ per-provider effort)
-│   │   ├── global-skill-roots.json ← CANONICAL map of the providers' global skill dirs (`devteam skills`, ADR-0020)
-│   │   ├── commands.json · command-map.json · tool-map.json ← renderer metadata
-│   │   ├── preferences-defaults.json ← defaults written into user-data/preferences.json
-│   │   ├── render_provider.py     ← render engine
-│   │   ├── strip-tarball.sh       ← single source of truth for the package strip rules
-│   │   ├── installer-fetch.sh     ← shared ref-pinned download + payload verification
-│   │   │                            (update.sh, rollback.sh, the auto-update hook path)
-│   │   ├── telemetry-guard.sh     ← single fail-closed definition of _telemetry_enabled
-│   │   ├── python.sh              ← resolves `python3` to a working Python 3.9+ (Windows Git Bash: python / py -3)
-│   │   ├── provider-ownership.sh  ← which paths the opencode/Codex installers may write (ADR-0022)
-│   │   └── ensure-claude-framework.sh
-│   ├── helpers/     ← SHIPS and runs in user projects — telemetry-send.sh (called by install.sh, update.sh)
-│   └── hooks/       ← session-start.sh, pre-compact.sh + pre-tool-use.sh, stop.sh (dispatchers)
-│       ├── pre-tool-use/  ← PreToolUse sub-scripts
-│       ├── stop/          ← Stop sub-scripts
-│       │   └── tips/      ← notifier tip data, one file per locale
-│       │                    (tips.en.txt · tips.pt-BR.txt · tips.es.txt)
-│       └── lib/           ← shared hook logic, sourced not dispatched
-│           ├── session-summary-detect.sh ← shared by pre-compact.sh and stop/01-
-│           ├── touched-paths.sh          ← touched-path set computed once by stop.sh
-│           ├── warn-once.sh              ← once-per-signature gate for Stop exit-2 warnings
-│           ├── plugins.sh                ← plugin hook dispatcher and helper functions
-│           └── update-check.sh           ← update-check engine behind session-start.sh and check-updates.sh
-├── .github/         ← CI workflows (incl. release.yml), issue/PR templates, CODEOWNERS, scripts/ci/
-│                      (incl. 04-packaging.sh, 05-app.sh ← the app/ JS gate) + scripts/release/bump-homebrew-formula.sh — stripped at install
-├── packaging/       ← distribution manifests (ADR-0011): Homebrew formula + cask, winget manifests,
-│                      the Windows CLI installer build (windows-cli/, ADR-0028) and the operator
-│                      runbook. UNRELEASED — see packaging/README.md for what each placeholder
-│                      needs. Never reaches a user project: install.sh's KEEP_ROOT allowlist drops it
-├── tests/           ← devteam CLI test suite (stdlib unittest); DEV-ONLY, stripped from the package
-├── user-data/       ← runtime state of this repo's own self-install; gitignored and untracked
-├── README.md
-├── README.pt-BR.md
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-├── SECURITY.md
-├── PRIVACY.md
-├── LICENSE
-├── AGENTS.md        ← points Codex/opencode contributors at this file; ends with the banner block `install-codex.sh` appends
-└── CLAUDE.md        ← this file
-```
-
-**Two `helpers` directories — do not confuse them:**
-
-| Path | Ships to user projects? | Purpose |
-|------|------------------------|---------|
-| `helpers/` (repo root) | **No** — `rm -rf` by `scripts/lib/strip-tarball.sh` | Dev-only authoring tools for this repo: linting, orphan scans, size limits, fingerprint index maintenance. Run them from the repo root, never from an installed `.dev-team-agents/`. |
-| `scripts/helpers/` | **Yes** — inside the allowlisted `scripts/` tree | Runtime helpers used by the installed package. Currently `telemetry-send.sh`, invoked by `install.sh` and `update.sh` at `.dev-team-agents/scripts/helpers/telemetry-send.sh`. |
-
-When a rule or script path references "helpers", state which of the two it means.
+→ See [`CLAUDE-md/file-structure.md`](CLAUDE-md/file-structure.md) for the repository tree and the two `helpers` directories: root `helpers/` is dev-only and stripped from the package, `scripts/helpers/` ships. When a rule or script path references "helpers", state which of the two it means.
 
 ---
 
@@ -411,7 +302,7 @@ When a rule or script path references "helpers", state which of the two it means
 | `CLAUDE-md/user-data.md` — § Under v3 layout 2 | Documentation; explain the migration and the rule for new files |
 | `scripts/lib/devteam/paths.py` — docstring of `MACHINE_LOCAL_RECORDS` | Rationale for the list |
 
-The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`** (all in the store's machine-local folder), **`audit.log`, `notifications.jsonl`, `notifications-seen.json`** (ADR-0017), the **`task-board/`** directory of per-session task records (ADR-0018), **`integrations-status.json`** (the last integration connection test), **`entitlement.json`** (the signed account entitlement, ADR-0029), **`account-session.json`** (the non-secret half of the signed-in session, ADR-0029), **`command-usage.json`** (how often each devteam command was run on this machine, ADR-0030), plus every dot-prefixed name (cache, ETag, marker file). **`credentials.local.json`** is a special case: machine-local by classification (ADR-0024) but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store, and is ignored by the bind-managed `.gitignore` block. When a review or ADR discussion finds a record that should be machine-local but is not listed, add it to the tuple and update the mirrors in the same commit.
+The set today: **`state.json`, `bind-manifest.json`, `telemetry-queue.json`** (all in the store's machine-local folder), **`audit.log`, `notifications.jsonl`, `notifications-seen.json`** (ADR-0017), the **`task-board/`** directory of per-session task records (ADR-0018), **`integrations-status.json`** (the last integration connection test), **`entitlement.json`** (the signed account entitlement, ADR-0029), **`account-session.json`** (the non-secret half of the signed-in session, ADR-0029), **`command-usage.json`** (how often each devteam command was run on this machine, ADR-0030), **`global-skills-lock.json`** (source and content hash of each skill `devteam skills install` placed, ADR-0040), plus every dot-prefixed name (cache, ETag, marker file). **`credentials.local.json`** is a special case: machine-local by classification (ADR-0024) but lives in the project tree at `.dev-team-agents/credentials.local.json`, never in the store, and is ignored by the bind-managed `.gitignore` block. When a review or ADR discussion finds a record that should be machine-local but is not listed, add it to the tuple and update the mirrors in the same commit.
 
 ---
 
@@ -488,6 +379,14 @@ These files are installed at a fixed path (`.dev-team-agents/`) and replaced ent
 - If a breaking change is unavoidable, document it in the PR description and README release notes
 - Never remove a skill or agent without a deprecation cycle (one minor version with a warning)
 
+**Compatibility regime per surface.** Each surface has one rule for how it may change, and the rule lives in one place — this table only points at it:
+
+| Surface | Regime | Canonical home |
+|---------|--------|----------------|
+| User state — `preferences.json`, project memory, files in a bound project | Never destroyed; defaults fill only what is absent; a structure move needs consent | `skills/shared/setup-health-check/SKILL.md` § No-Destruction Rule · § User Preferences above · ADR-0012 |
+| CLI `--json` output and store schemas | Additive freely; a removal ships a `deprecated` list one release first | ADR-0014 |
+| Shipped agents, skills and commands | One minor version with a warning before removal | This section |
+
 ---
 
 ## Agent Memory System
@@ -556,6 +455,8 @@ bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 The script prints existing ADR titles and auto-numbers the file — see `skills/shared/adr/SKILL.md` § Check Before Creating before running it, so a decision doesn't get a second, duplicate ADR. Fill in the generated template and change the status from `Proposed` to `Accepted`.
 
 **Automated gap detection.** `scripts/hooks/stop/03e-adr-gap-check.sh` is a heuristic, non-blocking safety net for this rule: it warns when a session touched a dependency manifest, a schema migration, or a provider config file but added no new file under `docs/development/adrs/`. It never decides whether an ADR is actually warranted — that judgment stays with the triggers above — it only prevents the signal from being silently missed. It warns **once per distinct set of signals** (signature kept as `.adr-gap-warned` in the machine-local state dir): a Stop exit 2 makes Claude Code continue the turn, so a warning nothing in the turn can clear would otherwise repeat after every reply.
+
+**Governed-path reminder.** `scripts/hooks/stop/03h-adr-scope-check.sh` covers the opposite gap: an Accepted ADR may list the paths it governs in an `**Applies to:**` header line (`skills/shared/adr/SKILL.md` § Applies To), and a session that touches one of them without touching the ADR is told once to re-read it (ADR-0039). Add the line when you write an ADR that constrains specific files.
 
 ### Learn Trigger Rule
 

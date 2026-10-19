@@ -747,6 +747,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "managed",
             "status",
             "error",
+            "provenance",
         },
         "skills show": {
             "name",
@@ -760,6 +761,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "managed",
             "status",
             "error",
+            "provenance",
             "body",
             "files",
             "files_truncated",

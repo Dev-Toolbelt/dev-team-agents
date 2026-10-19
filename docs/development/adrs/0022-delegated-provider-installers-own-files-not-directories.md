@@ -1,8 +1,9 @@
 # ADR-0022: Delegated provider installers own files, not directories
 
-**Date:** 2026-09-30
-**Status:** Accepted
-**Deciders:** dev-team-agents maintainers
+**Date:** 2026-09-30  
+**Status:** Accepted  
+**Deciders:** dev-team-agents maintainers  
+**Applies to:** `scripts/lib/provider-ownership.sh`, `scripts/install-opencode.sh`, `scripts/install-codex.sh`, `scripts/install-provider.sh`  
 
 ## Context
 

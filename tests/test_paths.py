@@ -138,6 +138,10 @@ class MachineLocalClassifierTest(unittest.TestCase):
         self.assertFalse(paths.is_machine_local_record("session-summary.md"))
         self.assertFalse(paths.is_machine_local_record("graphify.json"))
 
+    def test_global_skills_lock_is_machine_local(self):
+        self.assertTrue(paths.is_machine_local_record("global-skills-lock.json"))
+        self.assertTrue(paths.path_is_machine_local("machines/m/global-skills-lock.json"))
+
     def test_audit_log_is_machine_local(self):
         # ADR-0010: the credential audit trail records reads that happened on THIS
         # machine. Two machines appending to one portable log would need merge

@@ -3,6 +3,7 @@
 **Date:** 2026-10-17  
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
+**Applies to:** `scripts/spec-lint.sh`, `scripts/hooks/stop/03f-spec-lint.sh`, `skills/shared/spec-gate/SKILL.md`, `templates/spec-template.md`  
 **Relates to:** [ADR-0035](0035-planning-sequence-owned-by-the-main-conversation-per-scope-backlog-and-routing-in-every-provider-s-instruction-file.md) (planning sequence, per-scope backlog)
 
 ## Context

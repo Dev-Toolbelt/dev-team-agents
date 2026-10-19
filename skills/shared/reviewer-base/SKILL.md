@@ -13,6 +13,7 @@ description: Code reviewer shared rules — context, SonarQube, commit style.
    - Load `skills/shared/comments-policy/SKILL.md`
    - Load `skills/shared/conventional-commits/SKILL.md`
    - Load `skills/shared/scoped-test-execution/SKILL.md` **before running any test command** — a review that verifies behaviour runs the tests covering the diff, never the project's full suite. Reviewing is not one of the signals that authorize a full run
+   - Report findings in `skills/shared/review-result/SKILL.md` § Findings Table; a zero-findings verdict follows § Clean Verdict Evidence, so plan the checks you will execute before you start reading
    - Detect SonarQube using the `## Detection Signals` table in `skills/devops/sonarqube/SKILL.md` — if **any** signal in that table matches, load the skill. That table is the single source of truth; do not maintain or infer a signal list here, and do not treat the config files as the only trigger (a CI scanner step or a `sonarqube` service in `docker-compose.yml` counts too).
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full-file reads; use `git diff` output directly rather than re-reading changed files.
