@@ -1,8 +1,9 @@
 # ADR-0020: The CLI manages the providers' global skill directories
 
-**Date:** 2026-09-30
-**Status:** Accepted
-**Deciders:** dev-team-agents maintainers
+**Date:** 2026-09-30  
+**Status:** Accepted  
+**Deciders:** dev-team-agents maintainers  
+**Applies to:** `scripts/lib/devteam/global_skills.py`, `scripts/lib/global-skill-roots.json`  
 
 ## Context
 

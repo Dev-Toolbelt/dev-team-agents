@@ -2,7 +2,8 @@
 
 **Date:** 2026-10-17  
 **Status:** Accepted  
-**Deciders:** Maintainers
+**Deciders:** Maintainers  
+**Applies to:** `scripts/reuse-lint.sh`, `scripts/hooks/stop/03c-reuse-lint.sh`, `skills/shared/reuse-guidelines/SKILL.md`  
 
 ## Context
 
