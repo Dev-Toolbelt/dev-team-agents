@@ -1,5 +1,5 @@
-<!-- last-updated: 2026-10-18 -->
-**Last entries added:** command references are not rewritten per provider (2026-10-18)
+<!-- last-updated: 2026-10-19 -->
+**Last entries added:** bash glob matching, control-character stripping, hashing a user-writable directory (2026-10-19)
 # Wiki
 
 Domain knowledge that is **not derivable from reading the code** — non-obvious behaviors,
@@ -19,6 +19,8 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `bash/gnu-stat-f-is-filesystem-status.md` | stat, -f, -c, filesystem status, GNU, multi-line output, file-stat.sh, Ubuntu | A stat probe on a GNU system returns multi-line garbage and exits 1 |
 | `bash/shellcheck-blind-spots.md` | shellcheck, SC2034, SC1073, indirect expansion, directive, false positive, source-path | shellcheck reports a variable as unused, or stops checking a file for no visible reason |
 | `bash/supabase-local-dev.md` | supabase, cli, config.toml, content_path, email templates, workdir, dev-local.sh, symlink, copy | `supabase start` or `config push` cannot find a template, or the local stack needs a config change |
+| `bash/matching-untrusted-globs.md` | bash, glob, pattern matching, [[ ==, case, backtracking, bash 3.2, extglob, grep -E, glob_to_ere | Matching a glob that comes from repository content, where a hostile pattern can hang the matcher |
+| `bash/stripping-control-characters.md` | tr, control characters, newline, IFS read loop, sanitize, bidi override, C1 controls, sed, command substitution, printable ASCII | Sanitizing repository text before printing it to an agent, or a "nothing left to strip" check passes wrongly |
 | `electron/usecall-in-flight-guard-and-caller-contract.md` | useCall, double submit, in-flight guard, pending ref, inFlight, disabled, fireEvent.submit, PasswordChange, DeleteAccount, Profile, SignIn, account | `useCall.run` returns `null` on a duplicate submit, or a caller acts on a `run` result it did not check |
 | `electron/ipc-channels-need-the-trusted-sender-check.md` | electron, IPC, ipcMain.handle, security, trustedHandler, trustedRenderer, app/src/main/security.ts, audit trail | After rebasing app work on main, grep for new `ipcMain.handle` calls |
 | `electron/project-naming-scope.md` | project, name, BindRequest, settings.json, app-local, not portable, machine-local, product naming | Deciding whether project names belong in the app-local settings or the CLI's committed record |
@@ -41,6 +43,7 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `python/exclusive-create-instead-of-a-lock.md` | O_EXCL, os.open, machine-id, circular dependency, lock, os.link, Windows, race, singleton, first use | Creating a file exactly once from concurrent callers, especially when the lock would depend on the file |
 | `python/path-containment-and-symlinks.md` | realpath, symlink, containment, relative_to, startswith, /private/var, path traversal | Deciding whether a path stays inside a directory before writing to or removing it |
 | `python/tarfile-extraction-filter.md` | tarfile, extractall, filter, data, tarslip, linkname, symlink, CVE, python 3.14 | Extracting an archive you did not create, or pinning which interpreter CI tests |
+| `python/hashing-a-user-writable-directory.md` | os.walk, symlink, O_NOFOLLOW, dir_fd, scandir, RecursionError, FIFO, sha256, UnicodeDecodeError, jsonio | Hashing or walking a directory that a user or tool can write, such as installed skills |
 | `render/rendered-paths-must-match-shipped-scripts.md` | render, path rewrite, tool-map.json, adr, script, render_provider.py, opencode, codex, tool_unavailable, docs/development | A path rewrite in tool-map.json breaks commands when shipped scripts don't follow it |
 | `render/command-references-are-not-rewritten-per-provider.md` | _CODEX_BODY_REPLACEMENTS, render_provider.py, command-map.json, $devteam-, /devteam:, Codex, opencode, inline command invocation, learn --auto | A command body runs another devteam command inline, or a Codex agent cannot find a `/devteam:<name>` reference |
 | `security/credential-guard-heredocs.md` | credential-guard, 03-credential-guard.sh, heredoc, credentials.local.json, session-summary, false positive, false negative, newline, segment, refuse, exit 2 | The credential guard blocks a heredoc that only mentions a credential file, or lets a dump on the line after a heredoc through |
