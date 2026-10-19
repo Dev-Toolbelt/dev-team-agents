@@ -284,6 +284,212 @@ class SingleFileSourceTest(GlobalSkillsTestCase):
         self.assertFalse((self.claude_root / "alpha").exists())
 
 
+class ProvenanceTest(GlobalSkillsTestCase):
+    def lock_path(self):
+        from devteam import paths
+
+        return paths.machine_dir() / "global-skills-lock.json"
+
+    def install_alpha(self, *extra):
+        source = write_skill(self.tmp / "src" / "alpha", "alpha")
+        self.cli_json("install", "--source", str(source), "--provider", "claude", *extra)
+        return source
+
+    def test_install_records_an_entry_with_a_hash(self):
+        source = self.install_alpha()
+        data = json.loads(self.lock_path().read_text(encoding="utf-8"))
+        self.assertEqual(data["schema"], 1)
+        entry = data["skills"]["claude/alpha"]
+        self.assertEqual(entry["source"], str(source))
+        self.assertEqual(entry["kind"], "folder")
+        self.assertFalse(entry["link"])
+        self.assertEqual(len(entry["sha256"]), 64)
+        self.assertTrue(entry["installed_at"].endswith("Z"))
+
+    def test_list_and_show_report_unmodified_provenance(self):
+        self.install_alpha()
+        listed = self.cli_json("list")["skills"][0]["provenance"]
+        shown = self.cli_json("show", "alpha")["provenance"]
+        self.assertEqual(listed, shown)
+        self.assertFalse(listed["modified"])
+        self.assertEqual(
+            sorted(listed), ["installed_at", "kind", "link", "modified", "sha256", "source"]
+        )
+
+    def test_editing_an_installed_file_flags_modified(self):
+        self.install_alpha()
+        with (self.claude_root / "alpha" / "SKILL.md").open("a", encoding="utf-8") as fh:
+            fh.write("tampered\n")
+        self.assertTrue(self.cli_json("list")["skills"][0]["provenance"]["modified"])
+        self.assertTrue(self.cli_json("show", "alpha")["provenance"]["modified"])
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "needs symlinks and FIFOs")
+    def test_hash_never_follows_a_symlink_or_reads_a_fifo(self):
+        self.install_alpha()
+        outside = self.tmp / "outside.txt"
+        outside.write_text("secret", encoding="utf-8")
+        (self.claude_root / "alpha" / "link.txt").symlink_to(outside)
+        os.mkfifo(str(self.claude_root / "alpha" / "pipe"))
+        # Reading the FIFO would block forever; the call returning at all is the assertion.
+        self.assertTrue(self.cli_json("list")["skills"][0]["provenance"]["modified"])
+
+    @unittest.skipUnless(os.name == "posix", "symlinks need privileges on Windows")
+    def test_link_install_records_null_hash_and_is_never_modified(self):
+        source = self.install_alpha("--link")
+        with (source / "SKILL.md").open("a", encoding="utf-8") as fh:
+            fh.write("edited\n")
+        prov = self.cli_json("list")["skills"][0]["provenance"]
+        self.assertTrue(prov["link"])
+        self.assertIsNone(prov["sha256"])
+        self.assertFalse(prov["modified"])
+
+    def test_skill_without_an_entry_has_null_provenance(self):
+        write_skill(self.claude_root / "byhand", "byhand")
+        self.assertIsNone(self.cli_json("list")["skills"][0]["provenance"])
+        self.assertIsNone(self.cli_json("show", "byhand")["provenance"])
+
+    def test_remove_drops_the_entry(self):
+        self.install_alpha()
+        self.cli_json("remove", "alpha")
+        data = json.loads(self.lock_path().read_text(encoding="utf-8"))
+        self.assertNotIn("claude/alpha", data["skills"])
+
+    def test_replace_overwrites_the_entry(self):
+        self.install_alpha()
+        before = json.loads(self.lock_path().read_text(encoding="utf-8"))["skills"]["claude/alpha"]
+        source = write_skill(self.tmp / "src2" / "alpha", "alpha", description="changed")
+        self.cli_json("install", "--source", str(source), "--provider", "claude", "--replace")
+        after = json.loads(self.lock_path().read_text(encoding="utf-8"))["skills"]["claude/alpha"]
+        self.assertEqual(after["source"], str(source))
+        self.assertNotEqual(after["sha256"], before["sha256"])
+
+    def test_corrupt_lock_reads_as_empty_and_is_quarantined_on_write(self):
+        self.install_alpha()
+        lock = self.lock_path()
+        lock.write_text("{not json", encoding="utf-8")
+        self.assertIsNone(self.cli_json("list")["skills"][0]["provenance"])
+        self.assertEqual(lock.read_text(encoding="utf-8"), "{not json")
+        source = write_skill(self.tmp / "src" / "beta", "beta")
+        self.cli_json("install", "--source", str(source), "--provider", "claude")
+        self.assertIn("claude/beta", json.loads(lock.read_text(encoding="utf-8"))["skills"])
+        kept = [p for p in self.home.rglob("global-skills-lock.json*") if p != lock]
+        self.assertTrue(any(p.read_text(encoding="utf-8") == "{not json" for p in kept))
+
+    @unittest.skipUnless(os.name == "posix", "symlinks need privileges on Windows")
+    def test_a_copy_replaced_by_a_symlink_reads_as_modified(self):
+        import shutil
+
+        self.install_alpha()
+        shutil.rmtree(str(self.claude_root / "alpha"))
+        other = write_skill(self.tmp / "other" / "alpha", "alpha")
+        (self.claude_root / "alpha").symlink_to(other, target_is_directory=True)
+        prov = [s for s in self.cli_json("list")["skills"] if s["name"] == "alpha"][0]["provenance"]
+        self.assertTrue(prov["modified"])
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "needs FIFOs")
+    def test_a_fifo_at_the_lock_path_neither_blocks_nor_is_followed(self):
+        self.install_alpha()
+        lock = self.lock_path()
+        lock.unlink()
+        os.mkfifo(str(lock))
+        # Opening the FIFO for reading would block forever; returning is the assertion.
+        self.assertIsNone(self.cli_json("list")["skills"][0]["provenance"])
+
+    @unittest.skipUnless(os.name == "posix", "symlinks need privileges on Windows")
+    def test_a_symlinked_lock_is_not_read(self):
+        self.install_alpha()
+        lock = self.lock_path()
+        real = self.tmp / "planted.json"
+        real.write_text(lock.read_text(encoding="utf-8"), encoding="utf-8")
+        lock.unlink()
+        lock.symlink_to(real)
+        self.assertIsNone(self.cli_json("show", "alpha")["provenance"])
+
+    def test_a_failed_record_write_does_not_fail_the_install(self):
+        from unittest import mock
+
+        from devteam import global_skills
+
+        source = write_skill(self.tmp / "src" / "alpha", "alpha")
+        with mock.patch.object(global_skills, "_write_lock", side_effect=OSError("read-only")):
+            result = global_skills.install(str(source), providers=["claude"])
+        self.assertEqual(result["name"], "alpha")
+        self.assertTrue((self.claude_root / "alpha" / "SKILL.md").is_file())
+
+    @unittest.skipUnless(hasattr(os, "O_DIRECTORY"), "descriptor walk is POSIX-only")
+    def test_a_deep_folder_hashes_without_recursion(self):
+        import inspect
+        import sys
+
+        from devteam import global_skills
+
+        self.install_alpha()
+        skill = self.claude_root / "alpha"
+        depth = 200
+        fd = os.open(str(skill), os.O_RDONLY)
+        try:
+            for _ in range(depth):
+                os.mkdir("d", dir_fd=fd)
+                child = os.open("d", os.O_RDONLY, dir_fd=fd)
+                os.close(fd)
+                fd = child
+        finally:
+            os.close(fd)
+        # A recursion limit well below the folder depth: a recursive walk would raise
+        # RecursionError here, the iterative one does not.
+        previous = sys.getrecursionlimit()
+        sys.setrecursionlimit(len(inspect.stack()) + 60)
+        try:
+            digest = global_skills.content_hash(skill)
+        finally:
+            sys.setrecursionlimit(previous)
+        self.assertEqual(len(digest), 64)
+        self.assertTrue(self.cli_json("list")["skills"][0]["provenance"]["modified"])
+
+    @unittest.skipUnless(os.name == "posix", "symlinks need privileges on Windows")
+    def test_both_walks_produce_the_same_hash(self):
+        from unittest import mock
+
+        from devteam import global_skills
+
+        self.install_alpha()
+        skill = self.claude_root / "alpha"
+        (skill / "sub").mkdir()
+        (skill / "sub" / "a.txt").write_text("a", encoding="utf-8")
+        (skill / "empty").mkdir()
+        (skill / "link").symlink_to(self.tmp, target_is_directory=True)
+        by_fd = global_skills.content_hash(skill)
+        with mock.patch.object(global_skills, "_FD_WALK", False):
+            self.assertEqual(global_skills.content_hash(skill), by_fd)
+
+    def test_a_non_utf8_lock_reads_as_empty_and_is_quarantined_on_write(self):
+        self.install_alpha()
+        lock = self.lock_path()
+        lock.write_bytes(b"\xff\xfe")
+        self.assertIsNone(self.cli_json("show", "alpha")["provenance"])
+        source = write_skill(self.tmp / "src" / "beta", "beta")
+        self.cli_json("install", "--source", str(source), "--provider", "claude")
+        self.assertIn("claude/beta", json.loads(lock.read_text(encoding="utf-8"))["skills"])
+        kept = [p for p in self.home.rglob("global-skills-lock.json*") if p != lock]
+        self.assertTrue(any(p.read_bytes() == b"\xff\xfe" for p in kept))
+
+    @unittest.skipUnless(os.name == "posix", "symlinks need privileges on Windows")
+    def test_a_symlinked_or_empty_directory_changes_the_hash(self):
+        from devteam import global_skills
+
+        self.install_alpha()
+        skill = self.claude_root / "alpha"
+        before = global_skills.content_hash(skill)
+        (skill / "empty").mkdir()
+        with_empty = global_skills.content_hash(skill)
+        self.assertNotEqual(before, with_empty)
+        elsewhere = self.tmp / "elsewhere"
+        elsewhere.mkdir()
+        (skill / "scripts").symlink_to(elsewhere, target_is_directory=True)
+        self.assertNotEqual(with_empty, global_skills.content_hash(skill))
+        self.assertTrue(self.cli_json("list")["skills"][0]["provenance"]["modified"])
+
+
 class RemoveTest(GlobalSkillsTestCase):
     def test_remove_moves_a_directory_to_quarantine(self):
         write_skill(self.claude_root / "alpha", "alpha")
