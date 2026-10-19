@@ -70,7 +70,7 @@ Load `skills/shared/stack-detection/SKILL.md` to identify the project's primary 
 | `bitbucket-pipelines.yml` exists | `skills/devops/cicd-bitbucket/SKILL.md` |
 | `Jenkinsfile` exists | `skills/devops/cicd-jenkins/SKILL.md` |
 | `*.tf` files or `terraform/` / `infra/` directory | `skills/devops/iac-terraform/SKILL.md` |
-| `docker-compose.yml` at root (dev context) | `skills/devops/docker-dev/SKILL.md` |
+| `docker-compose.yml` at root (dev context) | `skills/devops/docker-dev/SKILL.md`; plus `skills/devops/local-environment/SKILL.md` when starting, reusing or stopping the local environment |
 | `docker-compose.yml` with production config | `skills/devops/docker-prod/SKILL.md` |
 | `prometheus.yml`, `grafana/`, `alertmanager.yml`, `monitoring/` directory, `DD_API_KEY` env var, `datadog.yml`, `datadog` service in compose, `amazon-cloudwatch-agent.json`, or `CloudWatch` resource in Terraform | `skills/devops/monitoring/SKILL.md` |
 | `cloudflare.toml` or Wrangler config | `skills/devops/cloudflare/SKILL.md`; plus `skills/integrations/cloudflare-api/SKILL.md` when an API call (DNS, cache purge, rules, Pages rollback) is to be executed |

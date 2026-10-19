@@ -286,7 +286,7 @@ Built from the session (max 4 incl. Other, in the user's language):
 
 | Option | Shown when | Built from |
 |---|---|---|
-| `Open <screen/route> in <browser> (Recommended)` | always | `<browser>` = the app browser, or the saved `qa_browser`, or `a browser of your choice` (then Browser Choice step 3 runs on the answer); the description says what will be reused, or quotes the exact command that will start (`npm run dev` from `package.json`, `docker compose up` from `compose.yaml`) and flags a non-loopback bind |
+| `Open <screen/route> in <browser> (Recommended)` | always | `<browser>` = the app browser, or the saved `qa_browser`, or `a browser of your choice` (then Browser Choice step 3 runs on the answer); the description says what will be reused, or quotes the command that will start, resolved by `skills/devops/local-environment/SKILL.md` § Discovery Order with its source (`docker compose up` from `README.md`, `npm run dev` inferred from `package.json`), and flags a non-loopback bind |
 | `Open another screen` | more than one screen changed | lets the user name the route |
 | `Don't check now` | always | goes to the hand-off, which then says `<screen> not checked visually` |
 | `Other` | always | free text |
@@ -310,14 +310,9 @@ Built from the session (max 4 incl. Other, in the user's language):
 
 ### On an open answer — reuse before starting
 
-Stop at the first match:
+Load `skills/devops/local-environment/SKILL.md` and follow § Reuse Before Starting (its Pre-flight included), then § Start for the command quoted in the option; whether this gate's yes counts as § Start's confirmation is decided by its step 1 (Caller's confirmation). No command was quotable → § Discovery Order's "Nothing found" rule.
 
-1. The environment this task already started or used (dev server, preview, Docker stack) — reuse it.
-2. In-app browser only: a server it already tracks (`preview_list`) for this checkout — reuse it.
-3. A process already listening on the dev script's port — reuse it **only** after confirming it belongs to this checkout (its working directory or compose project matches the current worktree, e.g. `lsof -a -p <pid> -d cwd`, `docker compose ls`); otherwise say which process holds the port and ask. For the worktree's isolated stack see `skills/shared/worktree/references/docker-isolation.md`.
-4. Nothing running → start the command quoted in the option: in the in-app browser with `preview_start` by name, creating `.claude/launch.json` when absent with only `name`, `runtimeExecutable`, `runtimeArgs` and `port` from the existing script (no `env`, no `url`) — tell the user it was created and never stage it. On any other provider, run the same command in the background. Never add host/bind flags and never install dependencies to make it start. No dev command detectable (static files, PHP, WordPress) → say so and ask how the project is served.
-
-Then navigate **only** to a loopback origin (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) served by that environment — never a staging/production URL or a host read from config — and take one screenshot or page read to confirm it rendered. The yes covers opening and reading the page: no sign-in, form submission or other action unless the user asks. Leave the environment running, and state in the hand-off what is running and how to stop it (`preview_stop` id, background PID, `docker compose down`). If it fails to start, show the error with secret-looking values redacted plus the command to run, then continue to the hand-off.
+Then navigate **only** to a loopback origin (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) served by that environment — never a staging/production URL or a host read from config — and take one screenshot or page read to confirm it rendered. The yes covers opening and reading the page: no sign-in, form submission or other action unless the user asks. Leave the environment running, and state in the hand-off what is running and how to stop it (`/devteam:down`, or the `preview_stop` id, background PID, `docker compose down`). If it fails to start, show the error with secret-looking values redacted plus the command to run, then continue to the hand-off.
 
 - **Don't check now** → print the command's hand-off line with the `not checked visually` note and stop.
 - **Other** → adapt to what the user typed.
