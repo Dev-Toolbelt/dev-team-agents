@@ -225,7 +225,7 @@ Os comandos de implementação também recebem uma tarefa de sprint (`/devteam:b
 | `/devteam:refactor` | Refatoração — software-architect planeja, desenvolvedor(es) executam |
 | `/devteam:architect` | Decisões de arquitetura e ADRs — software-architect |
 | `/devteam:audit` | Análise profunda de módulo/área — backend-developer + frontend-developer + security-specialist + devops-specialist; salva relatório em `docs/audit/` |
-| `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist + qa-specialist; em uma PR/MR, rascunha um comentário para o responsável — ou aprova quando nada bloqueia — após sua confirmação |
+| `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist + qa-specialist; em uma PR/MR, rascunha um comentário para o responsável — ou aprova quando nada bloqueia — após sua confirmação. Quando você aplica os achados, revisa as correções por até 3 rodadas e para antes se uma rodada voltar limpa ou parar de progredir |
 | `/devteam:qa` | Garantia de qualidade — qa-specialist |
 | `/devteam:security` | Auditoria de segurança — security-specialist + software-architect |
 | `/devteam:dba` | Trabalho de banco de dados — database-specialist + software-architect |
@@ -366,7 +366,7 @@ Agentes iniciam cada sessão sem memória das anteriores. Cinco camadas minimiza
 
 - **Resumo de sessão** — escrito ao final de qualquer sessão com arquivos alterados; um hook `Stop` enforça. Antes de entradas antigas serem removidas, os agentes verificam se as decisões nelas chegaram a virar ADR ou entrada de wiki, e avisam quais não viraram em vez de descartá-las em silêncio.
 - **Wiki** — `docs/wiki/README.md` é um índice por palavra-chave, uma linha por entrada. Os agentes fazem grep nele para a tarefa atual e abrem só o que casar, então um wiki com 200 entradas custa o mesmo no startup que um com 5.
-- **ADRs** — crie um com `bash .dev-team-agents/scripts/new-adr.sh "título"`. Ele segue uma série já existente em `docs/adr/`, mostra o diretório com `--dir` e adiciona a linha do ADR ao índice de ADRs (`README.md` nesse diretório). Os índices da wiki e de ADRs são verificados ao fim de cada sessão que os tocou.
+- **ADRs** — crie um com `bash .dev-team-agents/scripts/new-adr.sh "título"`. Ele segue uma série já existente em `docs/adr/`, mostra o diretório com `--dir` e adiciona a linha do ADR ao índice de ADRs (`README.md` nesse diretório). Os índices da wiki e de ADRs são verificados ao fim de cada sessão que os tocou. Um ADR pode nomear os caminhos que governa numa linha `**Applies to:**`; quando uma sessão altera um deles, o agente é lembrado de reler esse ADR ([ADR-0039](docs/development/adrs/0039-adrs-declare-the-paths-they-govern-and-a-stop-hook-names-them-when-those-paths-change.md)).
 - **`/devteam:learn`** — promove o que a sessão aprendeu da camada episódica para as duráveis.
 
 Nada nesse sistema apaga conhecimento automaticamente. A camada episódica é a única exceção, por design, e a verificação de promoção acima é o que a protege.
