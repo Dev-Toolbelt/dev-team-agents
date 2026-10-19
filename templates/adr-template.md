@@ -2,7 +2,8 @@
 
 **Date:** [YYYY-MM-DD]  
 **Status:** Proposed | Accepted | Deprecated | Superseded by ADR-[X]  
-**Deciders:** [Names or roles]
+**Deciders:** [Names or roles]  
+**Applies to:** [optional — the paths this decision governs, as path globs in backticks, comma-separated; delete this line if it governs no specific paths]
 
 ## Context
 
