@@ -128,7 +128,12 @@ export function BoardTabs({
   }
 
   return (
-    <div role="tablist" aria-label="Board tabs" className="flex items-end gap-1 overflow-x-auto border-b">
+    <div
+      role="tablist"
+      aria-label="Board tabs"
+      // Scrolls sideways when the tabs outgrow the width, with no scrollbar: the strip is a single row.
+      className="flex items-end gap-1 overflow-x-auto overflow-y-hidden border-b px-1 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       <button
         ref={register(null)}
         type="button"
@@ -139,7 +144,7 @@ export function BoardTabs({
         tabIndex={active === null ? 0 : -1}
         onClick={() => onSelect(null)}
         onKeyDown={(event) => onKeyDown(event, null)}
-        className={tabClass(active === null, 'px-3')}
+        className={tabClass(active === null, 'px-3', true)}
       >
         <LayoutGrid className="size-4 shrink-0" aria-hidden="true" />
         Overview
@@ -199,7 +204,10 @@ export function BoardTabs({
               aria-label={`Close ${tab.name}`}
               title="Close tab"
               onClick={() => close(tab.id, false)}
-              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className={cn(
+                'rounded p-0.5',
+                selected ? 'text-primary-foreground/70 hover:bg-black/15 hover:text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
             >
               <X className="size-3.5" aria-hidden="true" />
             </button>
@@ -219,11 +227,14 @@ export function panelId(id: string | null): string {
   return id === null ? 'board-panel-overview' : `board-panel-project-${id}`;
 }
 
-function tabClass(selected: boolean, padding: string): string {
+/** The tab on show is filled with the brand colour; the fixed overview tab keeps its frame either way. */
+function tabClass(selected: boolean, padding: string, framed = false): string {
   return cn(
     'flex h-9 shrink-0 items-center gap-1.5 rounded-t-md border border-b-0 text-sm transition-colors select-none',
     'focus-within:ring-[3px] focus-within:ring-ring/50',
     padding,
-    selected ? '-mb-px bg-background font-medium text-foreground' : 'border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+    selected
+      ? 'border-primary bg-primary font-medium text-primary-foreground'
+      : cn(framed ? 'border-border' : 'border-transparent', 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'),
   );
 }
