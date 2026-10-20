@@ -1,5 +1,5 @@
 <!-- last-updated: 2026-10-19 -->
-**Last entries added:** execution trace and Codex v2 gotchas, vendored hooks, lock export, new-adr --help (2026-10-19)
+**Last entries added:** Vitest asset inlining, XSS assertion scope, design-tool SVG C2PA metadata (2026-10-19)
 # Wiki
 
 Domain knowledge that is **not derivable from reading the code** — non-obvious behaviors,
@@ -78,4 +78,7 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `testing/diagnosing-the-windows-ci-job.md` | windows, CI, windows-latest, hang, timeout, faulthandler, dump_traceback_later, temporary branch, gh api, job logs, subtests, unittest, set +e | The Windows python job hangs or fails with no usable trace in its log |
 | `testing/fixture-circularity.md` | fixture, migration, test design, circular, legacy layout, false confidence | Writing a test for a migration away from a layout the current code no longer produces |
 | `testing/wait-for-the-data-a-control-depends-on.md` | async, flaky test, fixture, wait, disabled control, Radix, DropdownMenu, data loading, ProjectList, folders, sonner, toasts, race condition | Wait for the readiness signal of the data a control depends on, not for unrelated text rendered earlier |
+| `testing/vitest-inlines-small-assets.md` | vitest, assetsInlineLimit, data URI, svg import, inline limit, img src, renderer tests, filename assertion, providerIcon, vite | A renderer test asserts an imported image's filename, or passes for one asset and fails for another |
+| `testing/xss-assertions-scope-to-the-body.md` | xss, onerror, innerHTML, img, querySelector, toBeNull, skills.test.tsx, sanitize, text rendering, regression test | An XSS guard fails because a legitimate image appears on the same screen, or a payload-specific selector looks too narrow |
+| `electron/design-tool-svgs-carry-c2pa-metadata.md` | svg, c2pa, content credentials, metadata, manifest, design export, provider logo, sed, dark:invert, svg sanitize | Adding an SVG exported from a design or AI tool, or inlining an SVG as markup or an SVGR component |
 | `testing/windows-launcher-testing.md` | windows, launcher, fixture, spawn, shell false, CreateProcessA, _spawnv, argv quoting, PE, .exe, .scenario, PASS_THROUGH_ENV, CVE-2024-27980 | A Windows test spawns the fake CLI and the child gets a mangled argument, no scenario, or nothing executable at all |
