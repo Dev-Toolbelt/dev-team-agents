@@ -442,6 +442,10 @@ MUTATING = {
     "in the machine-local state directory (hook-only)",
     ("tasks", "review-result"): "records a review agent's result in a session's task record "
     "in the machine-local state directory (hook-only)",
+    ("insights", "dismiss"): "writes the user's dismissal of a suggestion to "
+    "data/insights-decisions.json (ADR-0042)",
+    ("tasks", "trace-record"): "writes a session's execution trace beside its task record "
+    "in the machine-local state directory (hook-only, ADR-0041)",
     ("upgrade",): "relocates this project's memory into the store",
     ("export",): "creates an archive — durable state outside the store, and a restorable "
     "copy of shapes the declaring client just said it cannot read, which `import` on the "
@@ -497,6 +501,10 @@ READ_ONLY = {
     ("tasks", "list"): "reads each project's session records; writes nothing",
     ("tasks", "watch"): "stats each project's session records and streams snapshots; "
     "writes nothing",
+    ("insights", "report"): "reads every bound project's execution traces and review windows "
+    "and the decisions record; writes nothing",
+    ("tasks", "trace"): "reads one session's execution trace in the project's machine-local "
+    "state directory; writes nothing",
     ("cred", "backends"): "probes which secret stores this machine offers",
     ("detect",): "reads a folder, `git` and `PATH`; writes nothing and creates no identity",
     ("catalog",): "read-only browse — asserted to create nothing, machine id included",
@@ -575,6 +583,9 @@ NEEDS_MACHINE_LAYOUT = {
     "pre-split store it would report an empty board, with exit 0",
     ("tasks", "watch"): "the same registry walk as `tasks list`, repeated for as long as "
     "it runs",
+    ("insights", "report"): "finds each project's traces through the registry — on a "
+    "pre-split store it would report no data at all, with exit 0",
+    ("insights", "dismiss"): "checks the id against the same registry walk as `insights report`",
 }
 
 

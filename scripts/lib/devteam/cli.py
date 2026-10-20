@@ -18,7 +18,7 @@ from pathlib import Path
 from . import auth, bind as bind_module
 from . import auth_gate as gate
 from . import detect
-from . import catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
+from . import catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, trace, insights, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .console import stdin_is_console as _stdin_is_console
@@ -860,6 +860,89 @@ def cmd_tasks_review_open(args, emitter):
 def cmd_tasks_review_result(args, emitter):
     result = tasks.review_result(_hook_root(args), _hook_payload())
     return result, "review result recorded" if result["recorded"] else "nothing recorded"
+
+
+def cmd_tasks_trace_record(args, emitter):
+    root = _hook_root(args)
+    if args.stop:
+        result = trace.settle(root, _hook_payload())
+        return result, "trace settled" if result["settled"] else "nothing settled"
+    result = trace.capture(root, _hook_payload())
+    return result, "span recorded" if result["recorded"] else "nothing recorded"
+
+
+def _trace_lines(node, depth, lines):
+    if node["usage_complete"]:
+        tokens = "{} tok".format(node["subtree_tokens"])
+    elif node["subtree_tokens"]:
+        tokens = "{}+ tok (partial)".format(node["subtree_tokens"])
+    else:
+        tokens = "tokens n/a"
+    lines.append("{}{} [{}] {}  {}s  {}{}".format(
+        "  " * depth, node["agent"], node["kind"], node["status"], node["duration_s"], tokens,
+        "  ({})".format(node["model"]) if node["model"] else "",
+    ))
+    for child in node["children"]:
+        _trace_lines(child, depth + 1, lines)
+
+
+def cmd_tasks_trace(args, emitter):
+    root = project.resolve_root(args.path)
+    result = trace.show(root, args.session)
+    if result is None:
+        raise EnvError(
+            "no execution trace for session {}".format(args.session),
+            hint="A trace starts with the session's first agent spawn in a bound project.",
+        )
+    lines = ["{} {}  {} span(s) · {} tokens · {}s".format(
+        result["provider"], result["session_id"], result["totals"]["spans"],
+        result["totals"]["tokens"], result["totals"]["duration_s"],
+    )]
+    for turn in result["turns"]:
+        label = "/devteam:{}".format(turn["command"]) if turn["command"] else "turn"
+        lines.append("{} @ {}  {} tokens".format(label, turn["turn_at"] if turn["turn_at"] is not None else "?", turn["tokens"]))
+        for node in turn["spans"]:
+            _trace_lines(node, 1, lines)
+    return result, "\n".join(lines)
+
+
+def _insights_lines(result):
+    lines = ["{} span(s) in {} session(s) across {} project(s)".format(
+        result["sample"]["spans"], result["sample"]["sessions"], result["sample"]["projects"])]
+    if result["agents"]:
+        lines.append("agents:")
+        for row in result["agents"]:
+            lines.append("  {} [{}] {} · {} span(s) · {} tok mean · p50 {}s · failed {:.0%} · interrupted {:.0%}".format(
+                row["agent"], row["kind"], row["provider"], row["spans"],
+                row["tokens_mean"] if row["tokens_mean"] is not None else "n/a",
+                row["duration_p50"] if row["duration_p50"] is not None else "?",
+                row["failed_rate"], row["interrupted_rate"],
+            ))
+    if result["commands"]:
+        lines.append("commands:")
+        for row in result["commands"]:
+            lines.append("  {} {} · {} run(s) · {} tok/run".format(
+                "/devteam:{}".format(row["command"]) if row["command"] else "(no command)", row["provider"],
+                row["runs"], row["tokens_per_run"] if row["tokens_per_run"] is not None else "n/a",
+            ))
+    if result["suggestions"]:
+        lines.append("suggestions:")
+        for item in result["suggestions"]:
+            lines.append("  [{}]{} {}".format(item["id"], " (dismissed)" if item["dismissed"] else "", item["title"]))
+            lines.append("      → {}".format(item["action"]))
+    else:
+        lines.append("no suggestions ({} subject(s) below a rule's minimum sample)".format(len(result["insufficient"])))
+    return lines
+
+
+def cmd_insights_report(args, emitter):
+    result = insights.report(args.project or None, since=args.since, include_dismissed=args.all)
+    return result, "\n".join(_insights_lines(result))
+
+
+def cmd_insights_dismiss(args, emitter):
+    result = insights.dismiss(args.suggestion)
+    return result, "dismissed {} until its sample reaches {} span(s)".format(result["dismissed"], 2 * result["sample_spans"])
 
 
 def _tasks_filters(args):
@@ -1878,6 +1961,16 @@ def build_parser():
     )
     tasks_result.add_argument("--project-root", metavar="DIR")
     tasks_result.set_defaults(func=cmd_tasks_review_result)
+    tasks_trace_record = leaf(
+        tasks_parser, "trace-record", help="hook-only: fold an agent spawn or result from stdin into the session's trace"
+    )
+    tasks_trace_record.add_argument("--project-root", metavar="DIR")
+    tasks_trace_record.add_argument("--stop", action="store_true", help="settle the trace at the end of a turn")
+    tasks_trace_record.set_defaults(func=cmd_tasks_trace_record)
+    tasks_trace = leaf(tasks_parser, "trace", help="one session's agent tree with duration and tokens per node")
+    tasks_trace.add_argument("session", help="the session id")
+    tasks_trace.add_argument("--path", help="the bound project (default: the current directory)")
+    tasks_trace.set_defaults(func=cmd_tasks_trace)
     tasks_list = leaf(tasks_parser, "list", help="every bound project with tasks, with derived state")
     tasks_filters(tasks_list)
     tasks_list.set_defaults(func=cmd_tasks_list)
@@ -1891,6 +1984,17 @@ def build_parser():
         "--interval", type=_watch_interval, default=1.0, help="seconds between checks (>= 0.01)"
     )
     tasks_watch.set_defaults(func=cmd_tasks_watch)
+    insights_parser = leaf(
+        sub, "insights", help="optimization loop: metrics and suggestions from execution traces (never applied)"
+    ).add_subparsers(dest="insights_cmd")
+    insights_report = leaf(insights_parser, "report", help="metrics and evidence-backed suggestions for bound projects")
+    insights_report.add_argument("--project", action="append", metavar="PROJECT_ID")
+    insights_report.add_argument("--since", type=int, metavar="EPOCH", help="only traces updated since this")
+    insights_report.add_argument("--all", action="store_true", help="include dismissed suggestions, flagged")
+    insights_report.set_defaults(func=cmd_insights_report)
+    insights_dismiss = leaf(insights_parser, "dismiss", help="hide a suggestion until its sample doubles")
+    insights_dismiss.add_argument("suggestion", help="the suggestion id, as `insights report` prints it")
+    insights_dismiss.set_defaults(func=cmd_insights_dismiss)
     plugin_parser = leaf(sub, "plugin", help="per-project integrations declared by the core")
     plugin_sub = plugin_parser.add_subparsers(dest="plugin_cmd")
     plugin_list = leaf(plugin_sub, "list", help="every plugin, its state and status")
