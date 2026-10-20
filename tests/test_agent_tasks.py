@@ -501,6 +501,148 @@ class CodexWaitTest(BoardCase):
         self.assertEqual(self.statuses(), {"c1": ("completed", False)})
 
 
+PARENT_THREAD = "01a14bb6-5ca0-7c52-951a-9fe71f0dac80"
+
+
+def final_answer(author, stamp="2023-11-14T22:30:00Z", text="done"):
+    """A Codex multi-agent v2 `FINAL_ANSWER` line, shaped as codex 0.163 writes it to the parent rollout."""
+    return json.dumps({"timestamp": stamp, "type": "response_item", "payload": {
+        "type": "agent_message", "author": author, "recipient": "/root",
+        "content": [{"type": "input_text", "text": "Message Type: FINAL_ANSWER\nTask name: /root\n"
+                                                    "Sender: {}\nPayload:\n{}".format(author, text)}],
+    }}) + "\n"
+
+
+class CodexV2Test(BoardCase):
+    """Codex multi-agent v2: `spawn_agent` answers a task path, and only the rollout says it ended."""
+
+    def agents(self, session="s1"):
+        return {t["id"]: t for t in self.load(session)["tasks"] if t.get("kind") == "agent"}
+
+    def spawn(self, call, task_name, rollout, now=T0):
+        spawn = {"session_id": "s1", "cwd": "", "tool_use_id": call, "hook_event_name": "PreToolUse",
+                 "tool_name": "spawn_agent", "transcript_path": str(rollout),
+                 "tool_input": {"task_name": task_name.rsplit("/", 1)[-1], "agent_type": AGENT, "message": "m"}}
+        tasks.record(self.root, spawn, now=now)
+        ack = dict(spawn, hook_event_name="PostToolUse", tool_response=json.dumps({"task_name": task_name}))
+        return tasks.record(self.root, ack, now=now + 1)
+
+    def rollout(self):
+        path = self.tmp / "rollout-2023-11-14T22-13-20-{}.jsonl".format(PARENT_THREAD)
+        path.write_text(json.dumps({"type": "session_meta", "payload": {"id": PARENT_THREAD}}) + "\n", encoding="utf-8")
+        return path
+
+    def stop(self, rollout, now):
+        return tasks.mark(self.root, {"session_id": "s1", "transcript_path": str(rollout)}, "idle", now=now)
+
+    def test_a_task_path_answer_is_a_running_agent_not_a_failed_spawn(self):
+        rollout = self.rollout()
+        self.spawn("c1", "/root/lobby_qa", rollout)
+        task = self.agents()["c1"]
+        self.assertEqual((task["status"], task["failed"], task["agent_ref"]), ("in_progress", False, "/root/lobby_qa"))
+        # A v2 `wait_agent` names nobody: it settles nothing.
+        wait = {"session_id": "s1", "cwd": "", "tool_use_id": "w1", "hook_event_name": "PostToolUse",
+                "tool_name": "wait_agent", "tool_input": {"timeout_ms": 10000},
+                "tool_response": json.dumps({"message": "Wait completed.", "timed_out": False})}
+        tasks.record(self.root, wait, now=T0 + 5)
+        self.stop(rollout, T0 + 10)
+        self.assertEqual(self.agents()["c1"]["status"], "in_progress")  # no FINAL_ANSWER yet, not interrupted
+
+    def test_the_final_answer_completes_the_task_at_its_time(self):
+        rollout = self.rollout()
+        self.spawn("c1", "/root/lobby_qa", rollout)
+        self.spawn("c2", "/root/lobby_reference", rollout, now=T0 + 2)
+        with open(str(rollout), "a", encoding="utf-8") as handle:
+            handle.write(final_answer("/root/someone_else"))
+            handle.write(final_answer("/root/lobby_qa"))
+            handle.write(final_answer("/root/lobby_qa", stamp="2023-11-14T22:40:00Z"))  # a re-task: ignored
+        self.stop(rollout, T0 + 5000)
+        by = self.agents()
+        self.assertEqual((by["c1"]["status"], by["c1"]["history"][-1]["at"]), ("completed", T0 + 1000))
+        self.assertEqual(by["c2"]["status"], "in_progress")
+        with open(str(rollout), "a", encoding="utf-8") as handle:
+            handle.write(final_answer("/root/lobby_reference", stamp="2023-11-14T23:00:00Z"))
+        self.stop(rollout, T0 + 9000)
+        self.assertEqual(self.agents()["c2"]["status"], "completed")
+
+    def test_an_answer_before_the_spawn_or_in_another_rollout_is_not_read(self):
+        rollout = self.rollout()
+        rollout.write_text(rollout.read_text(encoding="utf-8") + final_answer("/root/lobby_qa"), encoding="utf-8")
+        self.spawn("c1", "/root/lobby_qa", rollout)
+        other = self.tmp / "other.jsonl"
+        other.write_text(final_answer("/root/lobby_qa"), encoding="utf-8")
+        self.stop(other, T0 + 5000)
+        self.stop(rollout, T0 + 5001)
+        self.assertEqual(self.agents()["c1"]["status"], "in_progress")
+
+    def test_a_child_that_answers_before_the_ack_is_not_missed(self):
+        rollout = self.rollout()
+        spawn = {"session_id": "s1", "cwd": "", "tool_use_id": "c1", "hook_event_name": "PreToolUse",
+                 "tool_name": "spawn_agent", "transcript_path": str(rollout),
+                 "tool_input": {"task_name": "fast", "agent_type": AGENT, "message": "m"}}
+        tasks.record(self.root, spawn, now=T0)
+        with open(str(rollout), "a", encoding="utf-8") as handle:
+            handle.write(final_answer("/root/fast"))
+        tasks.record(self.root, dict(spawn, hook_event_name="PostToolUse",
+                                     tool_response=json.dumps({"task_name": "/root/fast"})), now=T0 + 1)
+        self.stop(rollout, T0 + 5000)
+        self.assertEqual(self.agents()["c1"]["status"], "completed")
+
+    def test_a_reused_task_path_is_ended_by_its_own_answer_only(self):
+        rollout = self.rollout()
+        self.spawn("c1", "/root/review", rollout)
+        with open(str(rollout), "a", encoding="utf-8") as handle:
+            handle.write(final_answer("/root/review"))
+        self.stop(rollout, T0 + 5000)
+        self.spawn("c2", "/root/review", rollout, now=T0 + 6000)
+        self.stop(rollout, T0 + 6100)
+        self.assertEqual((self.agents()["c1"]["status"], self.agents()["c2"]["status"]), ("completed", "in_progress"))
+
+    def test_two_open_tasks_of_one_path_end_oldest_first(self):
+        rollout = self.rollout()
+        self.spawn("c1", "/root/review", rollout)
+        self.spawn("c2", "/root/review", rollout, now=T0 + 2)
+        with open(str(rollout), "a", encoding="utf-8") as handle:
+            handle.write(final_answer("/root/review"))
+        self.stop(rollout, T0 + 5000)
+        self.assertEqual((self.agents()["c1"]["status"], self.agents()["c2"]["status"]), ("completed", "in_progress"))
+        # A Stop with no new answer must not reuse the one c1 already took.
+        self.stop(rollout, T0 + 6000)
+        self.assertEqual(self.agents()["c2"]["status"], "in_progress")
+        with open(str(rollout), "a", encoding="utf-8") as handle:
+            handle.write(final_answer("/root/review", stamp="2023-11-14T22:50:00Z"))
+        self.stop(rollout, T0 + 9000)
+        self.assertEqual(self.agents()["c2"]["status"], "completed")
+
+    def test_an_agent_that_never_answers_is_interrupted_after_the_age_limit(self):
+        rollout = self.rollout()
+        self.spawn("c1", "/root/silent", rollout)
+        self.stop(rollout, T0 + tasks.PENDING_MAX_AGE)
+        self.assertEqual(self.agents()["c1"]["status"], "in_progress")
+        self.stop(rollout, T0 + tasks.PENDING_MAX_AGE + 10)
+        task = self.agents()["c1"]
+        self.assertEqual((task["status"], task["interrupted"]), ("cancelled", True))
+
+    def test_v1_and_v2_agents_settle_side_by_side(self):
+        rollout = self.rollout()
+        self.spawn("c1", "/root/v2", rollout)
+        spawn, (ack, wait) = codex_cycle("s1", AGENT, "c9")
+        tasks.record(self.root, spawn, now=T0 + 3)
+        tasks.record(self.root, ack, now=T0 + 4)
+        tasks.record(self.root, wait, now=T0 + 5)
+        with open(str(rollout), "a", encoding="utf-8") as handle:
+            handle.write(final_answer("/root/v2"))
+        self.stop(rollout, T0 + 5000)
+        by = self.agents()
+        self.assertEqual((by["c1"]["status"], by["c9"]["status"]), ("completed", "completed"))
+
+    def test_a_malformed_task_path_is_still_a_failed_spawn(self):
+        rollout = self.rollout()
+        self.spawn("c1", "../etc", rollout)
+        task = self.agents()["c1"]
+        self.assertEqual((task["status"], task["failed"]), ("cancelled", True))
+
+
 class JsonContractTest(BoardCase):
     def test_kind_and_failed_are_additive_on_every_task(self):
         tasks.record(self.root, todo_write("s1", [todo("A")]), now=T0)

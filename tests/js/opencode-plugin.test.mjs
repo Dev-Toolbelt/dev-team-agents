@@ -38,11 +38,11 @@ const control = (dir, name, { code = 0, out = "", err = "" }) =>
   writeFileSync(join(dir, `${name}.ctl`), `CODE=${code}\nOUT='${out}'\nERR='${err}'\n`)
 const stdinOf = (dir, name) => JSON.parse(readFileSync(join(dir, `${name}.stdin`), "utf8"))
 
-const load = async (dir) => {
+const load = async (dir, messages = async () => ({ data: [] })) => {
   const logs = []
   const client = {
     app: { log: async ({ body }) => void logs.push(body) },
-    session: { messages: async () => ({ data: [] }), get: async () => ({ data: { title: "t" } }) },
+    session: { messages, get: async () => ({ data: { title: "t" } }) },
   }
   return { logs, plugin: await DevTeamAgents({ client, directory: dir }) }
 }
@@ -212,4 +212,36 @@ test("a prompt whose hook prints no directive clears the session's language line
   const system = { system: [] }
   await plugin["experimental.chat.system.transform"]({ sessionID: "s1" }, system)
   assert.deepEqual(system.system, [])
+})
+
+test("a finished task sends its child session, model and summed usage for the execution trace", async () => {
+  const dir = makeProject()
+  const asked = []
+  const messages = async ({ path }) => {
+    asked.push(path.id)
+    return {
+      data: [
+        { info: { role: "user" } },
+        { info: { role: "assistant", tokens: { input: 10, output: 5, reasoning: 2, cache: { read: 100, write: 7 } } } },
+        { info: { role: "assistant", tokens: { input: 3, output: 1, reasoning: 0, cache: { read: 50, write: 0 } } } },
+      ],
+    }
+  }
+  const { plugin } = await load(dir, messages)
+  const metadata = { sessionId: "ses_child", model: { modelID: "glm-5.2" } }
+  await plugin["tool.execute.after"]({ tool: "task", sessionID: "ses_top", callID: "c9", args: { subagent_type: "x" } }, { output: "done", metadata })
+  const sent = stdinOf(dir, "post-tool-use")
+  assert.ok(asked.includes("ses_child"))
+  assert.equal(sent.agent_session_id, "ses_child")
+  assert.equal(sent.agent_model, "glm-5.2")
+  assert.deepEqual(sent.agent_usage, { input: 13, output: 8, cache_read: 150, cache_write: 7 })
+})
+
+test("a task with no child session metadata adds no trace fields", async () => {
+  const dir = makeProject()
+  const { plugin } = await load(dir)
+  await plugin["tool.execute.after"]({ tool: "task", sessionID: "ses_top", callID: "c9", args: { subagent_type: "x" } }, { output: "done" })
+  const sent = stdinOf(dir, "post-tool-use")
+  assert.equal("agent_session_id" in sent, false)
+  assert.equal("agent_usage" in sent, false)
 })
