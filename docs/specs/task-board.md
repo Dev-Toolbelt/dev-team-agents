@@ -518,8 +518,15 @@ Implementation details:
   badge if the session has PR marks, session title (when the provider has one; cut by width) or else
   branch, and status; the branch beside a title and the per-session counts are in the chip's tooltip
   and accessible text; the session filter names a session by its title (40 characters), or by its
-  short id when it has none. The Done column carries a faint success tint. Leaving the Board tab
-  returns it to the overview.
+  short id when it has none. The Done column carries a faint success tint.
+- **Tabs (amendment 2026-10-20):** a project kanban opens in a browser-style tab. **Overview** is the first tab and cannot be closed; one tab per project, and opening an open project
+  shows its tab. Project tabs reorder by drag and drop or `Ctrl/⌘+Shift+←/→`, close by their ×, a
+  middle click or `Delete`; closing the tab on show moves to its right-hand neighbour, else its
+  left-hand one, else the overview. Each kanban keeps its filters while its tab is open; only the
+  tab on show runs its clocks. Leaving the Board app tab keeps the tabs and the one on show. A
+  project that stops having tasks has its tab closed for good (a later snapshot does not reopen it),
+  and when that tab was on show the overview says "That project no longer has tasks." Tabs live in
+  memory only and do not survive an app restart.
 - **Settings (app-local, `settings.ts`):** stale threshold (minutes, default 60), done retention
   (days, default 7), *Keep unanswered direct work for* (hours, 1–720, default 24). Not
   preferences.json keys.
@@ -653,3 +660,4 @@ Implementation details:
 | 2026-10-02 | A session's `title` follows renames with no turn in between: the view reads the provider's current title (`tasks.live_title`) — Claude Code's last transcript `custom-title` (the record now keeps `transcript_path`), Codex's `session_index.jsonl`, each cached by file mtime and size — and falls back to the stored one; opencode's plugin pushes a changed title on `session.updated` through `session-retitle.sh` → `tasks retitle` (title only). Ended sessions too; the view never writes. The kanban's direct card shows the session title | User request: a direct card named "Direct work" says nothing, and a rename in the provider never reached the board until the next turn |
 | 2026-10-19 | The execution trace (`execution-trace.md`, ADR-0041) rides the same agent hooks and stores spans in `task-board/trace/`, a subdirectory the board's listing never reads. The board record, columns and notifications are unchanged; review/QA and built-in agents stay off the board and appear only in the trace | Base for an optimization loop that needs cost and duration per agent, reviewers included |
 | 2026-10-19 | Codex multi-agent v2: a `spawn_agent` answering `{"task_name": "/root/<name>"}` is a running agent whose `agent_ref` is that task path, no longer a failed spawn. At `Stop` its first `FINAL_ANSWER` in the parent rollout completes it, at the answer's time; a v2 `wait_agent` names no agent and settles nothing. Each task keeps where the parent rollout ended at its spawn (`rollout_path`, `rollout_offset`): only an answer after that mark ends it, and among several open tasks of one path the oldest ends first. A task with no answer after 6 h (an errored child writes none; a resumed or forked thread, or a nested spawn, writes to another rollout) is cancelled as `interrupted`, and one running past 60 min shows `stale` meanwhile. Codex only: Claude Code and opencode always return a runtime id. In Review windows for v2 reviewers are unchanged (Out of Scope) | Codex desktop 0.163 spawns were all marked failed on the board |
+| 2026-10-20 | Project kanbans open in browser-style tabs (reorder by drag and drop, close by ×, middle click or Delete) instead of replacing the overview; the `← Board` breadcrumb is gone, and leaving the Board app tab no longer returns it to the overview — this supersedes those two points of the 2026-10-01 row | User request: several projects open at once, as in a browser |

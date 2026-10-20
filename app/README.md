@@ -361,7 +361,12 @@ closed and reopened. It is read-only: nothing here edits, moves or deletes a tas
   sessions used, `N sessions (M active)`, To do / In progress / In Review / PR/MR Created / Done with counts and
   percentages, a stacked bar, and stale / abandoned badges. A period filter (today, 7 days, 30 days, all)
   narrows it by each session's last activity.
-- **Kanban.** Click a card for five columns — To do, In progress, **In Review**, **PR/MR Created**, and Done —
+- **Tabs.** Clicking a project card opens its kanban in a tab, browser-style: **Overview** is the first tab and cannot be closed; each project gets one tab, and clicking an open project's card shows its tab
+  again. Drag a tab to reorder it (or `Ctrl/⌘+Shift+←/→`), close it with its **×**, a middle click or `Delete`,
+  and move between tabs with the arrow keys, `Home` and `End`. Each kanban keeps its filters while its tab is
+  open, and only the tab on show runs its clocks. Leaving the Board screen keeps the tabs; a project that stops
+  having tasks has its tab closed, and the overview says so if that tab was on show.
+- **Kanban.** Each project tab shows five columns — To do, In progress, **In Review**, **PR/MR Created**, and Done —
   side by side in one row that scrolls horizontally when the window is too narrow for them, never stacking; each
   column scrolls its own cards under a heading that stays in view. The **PR/MR Created** column is always
   there and stays empty until a PR or MR is created; it shows tasks that have reached a pull request
@@ -376,8 +381,7 @@ closed and reopened. It is read-only: nothing here edits, moves or deletes a tas
   PR/MR and issue links open in your system browser on the configured tracker host (GitHub, GitLab, or Jira),
   protected by security validation. Filter by session or period, hide done tasks older than the retention, and
   show/hide tasks with findings. Sessions are compact chips — provider, optional PR/MR badge, title or branch,
-  status icon — with the counts in the chip's tooltip. The Done column is tinted green. **← Board** returns to
-  the overview, and so does leaving the tab.
+  status icon — with the counts in the chip's tooltip. The Done column is tinted green.
 - **Board settings** (app-local, in `settings.json`, not preferences): `boardStaleAfterMinutes`
   (default 60, 5 to 1440) is passed to the CLI as `--stale-after`; `boardDoneRetentionDays`
   (default 7, 1 to 365) is the kanban's default retention.
