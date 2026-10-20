@@ -13,10 +13,7 @@ import {
   Pencil,
   RefreshCw,
   Settings2,
-  Sparkles,
-  SquareTerminal,
   TriangleAlert,
-  Braces,
   CalendarPlus,
   XCircle,
 } from 'lucide-react';
@@ -55,7 +52,7 @@ import {
   type Period,
   type ProjectView,
 } from '../boardModel.js';
-import type { Provider } from '../../shared/providers.js';
+import { ProviderIcon, providerLabel } from '../providers/ProviderIcon.js';
 import {
   BOARD_SETTING_BOUNDS,
   type BoardCounts,
@@ -81,54 +78,6 @@ const DEFAULT_SETTINGS: BoardSettings = {
 
 const SELECT_CLASS =
   'h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30';
-
-// Keyed by `Provider` so a provider added to the CLI fails the typecheck here; looked up by
-// `string` below because a feed can carry a provider this build has never heard of.
-const PROVIDER_LABELS: Readonly<Record<Provider, string>> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'opencode',
-};
-
-const PROVIDER_ICONS: Readonly<Record<Provider, typeof Bot>> = {
-  claude: Sparkles,
-  codex: SquareTerminal,
-  opencode: Braces,
-};
-
-/**
- * The providers' own marks, by URL, imported from `../logo/providers/`. A provider listed
- * here wins over its glyph in `PROVIDER_ICONS`, which stays as the fallback. The mark is
- * drawn as a CSS mask filled with `currentColor`, so one monochrome file follows the text
- * colour in both schemes.
- */
-const PROVIDER_LOGOS: Readonly<Record<string, string>> = {};
-
-function providerLabel(provider: string): string {
-  return (PROVIDER_LABELS as Readonly<Record<string, string | undefined>>)[provider] ?? provider;
-}
-
-/** The provider's mark. Its name is always available as text: the icon is never the only cue. */
-export function ProviderIcon({ provider, withLabel = false }: { provider: string; withLabel?: boolean }) {
-  const Icon = (PROVIDER_ICONS as Readonly<Record<string, typeof Bot | undefined>>)[provider] ?? Bot;
-  const logo = PROVIDER_LOGOS[provider];
-  const label = providerLabel(provider);
-  const a11y = { role: 'img', 'aria-label': withLabel ? undefined : label, 'aria-hidden': withLabel ? true : undefined } as const;
-  return (
-    <span className="inline-flex items-center gap-1" title={label}>
-      {logo !== undefined ? (
-        <span
-          {...a11y}
-          className="size-3.5 shrink-0 bg-current"
-          style={{ mask: `url("${logo}") center / contain no-repeat`, WebkitMask: `url("${logo}") center / contain no-repeat` }}
-        />
-      ) : (
-        <Icon className="size-3.5 shrink-0" {...a11y} />
-      )}
-      {withLabel ? <span>{label}</span> : null}
-    </span>
-  );
-}
 
 const STATUS_ICON: Readonly<Record<BoardSessionStatus, typeof Activity>> = {
   active: Activity,
@@ -440,7 +389,7 @@ function ProjectCard({ view, name, onOpen }: { view: ProjectView; name: string; 
         </span>
         <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
           {view.providers.map((provider) => (
-            <ProviderIcon key={provider} provider={provider} />
+            <ProviderIcon key={provider} provider={provider} size="md" />
           ))}
         </span>
       </span>
@@ -1017,7 +966,7 @@ function SessionChip({ projectId, session }: { projectId: string; session: Board
       data-status={session.status}
       title={details}
     >
-      <ProviderIcon provider={session.provider} />
+      <ProviderIcon provider={session.provider} decorative />
       <span className="sr-only">{provider}</span>
       {session.title !== null ? (
         <>
@@ -1157,7 +1106,8 @@ const TaskCard = memo(function TaskCard({
         {task.kind === 'direct' && task.turns.length > 0 ? <DirectTurns turns={task.turns} /> : null}
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1" title={`${providerLabel(session.provider)} session`}>
-            <ProviderIcon provider={session.provider} />
+            <ProviderIcon provider={session.provider} decorative />
+            <span className="sr-only">{providerLabel(session.provider)}</span>
             <span className="font-mono">{where}</span>
           </span>
           <span className="inline-flex items-center gap-1">
