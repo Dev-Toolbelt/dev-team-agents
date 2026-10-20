@@ -1069,6 +1069,10 @@ class AppFacingKeySetContractTest(StoreTestCase):
         subprocess.run(["git", "commit", "-qm", "v2"], cwd=str(root), check=True, stdout=subprocess.DEVNULL, env=env)
         plan = self._run_ok("migrate", str(root), "--provider", "claude", "--mode", "link", "--json")
         self._assert_exact_keys("migrate", plan, self.EXPECTED["migrate"])
+        # `detected.secondary` is how the plan names a root tree left beside a
+        # pre-root install; `null` here, an object with these keys when one exists.
+        self.assertIn("secondary", plan["detected"])
+        self.assertIsNone(plan["detected"]["secondary"])
         applied = self._run_ok(
             "migrate", str(root), "--provider", "claude", "--mode", "link", "--apply", "--untrack", "--json"
         )

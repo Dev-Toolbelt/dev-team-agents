@@ -7,7 +7,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from devteam_support import StoreTestCase
+from devteam_support import REPO_ROOT, StoreTestCase, requires_bash
 
 from devteam import bind, doctor, migrate, permissions, project, providers, quarantine, registry, versions
 from devteam.errors import ConflictError, UsageError
@@ -314,6 +314,79 @@ class PreRootMigrationTest(StoreTestCase):
             migrate.plan(root, provider_names=["claude"], mode="link")
         self.assertTrue((root / ".claude" / "user-data" / "session-summary.md").is_file())
 
+    def _with_root_tree(self, root):
+        """A v2.1.0+ update that vendored the root tree and left the pre-root one."""
+        vendored = root / project.PROJECT_DIR
+        for rel, text in (
+            ("agents/backend-developer.md", "# newer agent\n"),
+            ("scripts/hooks/stop.sh", "#!/bin/sh\n# newer\n"),
+            ("VERSION", "2.27.3\n"),
+        ):
+            (vendored / rel).parent.mkdir(parents=True, exist_ok=True)
+            (vendored / rel).write_text(text, encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=str(root), check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(
+            ["git", "commit", "-qm", "v2.27 update"],
+            cwd=str(root),
+            check=True,
+            stdout=subprocess.DEVNULL,
+            env=self._git_env(),
+        )
+        return root
+
+    def test_a_root_tree_beside_the_pre_root_install_is_planned_too(self):
+        root = self._with_root_tree(self._pre_root_project("both"))
+        preview = migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertEqual(preview["layout"], "pre-root")
+        secondary = preview["detected"]["secondary"]
+        self.assertEqual(secondary["install_dir"], project.PROJECT_DIR)
+        self.assertEqual(sorted(secondary["vendored_trees"]), ["agents", "scripts"])
+        self.assertEqual(secondary["vendored_files"], ["VERSION"])
+        for rel in (".dev-team-agents/scripts", ".dev-team-agents/VERSION", ".claude/dev-team-agents/scripts"):
+            self.assertIn("move {} into the data-store quarantine".format(rel), preview["actions"])
+            self.assertIn(rel, preview["git_tracked"])
+
+    def test_a_root_tree_beside_pre_root_memory_conflict_is_refused_before_anything_moves(self):
+        root = self._with_root_tree(self._pre_root_project("both-memory"))
+        (root / project.PROJECT_DIR / "user-data").mkdir()
+        with self.assertRaises(ConflictError):
+            migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertTrue((root / project.PROJECT_DIR / "scripts" / "hooks" / "stop.sh").is_file())
+        self.assertTrue((root / ".claude" / "user-data" / "session-summary.md").is_file())
+
+    def test_a_symlinked_root_install_outside_the_project_is_refused_before_anything_moves(self):
+        root = self._pre_root_project("both-symlinked")
+        outside = self.tmp / "outside-install"
+        (outside / "scripts").mkdir(parents=True)
+        (outside / "scripts" / "keep.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+        os.symlink(str(outside), str(root / project.PROJECT_DIR))
+        with self.assertRaises(ConflictError):
+            migrate.apply(root, provider_names=["claude"], mode="link")
+        self.assertTrue((outside / "scripts" / "keep.sh").is_file())
+        self.assertTrue((root / ".claude" / "dev-team-agents" / "agents").is_dir())
+        self.assertTrue((root / ".claude" / "user-data" / "session-summary.md").is_file())
+        self.assertFalse((outside / "project.json").exists())
+
+    def test_a_symlinked_empty_install_dir_outside_the_project_gets_no_memory_or_identity(self):
+        root = self._pre_root_project("symlinked-empty")
+        outside = self.tmp / "outside-empty"
+        outside.mkdir()
+        os.symlink(str(outside), str(root / project.PROJECT_DIR))
+        with self.assertRaises(ConflictError):
+            migrate.apply(root, provider_names=["claude"], mode="link")
+        self.assertTrue((root / ".claude" / "user-data" / "session-summary.md").is_file())
+        self.assertEqual(list(outside.iterdir()), [])
+
+    def test_a_vendored_bind_beside_a_stale_pre_root_directory_is_not_a_secondary_install(self):
+        root = self.new_project("vendored-stale")
+        bind.bind(root, provider_names=["claude"], mode="vendored")
+        stale = root / ".claude" / "dev-team-agents" / "agents"
+        stale.mkdir(parents=True)
+        (stale / "old.md").write_text("# old\n", encoding="utf-8")
+        preview = migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertIsNone(preview["detected"]["secondary"])
+        self.assertFalse([a for a in preview["actions"] if a.startswith("move .dev-team-agents/")])
+
     def test_the_cli_plan_and_apply_json(self):
         root = self._pre_root_project()
         code, out, err = self.run_cli("--json", "migrate", str(root), "--provider", "claude", "--mode", "link")
@@ -327,6 +400,59 @@ class PreRootMigrationTest(StoreTestCase):
         for key in ("layout", "adopted_identity", "memory_moved", "context_paths_added", "retired_links", "untracked", "untrack_problem"):
             self.assertIn(key, payload)
         self.assertTrue(payload["untracked"])
+
+
+#: Tools each provider's real installer needs; a provider added without a case fails.
+DUAL_LAYOUT_TOOLS = {"claude": (), "opencode": ("bash", "python3", "jq"), "codex": ("bash", "python3")}
+
+
+@requires_bash()
+class DualLayoutMigrationTest(StoreTestCase):
+    """A pre-root install with a root tree beside it, migrated by every provider's real installer."""
+
+    _git_env = staticmethod(MigrationTest._git_env)
+
+    def setUp(self):
+        super().setUp()
+        versions.install_from_tree(REPO_ROOT, version="9.9.9", force=True, make_current=True)
+        home = os.environ.get("HOME")
+        fake_home = self.tmp / "fake-home"
+        fake_home.mkdir()
+        os.environ["HOME"] = str(fake_home)
+        self.addCleanup(lambda: os.environ.__setitem__("HOME", home) if home is not None else os.environ.pop("HOME", None))
+
+    def test_every_provider_has_a_tools_case(self):
+        self.assertEqual(set(DUAL_LAYOUT_TOOLS), set(providers.ALL_PROVIDERS))
+
+    def test_apply_quarantines_both_installs_for_every_provider(self):
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                missing = [t for t in DUAL_LAYOUT_TOOLS[provider] if shutil.which(t) is None]
+                if missing:
+                    self.skipTest("{} needs {}".format(provider, ", ".join(missing)))
+                root = PreRootMigrationTest._with_root_tree(self, PreRootMigrationTest._pre_root_project(self, "both-" + provider))
+                result = migrate.apply(root, provider_names=[provider], mode="link", untrack_paths=True)
+                self.assertIsNone(result["untrack_problem"])
+                moved = {item["from"]: item["to"] for item in result["quarantined"]}
+                self.assertIn(".claude/dev-team-agents/scripts", moved)
+                self.assertIn(".dev-team-agents/scripts", moved)
+                # Same tree name, two origins: each lands in its own group, nothing lost.
+                self.assertEqual(Path(moved[".claude/dev-team-agents/scripts"]).parent.name, "v2-install")
+                self.assertEqual(Path(moved[".dev-team-agents/scripts"]).parent.as_posix().rsplit("/", 2)[-2:], ["v2-install", "root"])
+                self.assertEqual(
+                    (Path(moved[".dev-team-agents/scripts"]) / "hooks" / "stop.sh").read_text(encoding="utf-8"),
+                    "#!/bin/sh\n# newer\n",
+                )
+                self.assertFalse((root / ".claude" / "dev-team-agents").exists())
+                self.assertTrue(os.path.islink(str(root / project.PROJECT_DIR / "scripts")))
+                self.assertFalse((root / project.PROJECT_DIR / "VERSION").exists())
+                index = subprocess.run(
+                    ["git", "ls-files", "--", ".dev-team-agents/scripts", ".dev-team-agents/VERSION"],
+                    cwd=str(root),
+                    check=True,
+                    stdout=subprocess.PIPE,
+                ).stdout
+                self.assertEqual(index, b"")
 
 
 class BindOverV2Test(StoreTestCase):
@@ -756,6 +882,117 @@ class DoctorTest(StoreTestCase):
         findings = self._project_findings(root)
         self.assertTrue(findings)
         self.assertIn("devteam migrate", findings[0]["hint"])
+
+    def test_an_unbound_pre_root_install_names_its_own_directory(self):
+        root = self.new_project("prerooted-named")
+        (root / ".claude" / "dev-team-agents" / "agents").mkdir(parents=True)
+        message = next(f["message"] for f in self._project_findings(root) if "devteam migrate" in f["hint"])
+        self.assertIn(".claude/dev-team-agents", message)
+        self.assertNotIn("beside it", message)
+
+    def test_an_unbound_pre_root_install_names_the_root_tree_beside_it(self):
+        root = self.new_project("prerooted-both")
+        (root / ".claude" / "dev-team-agents" / "agents").mkdir(parents=True)
+        (root / project.PROJECT_DIR / "scripts").mkdir(parents=True)
+        finding = next(f for f in self._project_findings(root) if "devteam migrate" in f["hint"])
+        self.assertIn(".claude/dev-team-agents", finding["message"])
+        self.assertIn("scripts under .dev-team-agents/", finding["message"])
+        self.assertIn("devteam migrate", finding["hint"])
+
+    def _bound_with(self, name, mode="link"):
+        self.install_version("3.0.0", activate=True)
+        root = self.new_project(name)
+        bind.bind(root, provider_names=["claude"], mode=mode)
+        return root
+
+    def _leftover_findings(self, root):
+        return [
+            f for f in doctor.run(project_root=root)["findings"]
+            if f["level"] != "ok" and "still here" in f["message"]
+        ]
+
+    def test_a_bound_project_reports_a_leftover_pre_root_install(self):
+        root = self._bound_with("bound-preroot")
+        (root / ".claude" / "dev-team-agents" / "workflows").mkdir(parents=True)
+        leftover = self._leftover_findings(root)
+        self.assertEqual(len(leftover), 1)
+        self.assertIn("workflows under .claude/dev-team-agents/", leftover[0]["message"])
+
+    def test_a_bound_project_reports_a_pre_root_install_and_the_root_tree_beside_it(self):
+        root = self._bound_with("bound-both", mode="link")
+        (root / ".claude" / "dev-team-agents" / "agents").mkdir(parents=True)
+        (root / project.PROJECT_DIR / "VERSION").write_text("2.27.3\n", encoding="utf-8")
+        (root / project.PROJECT_DIR / "commands").mkdir()
+        message = self._leftover_findings(root)[0]["message"]
+        self.assertIn("agents under .claude/dev-team-agents/", message)
+        self.assertIn("commands, VERSION under .dev-team-agents/", message)
+
+    def test_a_copy_bind_beside_a_stale_pre_root_reports_only_the_pre_root(self):
+        # A copy bind writes real `scripts/` and `templates/` at the root: its own, not v2.
+        root = self._bound_with("bound-copy", mode="copy")
+        (root / ".claude" / "dev-team-agents" / "agents").mkdir(parents=True)
+        message = self._leftover_findings(root)[0]["message"]
+        self.assertIn(".claude/dev-team-agents/", message)
+        self.assertNotIn("under .dev-team-agents/", message)
+
+    def test_a_bound_project_with_only_pre_root_memory_is_not_reported(self):
+        root = self._bound_with("bound-preroot-memory")
+        (root / ".claude" / "dev-team-agents" / "user-data").mkdir(parents=True)
+        self.assertEqual(self._leftover_findings(root), [])
+
+    def test_leftover_names_are_made_printable_and_capped(self):
+        root = self._bound_with("bound-hostile-names")
+        legacy = root / ".claude" / "dev-team-agents"
+        legacy.mkdir(parents=True)
+        (legacy / "\x1b[31mred\nfake").mkdir()
+        for index in range(12):
+            (legacy / "tree{:02d}".format(index)).mkdir()
+        message = self._leftover_findings(root)[0]["message"]
+        self.assertNotIn("\x1b", message)
+        self.assertNotIn("\n", message)
+        self.assertIn("and 5 more", message)
+
+    def test_a_symlinked_pre_root_directory_is_not_listed(self):
+        root = self._bound_with("bound-preroot-symlink")
+        outside = self.tmp / "outside-preroot"
+        (outside / "secret-name").mkdir(parents=True)
+        os.symlink(str(outside), str(root / ".claude" / "dev-team-agents"))
+        message = self._leftover_findings(root)[0]["message"]
+        self.assertIn("a symlink, not inspected", message)
+        self.assertNotIn("secret-name", message)
+
+    def test_a_pre_root_directory_reached_through_a_symlinked_claude_is_not_listed(self):
+        root = self.new_project("claude-symlink")
+        outside = self.tmp / "outside-claude"
+        (outside / "dev-team-agents" / "secret-name").mkdir(parents=True)
+        os.symlink(str(outside), str(root / ".claude"))
+        installs = migrate.leftover_installs(root)
+        self.assertEqual(installs[0]["note"], "a symlink, not inspected")
+        self.assertNotIn("secret-name", migrate.describe_installs(installs))
+
+    @unittest.skipIf(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0), "needs POSIX permissions")
+    def test_an_unreadable_pre_root_install_is_a_finding_not_an_abort(self):
+        root = self.new_project("unreadable-preroot")
+        legacy = root / ".claude" / "dev-team-agents"
+        legacy.mkdir(parents=True)
+        legacy.chmod(0)
+        self.addCleanup(legacy.chmod, 0o755)
+        message = self._project_findings(root)[0]["message"]
+        self.assertIn("not readable", message)
+
+    def test_a_bound_project_with_an_empty_pre_root_directory_is_not_reported(self):
+        root = self._bound_with("bound-preroot-empty")
+        (root / ".claude" / "dev-team-agents").mkdir(parents=True)
+        self.assertEqual(self._leftover_findings(root), [])
+
+    def test_a_vendored_bind_beside_a_stale_pre_root_reports_only_the_pre_root(self):
+        # Meaningful because a vendored bind really writes real trees at the root.
+        root = self._bound_with("bound-vendored", mode="vendored")
+        (root / ".claude" / "dev-team-agents" / "agents").mkdir(parents=True)
+        leftover = self._leftover_findings(root)
+        self.assertEqual(len(leftover), 1)
+        self.assertIn(".claude/dev-team-agents/", leftover[0]["message"])
+        self.assertNotIn("under .dev-team-agents/", leftover[0]["message"])
 
     def test_a_directory_with_no_legacy_shape_still_gets_the_bind_hint(self):
         root = self.new_project("fresh")
