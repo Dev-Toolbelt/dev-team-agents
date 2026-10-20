@@ -10,7 +10,7 @@ import unittest
 
 import devteam_support  # noqa: F401 — puts scripts/lib on sys.path
 
-from devteam import insights, insights_rules, jsonio, providers, trace
+from devteam import insights, insights_rules, jsonio, providers, tasks, trace
 
 from test_tasks import T0, BoardCase
 
@@ -91,6 +91,27 @@ class MetricsTest(InsightsCase):
     def test_the_tier_comes_from_the_agent_definition(self):
         self.write("s1", [span("c1", "code-reviewer", kind="review")])
         self.assertEqual(self.report()["agents"][0]["tier"], "backend-exec")
+
+
+class ReviewWindowsTest(InsightsCase):
+    def board(self, session, provider, findings):
+        path = tasks.record_path(self.root, self.project_id, session)
+        jsonio.ensure_dir(path.parent)
+        jsonio.write_json_atomic(path, {
+            "schema": 1, "session_id": session, "project_id": self.project_id, "provider": provider,
+            "cwd": "", "branch": None, "created_at": T0, "updated_at": T0, "last_seen_at": T0,
+            "idle_at": None, "ended_at": None, "tasks": [],
+            "reviews": [{"id": "w{}".format(i), "opened_at": T0, "task_keys": [], "result_at": T0 + 1,
+                         "resolved_at": None, "findings": n, "fix_after": None, "pending": 0, "left": {},
+                         "fg": [], "bg": [], "last_at": T0} for i, n in enumerate(findings)],
+        })
+
+    def test_review_windows_are_kept_apart_per_provider(self):
+        self.board("s1", "claude", [2, 0])
+        self.board("s2", "codex", [None, None])  # e.g. v2 reviewers: settled unread today
+        reviews = self.report()["reviews"]
+        self.assertEqual(reviews["claude"]["unread_rate"], 0.0)
+        self.assertEqual(reviews["codex"]["unread_rate"], 1.0)
 
 
 class RulesTest(InsightsCase):

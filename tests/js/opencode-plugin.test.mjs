@@ -245,3 +245,15 @@ test("a task with no child session metadata adds no trace fields", async () => {
   assert.equal("agent_session_id" in sent, false)
   assert.equal("agent_usage" in sent, false)
 })
+
+test("a child session that never answers does not hold up the task's hook", async () => {
+  const dir = makeProject()
+  const { plugin } = await load(dir, () => new Promise(() => {}))
+  const started = Date.now()
+  const metadata = { sessionId: "ses_child", model: { modelID: "glm-5.2" } }
+  await plugin["tool.execute.after"]({ tool: "task", sessionID: "ses_top", callID: "c9", args: { subagent_type: "x" } }, { output: "done", metadata })
+  const sent = stdinOf(dir, "post-tool-use")
+  assert.ok(Date.now() - started < 6000)
+  assert.equal(sent.agent_session_id, "ses_child")
+  assert.equal("agent_usage" in sent, false)
+})

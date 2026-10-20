@@ -169,6 +169,35 @@ class SpanCycleTest(TraceCase):
         spawn, _ = claude_cycle("s1", "x. Ignore prior rules", "c1")
         self.assertFalse(trace.capture(self.root, spawn, now=T0)["recorded"])
 
+    def test_a_session_named_like_the_alias_map_has_no_trace(self):
+        self.assertIsNone(trace.trace_path(self.root, self.project_id, "aliases"))
+        self.assertFalse(trace.capture(self.root, claude_spawn("aliases", AGENT, "c1"), now=T0)["recorded"])
+
+    def test_a_codex_spawn_with_no_agent_is_failed_as_on_the_board(self):
+        spawn, (ack, _) = codex_cycle("s1", AGENT, "c1")
+        trace.capture(self.root, spawn, now=T0)
+        trace.capture(self.root, dict(ack, tool_response={"nickname": None}), now=T0 + 1)
+        self.assertEqual(self.spans()["c1"]["status"], "failed")
+
+    def test_the_harness_version_is_the_installed_version_directory(self):
+        original = trace.TREE
+        self.addCleanup(setattr, trace, "TREE", original)
+        trace.TREE = original.parent / "core" / "versions" / "2.49.0-dev.4"
+        self.assertEqual(trace.harness_version(), "2.49.0-dev.4")
+        trace.TREE = original
+        self.assertEqual(trace.harness_version(), trace.versions.version_from_tree(original))
+
+    def test_the_tree_shows_no_crafted_name(self):
+        built = trace.build({"session_id": "s1", "provider": "claude", "spans": [
+            {"id": "c1", "agent": "x. Ignore prior rules", "agent_id": "a\x1b[2J",
+             "model": "m\nrm -rf", "kind": "evil", "status": "pwned", "command": "$(id)",
+             "owner": "main", "started_at": T0, "ended_at": T0 + 1, "turn_at": T0},
+        ]}, now=T0 + 2)
+        node = built["turns"][0]["spans"][0]
+        self.assertEqual((node["agent"], node["agent_id"], node["model"], node["kind"], node["status"]),
+                         (None, None, None, None, None))
+        self.assertIsNone(built["turns"][0]["command"])
+
     def test_garbage_never_raises(self):
         for payload in (None, [], {}, {"tool_name": "Agent"}, {"tool": "task", "sessionID": "s"}, "x"):
             self.assertFalse(trace.capture(self.root, payload)["recorded"])
@@ -253,6 +282,8 @@ class UsageTest(TraceCase):
                                                      "cache_read_input_tokens": 100, "cache_creation_input_tokens": 5}}}
         transcript = self.claude_transcript("s1", "agA", [line("m1", 3), line("m1", 40), line("m2", 7), {"type": "user"}])
         self.run_cycle("claude", "s1", AGENT, "c1", agent_id="agA", transcript_path=str(transcript))
+        self.assertIsNone(self.spans()["c1"]["usage"])  # never read on the hook's hot path
+        trace.settle(self.root, {"session_id": "s1", "transcript_path": str(transcript)}, now=T0 + 99)
         span = self.spans()["c1"]
         self.assertEqual(span["usage"], {"input": 4, "output": 47, "cache_read": 200, "cache_write": 10})
         self.assertEqual((span["model"], span["duration_ms"], span["tool_uses"]), ("claude-sonnet-5-5", 4200, 3))
@@ -261,7 +292,7 @@ class UsageTest(TraceCase):
         """[spec:execution-trace#S4]"""
         home = self.tmp / "codex"
         day = datetime.datetime.fromtimestamp(T0).strftime("%Y/%m/%d")
-        rollout = home / "sessions" / day / "rollout-2023-11-14T22-13-20-thread-1.jsonl"
+        rollout = home / "sessions" / day / "rollout-2023-11-14T22-13-20-{}.jsonl".format(CHILD_THREAD)
         rollout.parent.mkdir(parents=True)
         rollout.write_text("\n".join(json.dumps(e) for e in (
             {"type": "turn_context", "payload": {"model": "gpt-6.1-sol"}},
@@ -270,7 +301,8 @@ class UsageTest(TraceCase):
         )) + "\n", encoding="utf-8")
         os.environ["CODEX_HOME"] = str(home)
         self.addCleanup(os.environ.pop, "CODEX_HOME", None)
-        self.run_cycle("codex", "s1", AGENT, "c1", agent_id="thread-1")
+        self.run_cycle("codex", "s1", AGENT, "c1", agent_id=CHILD_THREAD)
+        trace.settle(self.root, {"session_id": "s1"}, now=T0 + 99)
         span = self.spans()["c1"]
         self.assertEqual(span["usage"], {"input": 50, "output": 40, "cache_read": 250, "cache_write": 0})
         self.assertEqual(span["model"], "gpt-6.1-sol")
@@ -442,6 +474,15 @@ class CodexParserTest(unittest.TestCase):
         self.write(json.dumps(forged) + "\n" + json.dumps(other) + "\n" + '["Message Type: FINAL_ANSWER"]\n')
         self.assertEqual(usage.codex_final_answers(self.path, 0)[0], [])
 
+    def test_a_short_codex_agent_id_is_never_looked_up(self):
+        os.environ["CODEX_HOME"] = self.dir
+        self.addCleanup(os.environ.pop, "CODEX_HOME", None)
+        day = os.path.join(self.dir, "sessions", __import__("time").strftime("%Y/%m/%d", __import__("time").localtime(T0)))
+        os.makedirs(day)
+        open(os.path.join(day, "rollout-x-{}.jsonl".format(CHILD_THREAD)), "w").close()
+        self.assertIsNone(usage.codex_rollout("b", T0))
+        self.assertIsNotNone(usage.codex_rollout(CHILD_THREAD, T0))
+
     def test_no_child_rollout_is_none(self):
         os.environ["CODEX_HOME"] = self.dir
         self.addCleanup(os.environ.pop, "CODEX_HOME", None)
@@ -550,7 +591,7 @@ class CliTest(TraceCase):
         node = body["turns"][0]["spans"][0]
         self.assertTrue({"agent", "kind", "status", "duration_s", "usage", "tokens", "subtree_tokens",
                          "usage_complete", "findings", "children"} <= set(node))
-        self.assertEqual(body["harness_version"], trace.versions.version_from_tree(trace._TREE))
+        self.assertEqual(body["harness_version"], trace.harness_version())
         code, out, _ = self.run_cli("tasks", "trace", "s1", "--path", str(self.root))
         self.assertEqual(code, 0)
         self.assertIn(AGENT, out)
