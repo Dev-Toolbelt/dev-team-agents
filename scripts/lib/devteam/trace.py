@@ -35,6 +35,8 @@ MAX_ALIASES = 200
 #: must stay bounded however many agents a session ran (each read is capped by ``usage.READ_CAP``).
 SETTLE_READS = 20
 USAGE_TRIES = 3
+#: Bytes of usage files one Stop reads at most, all spans together; the rest waits for the next Stop.
+SETTLE_BYTES = 256 * 1024 * 1024
 #: A span still running this long after it started is settled ``interrupted``: a background agent
 #: whose hand-back never came, a Codex agent never waited on. Same age the board gives a review wait.
 RUNNING_MAX_AGE = tasks.PENDING_MAX_AGE
@@ -42,6 +44,10 @@ RUNNING_MAX_AGE = tasks.PENDING_MAX_AGE
 ENDED = ("completed", "failed", "cancelled", "interrupted")
 #: An agent name a span may carry; the same charset `insights` reads back (ADR-0042).
 _AGENT_NAME = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+#: The public name of that charset: insights.py reads trace content back through it.
+SAFE_NAME = _AGENT_NAME
+#: A semver version a trace may carry (a pre-release suffix allowed).
+SAFE_VERSION = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]{1,32})?$")
 _HANDBACK_FAILED = ("failed", "killed", "error")
 
 
@@ -51,8 +57,8 @@ def trace_dir(root, project_id):
 
 def trace_path(root, project_id, session_id):
     key = tasks.session_key(session_id)
-    if key is None:
-        return None
+    if key is None or key == "aliases":
+        return None  # `aliases.json` is the child-session map, never a session's trace
     return trace_dir(root, project_id) / "{}.json".format(key)
 
 
@@ -115,9 +121,9 @@ def _provider_and_tool(payload):
     tool_name = payload.get("tool_name") if isinstance(payload.get("tool_name"), str) else ""
     bare_tool = payload.get("tool") if isinstance(payload.get("tool"), str) else ""
     bare = tool_name.split(".")[-1]
-    if tool_name in tasks._CLAUDE_AGENT_TOOLS:
+    if tool_name in tasks.CLAUDE_AGENT_TOOLS:
         return "claude", tool_name
-    if bare in tasks._CODEX_AGENT_TOOLS:
+    if bare in tasks.CODEX_AGENT_TOOLS:
         return "codex", bare
     if bare_tool.lower() == "task":
         return "opencode", "task"
@@ -135,14 +141,14 @@ def _kind(provider, name):
 def _response_fields(payload):
     """``(agent_id, model, duration_ms, tool_uses, async)`` from a Claude ``Agent`` result."""
     agent_id = model = duration = tools = None
-    for found in tasks._json_objects(payload.get("tool_response") or payload.get("tool_output")):
-        agent_id = agent_id or tasks._id_text(found.get("agentId"))
+    for found in tasks.json_objects(payload.get("tool_response") or payload.get("tool_output")):
+        agent_id = agent_id or tasks.id_text(found.get("agentId"))
         model = model or (found.get("resolvedModel") if isinstance(found.get("resolvedModel"), str) else None)
         if duration is None and isinstance(found.get("totalDurationMs"), int):
             duration = found["totalDurationMs"]
         if tools is None and isinstance(found.get("totalToolUseCount"), int):
             tools = found["totalToolUseCount"]
-    return agent_id, model, duration, tools, tasks._async_launch(payload)
+    return agent_id, model, duration, tools, tasks.async_launch(payload)
 
 
 def _findings(value):
@@ -151,7 +157,7 @@ def _findings(value):
     Read like the board reads it: the fields that echo the agent's prompt are dropped first, so a
     prompt that quotes a marker is never counted, and only the report's own last marker counts.
     """
-    found = review_triggers.markers(tasks._output(value))
+    found = review_triggers.markers(tasks.agent_report(value))
     return found[-1] if found else None
 
 
@@ -160,20 +166,20 @@ def _event(payload):
     provider, tool = _provider_and_tool(payload)
     if provider is None:
         return None
-    inp = tasks._dict(payload.get("tool_input")) or tasks._dict(payload.get("args"))
-    event = tasks._text(payload.get("hook_event_name"))
+    inp = tasks.as_dict(payload.get("tool_input")) or tasks.as_dict(payload.get("args"))
+    event = tasks.as_text(payload.get("hook_event_name"))
     after = event in ("PostToolUse", "PostToolUseFailure") or any(
         k in payload for k in ("output", "tool_response", "tool_output")
     )
-    use_id = tasks._first_text(payload, "tool_use_id", "toolUseId")
+    use_id = tasks.first_text(payload, "tool_use_id", "toolUseId")
     if tool == "wait_agent":
-        results = tasks._wait_results(payload.get("tool_response"))
+        results = tasks.wait_results(payload.get("tool_response"))
         return (provider, "wait", results) if results else None
     if tool == "close_agent":
-        ident = tasks._id_text(inp.get("target") or inp.get("id") or inp.get("agent_id"))
+        ident = tasks.id_text(inp.get("target") or inp.get("id") or inp.get("agent_id"))
         return (provider, "wait", [(ident, "cancelled", False)]) if ident else None
-    name = review_triggers.spawn_name(tasks._first_text(inp, "subagent_type", "agent_type"))
-    if name is not None and not _AGENT_NAME.match(name):
+    name = review_triggers.spawn_name(tasks.first_text(inp, "subagent_type", "agent_type"))
+    if name is not None and not SAFE_NAME.match(name):
         return None  # a name no agent carries: recorded before the provider checks it, so never trusted
     if not after:
         if not name or not use_id:
@@ -187,20 +193,21 @@ def _event(payload):
     if event == "PostToolUseFailure":
         return provider, "end", {"id": use_id, "status": "failed"}
     if tool == "spawn_agent":
-        ref = tasks._spawned_agent_id(payload.get("tool_response"))
+        ref = tasks.spawned_agent_id(payload.get("tool_response"))
         if ref:
             return provider, "ref", {"id": use_id, "agent_id": ref}
-        task_path = tasks._spawned_task_path(payload.get("tool_response"))
+        task_path = tasks.spawned_task_path(payload.get("tool_response"))
         if task_path:
             # Multi-agent v2: no agent id, only a task path; its end is the parent rollout's
             # FINAL_ANSWER, read by `settle`.
             return provider, "ref", {"id": use_id, "agent_path": task_path}
-        return None  # no agent at all: the span stays as it is, and the Stop settles it
+        # No agent at all: failed, as the board records it (`tasks._agent_op`).
+        return provider, "end", {"id": use_id, "status": "failed"}
     findings = _findings(payload.get("tool_response") or payload.get("tool_output") or payload.get("output"))
     if provider == "opencode":
         return provider, "end", {
             "id": use_id, "status": "completed", "findings": findings,
-            "agent_id": tasks._id_text(payload.get("agent_session_id")),
+            "agent_id": tasks.id_text(payload.get("agent_session_id")),
             "usage": usage.from_payload(payload.get("agent_usage")),
             "model": payload.get("agent_model") if isinstance(payload.get("agent_model"), str) else None,
         }
@@ -215,23 +222,31 @@ def _event(payload):
 def _turn_of(root, project_id, session_id, spans):
     """``(turn_at, command)`` of the session's current turn; the last span's when the turn was injected."""
     record = tasks.record_path(root, project_id, session_id)
-    started, excerpt = tasks._turn(record) if record is not None else (None, "")
+    started, excerpt = tasks.current_turn(record) if record is not None else (None, "")
     if started is None:
         last = max((s for s in spans if s.get("turn_at")), key=lambda s: s["turn_at"], default=None)
         return (last["turn_at"], last.get("command")) if last else (None, None)
-    match = command_usage._INVOCATION_RE.match(excerpt or "")
-    return started, (match.group(1) if match else None)
+    return started, command_usage.invocation(excerpt)
 
 
 #: The tree this module runs from; its version is the harness that produced the trace.
-_TREE = Path(__file__).resolve().parents[3]
+#: The tree this module runs from; its version is the harness that produced the trace.
+TREE = Path(__file__).resolve().parents[3]
+
+
+def harness_version():
+    """The dev-team-agents version this code is: the installed version directory's name
+    (``core/versions/<v>/``, pre-releases included), else the newest CHANGELOG heading."""
+    if TREE.parent.name == "versions" and SAFE_VERSION.match(TREE.name):
+        return TREE.name
+    return versions.version_from_tree(TREE)
 
 
 def _new_trace(session_id, provider, now):
     return {
         "schema": SCHEMA, "session_id": session_id, "provider": provider,
         # Lets the optimization loop compare cost before and after a harness change.
-        "harness_version": versions.version_from_tree(_TREE),
+        "harness_version": harness_version(),
         "created_at": now, "updated_at": now,
         "scan": {"opened_at": now, "tx_path": None, "tx_offset": None, "queue_ids": []},
         "spans": [],
@@ -242,32 +257,39 @@ def _find(spans, ident):
     return next((s for s in spans if ident and ident in (s.get("id"), s.get("agent_id"))), None)
 
 
-def _fill_usage(span, provider, transcript, session_id=None):
-    """Read the ended span's usage from its provider's record, once. Returns True when it changed."""
-    if span.get("usage") is not None or span.get("status") not in ENDED:
-        return False
-    if (span.get("usage_tries") or 0) >= USAGE_TRIES:
-        return False
-    span["usage_tries"] = (span.get("usage_tries") or 0) + 1
-    found, model = None, None
+def _usage_source(span, provider, transcript, session_id):
+    """``(path, model_hint, agent_id)``: the file holding an ended span's usage, else ``(None, …)``.
+
+    Pure lookup, no lock held: the Claude subagent transcript, the Codex child rollout (v1 by agent
+    id, v2 by the child's first line naming its parent thread and task path).
+    """
     if provider == "claude":
         agent_id = span.get("agent_id") or usage.claude_agent_id_for(transcript, span.get("id"))
-        if agent_id and not span.get("agent_id"):
-            span["agent_id"] = agent_id
-        found = usage.claude_transcript_usage(usage.claude_subagent_path(transcript, agent_id))
-    elif provider == "codex" and span.get("agent_id"):
-        found, model = usage.codex_rollout_usage(usage.codex_rollout(span["agent_id"], span.get("started_at")))
-    elif provider == "codex" and span.get("agent_path"):
-        # v2: the child's own rollout names its parent thread and its task path in its first line.
+        return usage.claude_subagent_path(transcript, agent_id), agent_id
+    if provider == "codex" and span.get("agent_id"):
+        return usage.codex_rollout(span["agent_id"], span.get("started_at")), None
+    if provider == "codex" and span.get("agent_path"):
         parent = usage.codex_thread_id(span.get("rollout_path") or transcript) or session_id
-        child = usage.codex_child_rollout(parent, span["agent_path"], span.get("started_at"))
-        found, model = usage.codex_rollout_usage(child)
-    if found is None:
-        return False
-    span["usage"] = found
-    if model and not span.get("model"):
-        span["model"] = model
-    return True
+        return usage.codex_child_rollout(parent, span["agent_path"], span.get("started_at")), None
+    return None, None
+
+
+def _read_usage(span, provider, transcript, session_id, budget):
+    """``{"usage", "model", "agent_id"}`` read for one ended span, ``{}`` when not readable yet, or
+    ``None`` when the Stop's byte budget is spent (the span is not charged a try then)."""
+    path, agent_id = _usage_source(span, provider, transcript, session_id)
+    found = {"agent_id": agent_id} if agent_id and not span.get("agent_id") else {}
+    if path is None or not os.path.isfile(str(path)):
+        return found
+    size = os.path.getsize(str(path))
+    if size > budget["left"]:
+        return None
+    budget["left"] -= size
+    if provider == "claude":
+        found["usage"] = usage.claude_transcript_usage(path)
+    else:
+        found["usage"], found["model"] = usage.codex_rollout_usage(path)
+    return found
 
 
 def _is_v2(span):
@@ -275,40 +297,24 @@ def _is_v2(span):
 
 
 def _mark_rollout(span, transcript):
-    """Where the parent rollout ends now; a v2 FINAL_ANSWER for ``span`` can only come after it."""
-    if span.get("rollout_path") or not (transcript and os.path.isfile(transcript)):
-        return
-    span["rollout_offset"] = os.path.getsize(transcript)
-    span["rollout_path"] = transcript
+    """Keep where the parent rollout ends at this v2 spawn (``usage.rollout_mark``), once."""
+    if not span.get("rollout_path"):
+        span.update(usage.rollout_mark(transcript) or {})
 
 
 def _settle_v2(trace, transcript, now):
-    """End v2 spans at their FINAL_ANSWER: the first one from their path after their own spawn mark.
+    """End v2 spans at their FINAL_ANSWER, by the rule the board uses (``usage.codex_v2_matches``).
 
-    Same rule as the board (``tasks._scan_codex_v2``); a span with none is left to
-    :data:`RUNNING_MAX_AGE`. Spans whose spawn wrote to another rollout (a nested spawn from a child
-    thread, a resumed thread) are not read here.
+    A span with none is left to :data:`RUNNING_MAX_AGE`; spans whose spawn wrote to another rollout
+    (a nested spawn from a child thread, a resumed thread) are not read here.
     """
-    readable = [s for s in trace["spans"] if _is_v2(s) and s.get("rollout_path") == transcript]
-    if not readable or not transcript or not os.path.isfile(transcript):
-        return
-    scan = trace.get("codex_scan") if isinstance(trace.get("codex_scan"), dict) else {}
-    # Resume where the last scan stopped, or at the oldest open mark when that is later (as the board).
-    start = min(s.get("rollout_offset") or 0 for s in readable)
-    if scan.get("tx_path") == transcript and isinstance(scan.get("tx_offset"), int):
-        start = max(start, scan["tx_offset"])
-    answers, offset = usage.codex_final_answers(transcript, start)
-    trace["codex_scan"] = {"tx_path": transcript, "tx_offset": offset}
-    for answer in answers:
-        waiting = sorted(
-            (s for s in readable if _is_v2(s) and s["agent_path"] == answer["author"]
-             and (s.get("rollout_offset") or 0) <= answer["offset"]),
-            key=lambda s: s["started_at"],
-        )
-        if waiting:
-            span = waiting[0]
-            _end(span, "completed", max(span["started_at"], min(now, answer["at"] or now)))
-            span["findings"] = _findings(answer["text"])
+    open_spans = [s for s in trace["spans"] if _is_v2(s)]
+    pairs, scan = usage.codex_v2_matches(open_spans, transcript, trace.get("codex_scan"), "agent_path", "started_at")
+    if scan is not None:
+        trace["codex_scan"] = scan
+    for span, answer in pairs:
+        _end(span, "completed", max(span["started_at"], min(now, answer["at"] or now)))
+        span["findings"] = _findings(answer["text"])
 
 
 def _end(span, status, now):
@@ -343,7 +349,6 @@ def _apply(trace, provider, op, body, owner, turn, now, transcript):
         for ident, status, failed in body:
             span = _find(spans, ident)
             if span is not None and _end(span, "failed" if failed else status, now):
-                _fill_usage(span, provider, transcript)
                 changed = True
         return changed
     span = _find(spans, body["id"])
@@ -358,8 +363,8 @@ def _apply(trace, provider, op, body, owner, turn, now, transcript):
         span["background"] = True
         return True
     if op == "end":
+        # Its usage is read at Stop (`settle`), outside any lock: never on the hook's hot path.
         _end(span, body["status"], now)
-        _fill_usage(span, provider, transcript)
     return True
 
 
@@ -373,12 +378,12 @@ def capture(root, payload, now=None):
         if found is None:
             return result
         provider, op, body = found
-        project_id = tasks._bound_id(root)
-        session_id = tasks._first_text(payload, "session_id", "sessionID", "sessionId")
+        project_id = tasks.bound_id(root)
+        session_id = tasks.first_text(payload, "session_id", "sessionID", "sessionId")
         if not project_id or not session_id:
             return result
         top, child = _root_session(root, project_id, session_id)
-        parent = tasks._first_text(payload, "parent_id") if provider == "opencode" else ""
+        parent = tasks.first_text(payload, "parent_id") if provider == "opencode" else ""
         own = trace_path(root, project_id, session_id)
         if not child and parent and parent != session_id and own is not None and not own.exists():
             # opencode names a child session's parent on every call: route it before its agent ends.
@@ -388,8 +393,8 @@ def capture(root, payload, now=None):
         if path is None:
             return result
         now = int(time.time() if now is None else now)
-        owner = tasks._first_text(payload, "agent_id") or (session_id if child else tasks.MAIN_OWNER)
-        transcript = tasks._first_text(payload, "transcript_path") or None
+        owner = tasks.first_text(payload, "agent_id") or (session_id if child else tasks.MAIN_OWNER)
+        transcript = tasks.first_text(payload, "transcript_path") or None
         jsonio.ensure_dir(path.parent)
         with _lock(path):
             trace = _load(path)
@@ -424,8 +429,8 @@ def settle(root, payload, now=None):
     """
     result = {"settled": False}
     try:
-        project_id = tasks._bound_id(root)
-        session_id = tasks._first_text(payload, "session_id", "sessionID", "sessionId") if isinstance(payload, dict) else ""
+        project_id = tasks.bound_id(root)
+        session_id = tasks.first_text(payload, "session_id", "sessionID", "sessionId") if isinstance(payload, dict) else ""
         if not project_id or not session_id:
             return result
         top, child = _root_session(root, project_id, session_id)
@@ -433,7 +438,7 @@ def settle(root, payload, now=None):
         if child or path is None or not path.is_file():
             return result
         now = int(time.time() if now is None else now)
-        transcript = tasks._first_text(payload, "transcript_path") or None
+        transcript = tasks.first_text(payload, "transcript_path") or None
         with _lock(path):
             trace = _load(path)
             if trace is None:
@@ -452,7 +457,7 @@ def settle(root, payload, now=None):
             if pending and provider == "claude" and transcript and os.path.isfile(transcript):
                 scan = trace.setdefault("scan", {"opened_at": now, "tx_path": None, "tx_offset": None, "queue_ids": []})
                 scan["opened_at"] = min(s["started_at"] for s in pending.values())
-                for report in tasks._background_reports(scan, transcript):
+                for report in tasks.background_reports(scan, transcript):
                     span = pending.get(report["id"])
                     if span is not None and span["status"] == "running":
                         status = "failed" if report["status"] in _HANDBACK_FAILED else "completed"
@@ -461,7 +466,6 @@ def settle(root, payload, now=None):
                             span["findings"] = report["markers"][-1]
             if provider == "codex":
                 _settle_v2(trace, transcript, now)
-            reads = 0
             for span in spans:
                 if span.get("status") == "running" and (
                     now - (span.get("started_at") or now) > RUNNING_MAX_AGE
@@ -469,32 +473,64 @@ def settle(root, payload, now=None):
                         and not (provider == "codex" and (span.get("agent_id") or span.get("agent_path"))))
                 ):
                     _end(span, "interrupted", now)
-                if reads < SETTLE_READS and span.get("usage") is None and span.get("status") in ENDED \
-                        and (span.get("usage_tries") or 0) < USAGE_TRIES:
-                    reads += 1
-                    _fill_usage(span, provider, transcript, trace.get("session_id"))
-            if json.dumps(trace, sort_keys=True) == before:
-                result["settled"] = True
-                return result
-            trace["updated_at"] = now
-            jsonio.write_json_atomic(path, trace)
+            wanted = [
+                dict(s) for s in spans
+                if s.get("usage") is None and s.get("status") in ENDED and (s.get("usage_tries") or 0) < USAGE_TRIES
+            ][:SETTLE_READS]
+            if json.dumps(trace, sort_keys=True) != before:
+                trace["updated_at"] = now
+                jsonio.write_json_atomic(path, trace)
+            session = trace.get("session_id")
+        # Usage files can be large: they are read with no lock held, then merged under it again.
+        budget = {"left": SETTLE_BYTES}
+        reads = {}
+        for span in wanted:
+            found = _read_usage(span, provider, transcript, session, budget)
+            if found is None:
+                break
+            reads[span["id"]] = found
+        if reads:
+            with _lock(path):
+                trace = _load(path)
+                if trace is None:
+                    return result
+                for span in trace["spans"]:
+                    found = reads.get(span.get("id"))
+                    if found is None or span.get("usage") is not None:
+                        continue
+                    span["usage_tries"] = (span.get("usage_tries") or 0) + 1
+                    if found.get("agent_id") and not span.get("agent_id"):
+                        span["agent_id"] = found["agent_id"]
+                    if found.get("usage") is not None:
+                        span["usage"] = found["usage"]
+                        if found.get("model") and not span.get("model"):
+                            span["model"] = found["model"]
+                trace["updated_at"] = now
+                jsonio.write_json_atomic(path, trace)
         result["settled"] = True
     except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
         result["settled"] = False
     return result
 
 
+def _safe(value):
+    """A recorded name or id as it may be shown, else ``None``: the file is read back as data."""
+    return value if isinstance(value, str) and SAFE_NAME.match(value) else None
+
+
 def _node(span, now):
     end = span.get("ended_at") or now
     own = usage.total(span.get("usage"))
     return {
-        "id": span.get("id"), "agent": span.get("agent"), "kind": span.get("kind"),
-        "agent_id": span.get("agent_id"), "status": span.get("status"),
+        "id": _safe(span.get("id")), "agent": _safe(span.get("agent")),
+        "kind": span.get("kind") if span.get("kind") in ("agent", "review", "builtin") else None,
+        "agent_id": _safe(span.get("agent_id")),
+        "status": span.get("status") if span.get("status") in ("running",) + ENDED else None,
         "background": bool(span.get("background")),
         "started_at": span.get("started_at"), "ended_at": span.get("ended_at"),
         "duration_s": max(0, int(end) - int(span.get("started_at") or end)),
         "duration_ms": span.get("duration_ms"), "tool_uses": span.get("tool_uses"),
-        "model": span.get("model"), "usage": span.get("usage"), "findings": span.get("findings"),
+        "model": _safe(span.get("model")), "usage": span.get("usage"), "findings": span.get("findings"),
         "tokens": own, "subtree_tokens": own, "usage_complete": span.get("usage") is not None, "children": [],
     }
 
@@ -535,8 +571,8 @@ def build(trace, now=None):
     turns = {}
     for span in roots:
         key = span.get("turn_at")
-        turn = turns.setdefault(key, {"turn_at": key, "command": span.get("command"), "spans": []})
-        turn["command"] = turn["command"] or span.get("command")
+        turn = turns.setdefault(key, {"turn_at": key, "command": _safe(span.get("command")), "spans": []})
+        turn["command"] = turn["command"] or _safe(span.get("command"))
         node = nodes[id(span)]
         total(node)
         turn["spans"].append(node)
@@ -561,10 +597,14 @@ def build(trace, now=None):
 
 def show(root, session_id, now=None):
     """The built trace of ``session_id`` in the project at ``root``, else ``None``."""
-    project_id = tasks._bound_id(root)
+    project_id = tasks.bound_id(root)
     if not project_id:
         return None
     session_id = _root_session(root, project_id, session_id)[0]
     path = trace_path(root, project_id, session_id)
     trace = _load(path) if path is not None and path.is_file() else None
     return build(trace, now) if trace is not None else None
+
+
+#: The public name for reading a trace file (insights.py reads traces through it).
+load = _load
