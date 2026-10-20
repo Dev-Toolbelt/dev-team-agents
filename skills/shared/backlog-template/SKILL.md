@@ -232,6 +232,8 @@ In task descriptions, always call out upstream dependencies:
 - `Depends on: external API contract` — blocked by third party
 - `Parallel with: TASK-005` — can run concurrently
 
+`devteam backlog lint` checks this graph mechanically, and `devteam backlog ready` derives the ready frontier and the waves it implies. A prose dependency (`external API contract`) cannot be evaluated: it is reported as the task's `external_note` and never holds the task back — whoever starts the task checks it.
+
 **Design for parallelism.** Keep the dependency graph as flat as possible so
 each wave holds as many tasks as it can. A task with `Depends on: none` belongs
 to Wave A; a task moves to a later wave only when it truly cannot start before
