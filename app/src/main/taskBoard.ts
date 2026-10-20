@@ -40,6 +40,8 @@ export interface TaskBoardDeps {
   readonly startStream: (handlers: {
     readonly onEvent: (event: TaskWatchEvent) => void;
     readonly onInvalid: (detail: string) => void;
+    /** A session dropped from a snapshot that was still delivered. */
+    readonly onDropped?: (detail: string) => void;
     readonly onEnd: (end: StreamEnd) => void;
   }) => Promise<StreamHandle | null>;
   /** One-shot `tasks list`, for a manual refresh. */
@@ -58,6 +60,8 @@ export class TaskBoard {
   private incoming: Map<ProjectId, BoardProject> | null = null;
   private handle: StreamHandle | null = null;
   private stopped = false;
+  /** Dropped-session notes already logged on this stream. */
+  private loggedDrops = new Set<string>();
   /** Terminal: set when the app is quitting; nothing may spawn a child afterwards. */
   private disposed = false;
   /** Bumped whenever the stream changes `projects`; a `refresh` that raced it yields. */
@@ -162,6 +166,7 @@ export class TaskBoard {
     const generation = this.generation;
     const current = () => generation === this.generation && !this.stopped;
     this.incoming = new Map();
+    this.loggedDrops = new Set();
     this.streamError = null;
     // A restart keeps the data-bearing status: flipping to `starting` would flash "Waiting
     // for the first snapshot" over a board that still has its last good snapshots.
@@ -174,6 +179,12 @@ export class TaskBoard {
           if (current()) this.onEvent(event);
         },
         onInvalid: (detail) => this.deps.log?.(`task board: ignored an event: ${detail}`),
+        onDropped: (detail) => {
+          // Every snapshot of the project repeats the same drop; log each reason once per stream.
+          if (!current() || this.loggedDrops.has(detail)) return;
+          this.loggedDrops.add(detail);
+          this.deps.log?.(`task board: ${detail}`);
+        },
         onEnd: (end) => {
           if (current()) this.onEnd(end);
         },

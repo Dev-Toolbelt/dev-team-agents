@@ -84,9 +84,12 @@ export function formatDateTime(epochSeconds: number, locale?: string, timeZone?:
   return `${date} ${time}`;
 }
 
-/** Tasks the CLI counts in these sessions that were not parsed into a card (unknown column and status). */
-export function countUnshown(sessions: readonly BoardSession[]): number {
-  return sessions.reduce((n, session) => n + Math.max(0, session.counts.total - session.tasks.length), 0);
+/**
+ * Tasks the CLI counts in these sessions that were not parsed into a card (unknown column and
+ * status), plus the tasks of sessions dropped whole (`droppedTasks`, for a view that spans them).
+ */
+export function countUnshown(sessions: readonly BoardSession[], droppedTasks = 0): number {
+  return sessions.reduce((n, session) => n + Math.max(0, session.counts.total - session.tasks.length), droppedTasks);
 }
 
 export function percent(part: number, total: number): number {
@@ -257,7 +260,7 @@ export function viewProject(project: BoardProject, period: Period, nowSeconds: n
     sessions,
     providers,
     sessionsTotal: whole ? project.sessions_total : sessions.length,
-    sessionsActive: whole ? project.sessions_active : sessions.filter((s) => s.status === 'active').length,
+    sessionsActive: whole ? project.sessions_active : sessions.filter((s) => s.status !== 'ended').length,
     counts,
     stale: whole ? project.stale : tasks.filter((task) => task.stale).length,
     abandoned: whole ? project.abandoned : tasks.filter((task) => task.abandoned).length,
@@ -362,6 +365,44 @@ export function basename(path: string): string {
 /** The app-local name, else the directory's basename, else the id — never a bare UUID when a path exists. */
 export function boardProjectName(project: BoardProject, names: Readonly<Record<string, string>>): string {
   return names[project.project_id] ?? (project.root !== '' ? basename(project.root) : project.project_id);
+}
+
+/**
+ * `names` with the parent directory appended (`storefront (acme)`) to every project whose shown
+ * name another project shares, so two tabs or cards never read alike. Unique names pass through.
+ */
+export function disambiguatedNames(projects: readonly BoardProject[], names: Readonly<Record<string, string>>): Record<string, string> {
+  const groupBy = (shownOf: (project: BoardProject) => string): Map<string, BoardProject[]> => {
+    const groups = new Map<string, BoardProject[]>();
+    for (const project of projects) {
+      const shown = shownOf(project);
+      groups.set(shown, [...(groups.get(shown) ?? []), project]);
+    }
+    return groups;
+  };
+  const shown = new Map<string, string>();
+  for (const project of projects) shown.set(project.project_id, boardProjectName(project, names));
+  for (const [name, group] of groupBy((project) => shown.get(project.project_id)!)) {
+    if (group.length < 2) continue;
+    for (const project of group) {
+      const parent = project.root === '' ? '' : basename(project.root.replace(/[/\\]+$/, '').replace(/[^/\\]*$/, ''));
+      if (parent !== '' && parent !== project.root) shown.set(project.project_id, `${name} (${parent})`);
+    }
+  }
+  // Same basename and parent, or no parent at all: a short, stable slice of the id breaks the tie.
+  for (const [name, group] of groupBy((project) => shown.get(project.project_id)!)) {
+    if (group.length < 2) continue;
+    const longest = Math.max(...group.map((project) => project.project_id.length));
+    let length = 4;
+    while (length < longest && new Set(group.map((project) => project.project_id.slice(0, length))).size < group.length) length += 1;
+    for (const project of group) shown.set(project.project_id, `${name} [${project.project_id.slice(0, length)}]`);
+  }
+  const result: Record<string, string> = {};
+  for (const project of projects) {
+    const name = shown.get(project.project_id)!;
+    if (name !== boardProjectName(project, names)) result[project.project_id] = name;
+  }
+  return result;
 }
 
 /** Projects with a task in progress first, then by the name the card shows, ignoring case and accents. */

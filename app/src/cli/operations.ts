@@ -2404,6 +2404,8 @@ export function watchNotifications(
   handlers: {
     readonly onEvent: (event: WatchEvent) => void;
     readonly onInvalid: (detail: string) => void;
+    /** A session dropped from a delivered snapshot; falls back to `onInvalid` when absent. */
+    readonly onDropped?: (detail: string) => void;
     readonly onEnd: (end: StreamEnd) => void;
   },
   spawnStream: typeof streamDevteam = streamDevteam,
@@ -2632,6 +2634,7 @@ export function asBoardTask(raw: unknown): BoardTask | null {
     abandoned: raw['abandoned'] === true,
     kind: raw['kind'] === 'agent' || raw['kind'] === 'direct' ? raw['kind'] : 'todo',
     failed: raw['failed'] === true,
+    interrupted: raw['interrupted'] === true,
     review,
     worktree: asBoardWorktree(raw['worktree']),
     turns: asBoardTurns(raw['turns']),
@@ -2665,14 +2668,35 @@ function asBoardWorktree(raw: unknown): BoardWorktree | null {
   return { path, branch: branch === '' ? null : branch };
 }
 
-function asBoardSession(raw: unknown): BoardSession | null {
-  if (!isRecord(raw)) return null;
+/** Reports a session the parser had to drop, naming it and the field that failed. */
+type BoardNote = (detail: string) => void;
+
+const UNKNOWN_PROVIDER = 'unknown';
+
+function asBoardSession(raw: unknown, note?: BoardNote, projectId?: string): BoardSession | null {
+  const at = projectId === undefined ? '' : ` of project ${projectId}`;
+  if (!isRecord(raw)) {
+    note?.(`dropped a session${at}: not an object`);
+    return null;
+  }
   const sessionId = boundedString(raw['session_id'], MAX_ID);
-  const provider = boundedString(raw['provider'], 64);
+  if (sessionId === null) {
+    note?.(`dropped a session${at}: no \`session_id\``);
+    return null;
+  }
+  // A missing or empty provider is a cosmetic gap, not a reason to lose the session and its cards.
+  const rawProvider = boundedString(raw['provider'], 64);
+  const provider = rawProvider === null || rawProvider === '' ? UNKNOWN_PROVIDER : rawProvider;
   const status = raw['status'];
   const counts = asBoardCounts(raw['counts']);
-  if (sessionId === null || provider === null || typeof counts === 'string') return null;
-  if (typeof status !== 'string' || !(SESSION_STATUSES as readonly string[]).includes(status)) return null;
+  if (typeof counts === 'string') {
+    note?.(`dropped session ${sessionId}${at}: invalid counts (${counts})`);
+    return null;
+  }
+  if (typeof status !== 'string' || !(SESSION_STATUSES as readonly string[]).includes(status)) {
+    note?.(`dropped session ${sessionId}${at}: unknown status ${JSON.stringify(status)}`);
+    return null;
+  }
   const resume = raw['resume_command'];
   // A card that cannot be drawn is dropped, but the CLI's `counts` are kept as sent; the kanban
   // reports the difference (`counts.total` minus the cards kept) rather than hiding it.
@@ -2701,7 +2725,7 @@ function asBoardSession(raw: unknown): BoardSession | null {
 }
 
 /** A project document from `tasks list` or a `snapshot` event, or why it is unusable. */
-export function asBoardProject(raw: unknown): BoardProject | string {
+export function asBoardProject(raw: unknown, note?: BoardNote): BoardProject | string {
   if (!isRecord(raw)) return 'a project that is not an object';
   const projectId = boundedString(raw['project_id'], MAX_ID);
   if (projectId === null) return 'a project with no `project_id`';
@@ -2714,9 +2738,13 @@ export function asBoardProject(raw: unknown): BoardProject | string {
   if (!Array.isArray(raw['sessions'])) return `project ${projectId} has no sessions array`;
   const asOf = nonNegative(raw['as_of']);
   const sessions: BoardSession[] = [];
+  // The tasks of a session dropped whole stay in the CLI's project counts; the app tallies them
+  // so the kanban can say they are not shown. App-derived: the CLI never emits this key.
+  let droppedTasks = 0;
   for (const entry of raw['sessions']) {
-    const session = asBoardSession(entry);
+    const session = asBoardSession(entry, note, projectId);
     if (session !== null) sessions.push(session);
+    else if (isRecord(entry) && isRecord(entry['counts'])) droppedTasks += nonNegative(entry['counts']['total']) ?? 0;
   }
   return {
     project_id: projectId,
@@ -2732,6 +2760,7 @@ export function asBoardProject(raw: unknown): BoardProject | string {
     last_activity_at: nonNegative(raw['last_activity_at']) ?? 0,
     link_hosts: asBoardLinkHosts(raw['link_hosts']),
     sessions,
+    ...(droppedTasks > 0 ? { droppedTasks } : {}),
   };
 }
 
@@ -2767,7 +2796,7 @@ export type TaskWatchEvent =
   | { readonly event: 'end'; readonly reason: string }
   | { readonly event: 'error'; readonly message: string; readonly hint: string | null; readonly exitCode: number | null };
 
-export function asTaskWatchEvent(raw: Record<string, unknown>): TaskWatchEvent | string {
+export function asTaskWatchEvent(raw: Record<string, unknown>, note?: BoardNote): TaskWatchEvent | string {
   switch (raw['event']) {
     case 'snapshot': {
       const project = raw['project'];
@@ -2775,7 +2804,7 @@ export function asTaskWatchEvent(raw: Record<string, unknown>): TaskWatchEvent |
         const id = boundedString(project['project_id'], MAX_ID);
         return id === null ? 'a removal with no `project_id`' : { event: 'removed', projectId: id };
       }
-      const parsed = asBoardProject(project);
+      const parsed = asBoardProject(project, note);
       return typeof parsed === 'string' ? parsed : { event: 'snapshot', project: parsed };
     }
     case 'ready':
@@ -2811,6 +2840,8 @@ export function watchTasks(
   handlers: {
     readonly onEvent: (event: TaskWatchEvent) => void;
     readonly onInvalid: (detail: string) => void;
+    /** A session dropped from a delivered snapshot; falls back to `onInvalid` when absent. */
+    readonly onDropped?: (detail: string) => void;
     readonly onEnd: (end: StreamEnd) => void;
   },
   spawnStream: typeof streamDevteam = streamDevteam,
@@ -2826,7 +2857,7 @@ export function watchTasks(
     ...(context.declarationFile !== undefined ? { declarationFile: context.declarationFile } : {}),
     args,
     onEvent: (raw) => {
-      const event = asTaskWatchEvent(raw);
+      const event = asTaskWatchEvent(raw, handlers.onDropped ?? handlers.onInvalid);
       if (typeof event === 'string') handlers.onInvalid(event);
       else handlers.onEvent(event);
     },

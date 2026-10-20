@@ -15,6 +15,7 @@ import {
   Settings2,
   TriangleAlert,
   CalendarPlus,
+  CircleSlash,
   XCircle,
 } from 'lucide-react';
 
@@ -35,6 +36,7 @@ import {
   PERIODS,
   basename,
   boardProjectName,
+  disambiguatedNames,
   sortProjectViews,
   buildKanban,
   countUnshown,
@@ -149,7 +151,8 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
         if (live && !pushed) setFeed(initial);
       },
       (error: unknown) => {
-        if (!live) return;
+        // A push that already delivered a feed is newer than this failure; keep showing it.
+        if (!live || pushed) return;
         loadFailedRef.current = true;
         setLoadFailed(true);
         setProblem(`The task board could not be loaded: ${errorText(error)}`);
@@ -212,6 +215,7 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
   }
 
   const projectsById = useMemo(() => new Map(feed.projects.map((each) => [each.project_id, each])), [feed.projects]);
+  const shownNames = useMemo(() => ({ ...names, ...disambiguatedNames(feed.projects, names) }), [feed.projects, names]);
   const openProjects = tabs.order.flatMap((id) => {
     const each = projectsById.get(id);
     return each === undefined ? [] : [each];
@@ -275,7 +279,7 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
       {loadFailed ? null : (
         <>
           <BoardTabs
-            tabs={openProjects.map((each) => ({ id: each.project_id, name: boardProjectName(each, names) }))}
+            tabs={openProjects.map((each) => ({ id: each.project_id, name: boardProjectName(each, shownNames) }))}
             active={tabs.active}
             onSelect={(id) => {
               setProjectGone(false);
@@ -292,7 +296,7 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
             ) : null}
             <Overview
               feed={feed}
-              names={names}
+              names={shownNames}
               period={period}
               now={now}
               onOpen={(projectId) => {
@@ -315,7 +319,7 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
               >
                 <HiddenAwareKanban
                   project={each}
-                  name={boardProjectName(each, names)}
+                  name={boardProjectName(each, shownNames)}
                   period={period}
                   settings={settings}
                   clock={clock}
@@ -589,6 +593,15 @@ function IssueBadge({ issue, request }: { issue: BoardRef; request: OpenTaskLink
   );
 }
 
+function InterruptedBadge() {
+  return (
+    <Badge variant="outline" className="border-warning text-foreground" title="The agent run was interrupted before it finished">
+      <CircleSlash aria-hidden="true" />
+      Interrupted
+    </Badge>
+  );
+}
+
 function FailedBadge() {
   return (
     <Badge variant="outline" className="border-destructive text-foreground" title="The agent run failed">
@@ -741,7 +754,11 @@ function Kanban({
   const findingsOn = onlyFindings;
   // Only an unchecked box is ever disabled: a checked one must stay operable to be unchecked.
   const findingsUnavailable = !findingsAvailable && !findingsOn;
-  const unshown = countUnshown(shownSessions);
+  // A session dropped whole has no card or period, so its tasks join the notice only on the whole project.
+  const unshown = countUnshown(
+    shownSessions,
+    effectiveSession === 'all' && sessionsInRange.length === project.sessions.length ? (project.droppedTasks ?? 0) : 0,
+  );
   const view = useMemo(
     () =>
       buildKanban(
@@ -1184,6 +1201,7 @@ const TaskCard = memo(function TaskCard({
           {task.kind === 'agent' ? <AgentBadge name={split?.agent ?? null} /> : null}
           {task.kind === 'direct' ? <DirectBadge /> : null}
           {task.failed ? <FailedBadge /> : null}
+          {task.interrupted ? <InterruptedBadge /> : null}
           {task.review !== null && task.column === 'in_review' ? <ReviewBadge review={task.review} /> : null}
           {task.stale ? <StaleBadge /> : null}
           {task.abandoned ? <AbandonedBadge /> : null}

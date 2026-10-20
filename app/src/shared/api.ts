@@ -1618,6 +1618,11 @@ export interface BoardTask {
   readonly kind: BoardTaskKind;
   /** An agent task whose run failed; false for a CLI that predates the field. */
   readonly failed: boolean;
+  /**
+   * An agent task cut off before it finished (Esc, a timeout, a thrown `task`); false for a CLI
+   * that predates the field. It is not a success: the card says so next to where Failed would sit.
+   */
+  readonly interrupted: boolean;
   /** Null when the task is not in review (and for a CLI that predates the review window). */
   readonly review: BoardReview | null;
   /**
@@ -1676,6 +1681,8 @@ export interface BoardProject {
   /** Hosts this project's links may point at, per kind; empty from an older CLI (no link opens). */
   readonly link_hosts: readonly BoardLinkHost[];
   readonly sessions: readonly BoardSession[];
+  /** App-derived, not from the CLI: tasks of sessions the parser dropped whole; absent when none. */
+  readonly droppedTasks?: number;
 }
 
 export type BoardStreamStatus = 'starting' | 'live' | 'retrying' | 'unavailable';
