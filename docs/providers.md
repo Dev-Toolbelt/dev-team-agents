@@ -152,6 +152,23 @@ The built-in list is `review_triggers.BUILTIN_AGENTS`; a spawn with no agent typ
 
 Limits: a `run_in_background` agent's `PostToolUse` answers before it has run, so its result is read from the transcript hand-back at a later `Stop` (the window shows *pending* until then); Codex `spawn_agent`'s `PostToolUse` carries an agent id, not a report, and is ignored; a Codex `wait_agent` without a marker is ignored because it does not say which agent it waited on — the launch it should have retired is settled as *unread* at the turn's `Stop`, as is any foreground launch whose result never arrived. A window with no activity for 6 hours is settled as unread.
 
+**Execution-trace capture per provider** (spec `docs/specs/execution-trace.md`, ADR-0041). Every agent spawn is a span, review/QA agents and built-ins included. It is captured by the same hooks as agent tasks, through `devteam tasks trace-record`, and settled at `Stop` with `--stop`:
+
+| Signal | Claude Code | Codex | opencode |
+| --- | --- | --- | --- |
+| Runtime agent id | `tool_response.agentId` (foreground result or background ack); fallback `subagents/agent-*.meta.json` `toolUseId` | `spawn_agent` `PostToolUse` `agent_id` (the child thread id) | `agent_session_id`, from the `task` result's `metadata.sessionId` (plugin) |
+| Nested spawn's owner | payload `agent_id` | payload `agent_id`, or a child thread routed through `trace/aliases.json` | the child session (`sessionID`), routed by the plugin's `parent_id` |
+| Tokens | the subagent transcript beside the session's, last `message.usage` per `message.id` | the child rollout's last `token_count.info.total_token_usage` (`input_tokens` minus `cached_input_tokens`) | `agent_usage`, summed by the plugin from the child session's assistant `info.tokens` (`reasoning` counts as output) |
+| Model | `tool_response.resolvedModel` | the rollout's `turn_context.model` | `metadata.model.modelID` |
+
+**Codex multi-agent v2** (desktop 0.163). `spawn_agent` answers `{"task_name": "/root/<name>"}`, not an `agent_id`, and a `wait_agent` reports only "Wait completed." without naming the agent. No hook fires when the child ends: its end reaches the parent's rollout (the hook's `transcript_path`) as a `response_item` `agent_message` whose `author` is the task path and whose text opens with `Message Type: FINAL_ANSWER`. So, on both the board and the trace:
+- The task path becomes the agent's reference, and the spawn is no longer cancelled as failed.
+- At `Stop`, the parent rollout is read from where it ended at the agent's spawn (kept per agent from `PreToolUse`, so a child that answers before the ack is not missed). The agent ends at its first `FINAL_ANSWER` after that mark (`usage.codex_final_answers`), and among several open agents of one path the oldest ends first. A later answer from a re-tasked agent is ignored. An agent with no answer after 6 h is settled `interrupted`: this covers an errored child, which writes no answer, and an answer written to another rollout (a resumed or forked thread, or a nested spawn from a child thread).
+- The trace takes `findings` from the answer's review-result marker. It reads tokens from the child's rollout, found by its first line (`session_meta.source.subagent.thread_spawn` with the parent's thread id and the task path).
+- A v2 reviewer's **In Review window** is not fed from the `FINAL_ANSWER` yet, and is still settled as unread at `Stop`.
+
+opencode's usage comes from the plugin's SDK calls: these are verified against stored session data and by `tests/js/opencode-plugin.test.mjs`, but not yet in a live session.
+
 **PR/MR Created and merge capture per provider** (spec `docs/specs/task-board.md` § PR/MR Created; issue refs):
 
 | Signal | Claude Code | Codex | opencode |

@@ -51,6 +51,7 @@ data/projects/<project_id>/preferences.json        PORTABLE — the project pref
 data/projects/<project_id>/session-summary.md      PORTABLE — the user's own memory
 data/credentials/                                  PORTABLE — references only, no values
 data/integrations/<name>.json                      PORTABLE — integration account config, no token
+data/insights-decisions.json                       PORTABLE — suggestions the user dismissed (ADR-0042)
 data/quarantine/<date>/<project_id>/               PORTABLE
 data/machines/<machine-id>/registry.json           MACHINE-LOCAL — absolute paths
 data/machines/<machine-id>/locks/                  MACHINE-LOCAL — a lock names a pid
@@ -205,6 +206,10 @@ mode.
 | `devteam tasks review-open --project-root <dir>` | **Hook-only.** Reads a review trigger on stdin (a review/QA agent spawn, a review command or an explicit request in a prompt) and opens or joins the session's review window. Prints `{recorded, session, window, joined}`. Never fails on bad input |
 | `devteam tasks retitle --project-root <dir>` | **Hook-only.** Writes the payload's `session_title` into its session's record, changing nothing else (no status, no activity time); no-op without a record or when unchanged. Prints `{retitled}`. Called by `session-retitle.sh`, which the opencode plugin runs on a `session.updated` that changed the title — Claude Code and Codex need no call: the view re-reads their title files |
 | `devteam tasks review-result --project-root <dir>` | **Hook-only.** Reads a finished review agent's output on stdin, sums its `<!-- review-result: findings=N -->` markers and records the window's result once every source answered. Prints `{recorded, session, window, result, findings, resolved, all_done, became_all_done}` |
+| `devteam tasks trace-record --project-root <dir> [--stop]` | **Hook-only.** Reads an agent spawn, result or wait on stdin and folds it into the session's execution trace, one span per agent of any type ([ADR-0041](../docs/development/adrs/0041-execution-trace-kept-beside-the-task-board-record-as-one-span-per-agent-spawn.md), spec `docs/specs/execution-trace.md`); with `--stop` it settles background hand-backs, interrupted foreground spans and late token usage. Prints `{recorded, session}` / `{settled}`. Never fails on bad input |
+| `devteam insights report [--project <id>…] [--since <epoch>] [--all]` | The optimization loop's metrics across bound projects: per agent, command, harness version and provider, from execution traces and review windows, plus evidence-backed `suggestions` (never below a rule's minimum sample; the rest is in `insufficient`). Read-only; nothing it suggests is applied ([ADR-0042](../docs/development/adrs/0042-optimization-loop-suggests-harness-changes-from-execution-traces-and-never-applies-them.md), spec `docs/specs/optimization-loop.md`) |
+| `devteam insights dismiss <id>` | Records the user's dismissal of a current suggestion in `data/insights-decisions.json` (portable, locked, atomic); it is hidden until its sample has doubled. Refuses an id that no current suggestion has, and never rewrites a damaged record |
+| `devteam tasks trace <session> [--path <dir>]` | One session's agent tree — turn (with its `/devteam:*` command) → agent → nested agent — with status, duration, model and tokens per node and `subtree_tokens`. `--json` prints `{session_id, provider, harness_version, totals, turns}`. Exit non-zero when the session has no trace |
 | `devteam tasks list [--project <id>…] [--since <epoch>] [--stale-after S] [--ended-after S]` | The task board: every bound project with ≥ 1 task, sessions, tasks and derived state; see § Task board below |
 | `devteam tasks watch [same filters] [--interval <s>]` | Stream `snapshot` events per changed project, then `ready`, `heartbeat`, `end`. `--json` is JSON Lines |
 | `devteam detect [--path <dir>]` | Detect the machine (git, Python, installed providers), the project's stack and primary provider, and suggest a project type (`new`, `unfinished`, `maintenance`). ADR-0030: detection lives in the CLI, the app only displays it. Report is JSON-native (always structured for scripting) |
@@ -261,6 +266,11 @@ Nothing deletes a record or a task: a task a replace-style call omits gets `remo
 - `record`, `mark`, `retitle`, `review-open` and `review-result` are **mutating** in `compat.MUTATING` but **hook-safe**: they swallow every
   error and exit 0 with `recorded: false` / `marked: false`, and refuse a session id containing a
   path separator.
+- The **execution trace** (ADR-0041) lives beside the records, in `<state-dir>/task-board/trace/<session-key>.json`
+  (plus `trace/aliases.json`, which routes an opencode child session or a Codex child thread to its top
+  session). The board's listing reads only the top level of `task-board/`, so the trace never reaches it,
+  and `tasks.py` never writes it: `scripts/lib/devteam/trace.py` owns it, and `scripts/lib/devteam/usage.py`
+  is the single token parser, shared with `scripts/hooks/lib/agent-usage.sh`.
 - `list` and `watch` are read-only. `watch` is JSON Lines like `notifications watch` (same stdin-EOF /
   SIGTERM / 30 s heartbeat lifecycle); because "stale" moves with the clock, it recomputes every
   project every 30 s and emits a `snapshot` only when the view differs from the last one sent.

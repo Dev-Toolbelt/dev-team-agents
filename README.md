@@ -129,6 +129,8 @@ Both install for your user only, put `devteam` on your PATH and install the fram
 | Manage your global Claude / Codex / opencode skills | `devteam skills list\|show\|install\|remove` |
 | Connect GitHub, Jira and Cloudflare accounts | `devteam integration connect github\|jira\|cloudflare`, test, disconnect, config |
 | See every agent task across bound projects (the app's Board reads the same) | `devteam tasks list\|watch` |
+| See one session's agent tree with duration, model and tokens per agent | `devteam tasks trace <session>` |
+| See cost and reliability per agent and command, with suggestions you decide | `devteam insights report` |
 | Update every bound project at once | `devteam update` |
 | Hold one project on a version | `devteam pin 3.0.0` |
 | Convert an existing v2 install, either shape (`bind` refuses one; the app's bind dialog offers it) | `devteam migrate --apply --untrack`, then commit |
@@ -245,6 +247,7 @@ Implementation commands also take a sprint task (`/devteam:backend TASK-003`): t
 | `/devteam:update` | Update — checks for a new dev-team-agents release and applies it |
 | `/devteam:symlinks` | Symlink repair — detects the OS, repairs links materialized as plain files, and guides the fix when the OS blocks native symlinks |
 | `/devteam:version` | Version check — prints the installed dev-team-agents version in the session-start banner layout; one bash call, no agent spawn, minimum token cost |
+| `/devteam:insights` | Optimization loop — cost, reliability and review metrics per agent, command and harness version, from the execution traces of every bound project; asks about each evidence-backed suggestion (plan it, dismiss it, later) and never changes the harness on its own |
 | `/devteam:status` | Git status snapshot — branch/worktree, unstaged and staged changes, last 5 commits, and totals as formatted markdown tables; one bash call, no agent spawn, minimum token cost. `/devteam:status <branch-name>` inspects that branch instead of the current one |
 | `/devteam:up` · `/devteam:down` | Local environment — `/devteam:up` starts it exactly as the project documents it (Docker, native, per service), reusing what already runs for this checkout and confirming the commands first; `/devteam:down` stops it without removing volumes or data. `/devteam:up docker` or `/devteam:up local` picks a mode when several are documented |
 

@@ -129,6 +129,8 @@ Os dois instalam só para o seu usuário, colocam o `devteam` no PATH e instalam
 | Gerenciar suas skills globais do Claude / Codex / opencode | `devteam skills list\|show\|install\|remove` |
 | Conectar contas do GitHub, Jira e Cloudflare | `devteam integration connect github\|jira\|cloudflare`, test, disconnect, config |
 | Ver as tarefas dos agentes em todos os projetos vinculados (o Quadro do app lê o mesmo) | `devteam tasks list\|watch` |
+| Ver a árvore de agentes de uma sessão, com duração, modelo e tokens por agente | `devteam tasks trace <session>` |
+| Ver custo e confiabilidade por agente e comando, com sugestões que você decide | `devteam insights report` |
 | Atualizar todos os projetos de uma vez | `devteam update` |
 | Manter um projeto numa versão | `devteam pin 3.0.0` |
 | Converter uma instalação v2 existente, em qualquer formato (o `bind` recusa; o diálogo de bind do app oferece) | `devteam migrate --apply --untrack`, depois o commit |
@@ -245,6 +247,7 @@ Os comandos de implementação também recebem uma tarefa de sprint (`/devteam:b
 | `/devteam:update` | Atualização — verifica se há uma nova release do dev-team-agents e a aplica |
 | `/devteam:symlinks` | Reparo de symlinks — detecta o SO, repara links materializados como arquivos comuns e guia a correção quando o SO bloqueia symlinks nativos |
 | `/devteam:version` | Checagem de versão — imprime a versão instalada do dev-team-agents no mesmo layout do banner de início de sessão; uma única chamada bash, sem spawn de agente, custo mínimo de token |
+| `/devteam:insights` | Loop de otimização — métricas de custo, confiabilidade e review por agente, comando e versão do harness, a partir dos traces de execução de todos os projetos vinculados; pergunta sobre cada sugestão com evidência (planejar, dispensar, depois) e nunca muda o harness sozinho |
 | `/devteam:status` | Snapshot do git status — branch/worktree, mudanças unstaged e staged, últimos 5 commits e totais em tabelas markdown formatadas; uma única chamada bash, sem spawn de agente, custo mínimo de token. `/devteam:status <nome-da-branch>` inspeciona essa branch em vez da atual |
 | `/devteam:up` · `/devteam:down` | Ambiente local — `/devteam:up` sobe o ambiente exatamente como o projeto documenta (Docker, nativo, por serviço), reaproveitando o que já roda para este checkout e confirmando os comandos antes; `/devteam:down` para o ambiente sem remover volumes nem dados. `/devteam:up docker` ou `/devteam:up local` escolhe o modo quando há mais de um documentado |
 
