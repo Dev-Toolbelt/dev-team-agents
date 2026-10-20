@@ -2546,7 +2546,7 @@ def main(argv=None, stdout=None, stderr=None):
         if getattr(args, "command", None) == "notifications":
             return emitter.fail(UsageError("notifications needs a subcommand: list, ack, watch"))
         if getattr(args, "command", None) == "tasks":
-            return emitter.fail(UsageError("tasks needs a subcommand: record, mark, review-open, review-result, list, watch"))
+            return emitter.fail(UsageError("tasks needs a subcommand: record, mark, retitle, review-open, review-result, trace-record, trace, list, watch"))
         if getattr(args, "command", None) == "skills":
             return emitter.fail(UsageError("skills needs a subcommand: list, show, install, remove"))
         if getattr(args, "command", None) == "auth":

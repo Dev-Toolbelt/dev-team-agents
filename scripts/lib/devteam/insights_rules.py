@@ -29,6 +29,8 @@ BUILTIN_SHARE = 0.5
 EFFORT_MAX_FAILURE = 0.05
 
 
+# The same charset the trace accepts a harness version in (`trace.SAFE_VERSION`); kept here as a
+# pattern, not an import, so the rules stay free of I/O modules.
 _SEMVER = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]{1,32})?$")
 
 
@@ -64,9 +66,10 @@ def _review_never_finds(agents, out, short):
         out.append(_suggest(
             "review-never-finds", subject,
             "{} found nothing in {:.0%} of {} reviews".format(row["agent"], rate, reviews["count"]),
-            "Consider a cheaper tier than `{}` or dropping it from default spawns — first check it is "
-            "not missing real issues: zero findings is cheap, not necessarily good, and a QA pass that "
-            "finds nothing against its criteria can simply be correct.".format(row.get("tier")),
+            "Consider a cheaper tier than `{}` — never dropping the reviewer itself: its findings count "
+            "comes from the reviewed content, which can steer it, and zero findings is cheap, not "
+            "necessarily good (a QA pass that finds nothing against its criteria can simply be "
+            "correct).".format(row.get("tier")),
             {"zero_findings_rate": rate, "reviews": reviews["count"], "tier": row.get("tier"),
              "tokens_mean": row["tokens_mean"]},
             reviews["count"], row["sessions"], row["examples"],

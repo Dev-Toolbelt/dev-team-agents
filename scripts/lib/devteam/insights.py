@@ -18,21 +18,20 @@ import re
 import time
 from pathlib import Path
 
-from . import insights_rules, jsonio, lock, paths, tasks, trace, usage
+from . import catalog, insights_rules, jsonio, lock, paths, tasks, trace, usage
 from .errors import DevteamError, UsageError
 
 DECISIONS_FILE = "insights-decisions.json"
 DECISIONS_SCHEMA = 1
 
-_TREE = Path(__file__).resolve().parents[3]
-_TIER_RE = re.compile(r"^tier:\s*([A-Za-z0-9_-]+)\s*$", re.MULTILINE)
+_TREE = trace.TREE
 _SUGGESTION_ID = re.compile(r"^[a-z-]+:[0-9a-f]{12}$")
 #: What a trace may name, read back before it reaches a report, a suggestion title the model reads, or
 #: a `devteam tasks trace <session>` the command hints at: anything else is crafted, and the trace or
 #: span is skipped (the same charset `tasks.session_key` accepts for an id).
-_SAFE_NAME = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+_SAFE_NAME = trace.SAFE_NAME
 _SAFE_SESSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-_SAFE_VERSION = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]{1,32})?$")
+_SAFE_VERSION = trace.SAFE_VERSION
 #: A trace file larger than this is skipped unread: `trace.MAX_SPANS` keeps a real one far below it.
 MAX_TRACE_BYTES = 4 * 1024 * 1024
 
@@ -62,11 +61,11 @@ def _tiers():
             continue
         try:
             with open(str(directory / name), "r", encoding="utf-8") as handle:
-                match = _TIER_RE.search(handle.read(4096))
-        except OSError:
+                meta, _ = catalog.parse_frontmatter(handle.read())
+        except (OSError, ValueError, DevteamError):
             continue
-        if match:
-            found[name[: -len(".md")]] = match.group(1)
+        if isinstance(meta, dict) and isinstance(meta.get("tier"), str):
+            found[name[: -len(".md")]] = meta["tier"]
     return found
 
 
@@ -94,7 +93,8 @@ def _int(value):
 
 
 def _tokens(value):
-    """A span's token total, or ``None`` when its usage is unknown — never 0 for a usage with no counts."""
+    """A span's token total, or ``None`` when its usage is unknown: no usage object, or one that
+    carries no integer count at all (``{}``). A usage whose counts are all zero is a real 0."""
     if not isinstance(value, dict) or not any(_int(value.get(k)) for k in ("input", "output", "cache_read", "cache_write")):
         return None
     return usage.total(value)
@@ -103,7 +103,7 @@ def _tokens(value):
 def _spans(project_ids, since):
     """Every span of every trace in scope, flattened with its session's context."""
     out = []
-    for project_id, root in tasks._bound(project_ids):
+    for project_id, root in tasks.bound_projects(project_ids):
         directory = trace.trace_dir(root, project_id)
         try:
             names = sorted(n for n in os.listdir(str(directory)) if n.endswith(".json") and n != "aliases.json")
@@ -115,7 +115,7 @@ def _spans(project_ids, since):
                     continue
             except OSError:
                 continue
-            data = trace._load(directory / name)
+            data = trace.load(directory / name)
             if data is None or not _SAFE_SESSION.match(str(data.get("session_id"))):
                 continue
             updated = data.get("updated_at")
@@ -149,30 +149,40 @@ def _spans(project_ids, since):
 
 
 def _review_windows(project_ids, since):
-    """The board's review windows in scope: ``(windows, unread, findings list, fixed)``."""
-    windows = unread = fixed = 0
-    findings = []
-    for project_id, root in tasks._bound(project_ids):
-        for rec in tasks._project_records(root, project_id):
+    """The board's review windows in scope, per provider: ``{provider: {windows, unread_rate,
+    findings_mean, fixed_after_findings}}``.
+
+    Kept apart per provider because a provider's capture gap must not read as a reliability signal
+    of every provider: Codex multi-agent v2 reviewer windows are always settled unread today
+    (task-board spec, Out of Scope).
+    """
+    groups = {}
+    for project_id, root in tasks.bound_projects(project_ids):
+        for rec in tasks.project_records(root, project_id):
             updated = rec.get("updated_at")
             if since is not None and not (_int(updated) and updated >= since):
                 continue
+            provider = rec.get("provider") if rec.get("provider") in tasks.PROVIDERS else None
+            group = groups.setdefault(provider, {"windows": 0, "unread": 0, "fixed": 0, "findings": []})
             for window in rec.get("reviews") or []:
                 if not isinstance(window, dict) or window.get("result_at") is None:
                     continue
-                windows += 1
+                group["windows"] += 1
                 count = window.get("findings")
-                if isinstance(count, int):
-                    findings.append(count)
+                if _int(count):
+                    group["findings"].append(count)
                     if count > 0 and window.get("resolution") == "fixed":
-                        fixed += 1
+                        group["fixed"] += 1
                 else:
-                    unread += 1
+                    group["unread"] += 1
     return {
-        "windows": windows,
-        "unread_rate": round(unread / windows, 3) if windows else None,
-        "findings_mean": _mean(findings),
-        "fixed_after_findings": fixed,
+        str(provider): {
+            "windows": g["windows"],
+            "unread_rate": round(g["unread"] / g["windows"], 3) if g["windows"] else None,
+            "findings_mean": _mean(g["findings"]),
+            "fixed_after_findings": g["fixed"],
+        }
+        for provider, g in sorted(groups.items(), key=lambda kv: str(kv[0])) if g["windows"]
     }
 
 
@@ -312,17 +322,18 @@ def dismiss(suggestion_id, now=None):
     a hidden suggestion again resets its baseline to the current sample.
     """
     if not isinstance(suggestion_id, str) or not _SUGGESTION_ID.match(suggestion_id):
-        raise UsageError("not a suggestion id: {}".format(suggestion_id), hint="Copy the id from `devteam insights`.")
+        raise UsageError("not a suggestion id: {}".format(suggestion_id), hint="Copy the id from `devteam insights report`.")
     now = int(time.time() if now is None else now)
     current = {s["id"]: s for s in report(include_dismissed=True, now=now)["suggestions"]}
     if suggestion_id not in current:
         raise UsageError(
             "no current suggestion has id {}".format(suggestion_id),
-            hint="Run `devteam insights` and copy an id from its suggestions.",
+            hint="Run `devteam insights report` and copy an id from its suggestions.",
         )
     path = decisions_path()
     jsonio.ensure_dir(path.parent)
-    with lock.Lock(str(path)[: -len(".json")] + ".lock", timeout=10.0, stale_after=30.0):
+    # A lock names a pid, so it is machine-local (the store's `locks/`), never beside the portable record.
+    with lock.store_lock("insights-decisions"):
         data = jsonio.read_json(path, default={"schema": DECISIONS_SCHEMA, "dismissed": {}})
         if not isinstance(data, dict) or not isinstance(data.get("dismissed", {}), dict):
             raise UsageError("{} is not a decisions record".format(path), hint="Fix or move the file by hand.")
