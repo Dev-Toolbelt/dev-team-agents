@@ -3,11 +3,13 @@ import { useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { PROJECT_TYPES, type DetectReport, type LaunchFirstTaskAnswer, type OperationResult, type ProjectType, type StartReport } from '../../shared/api.js';
 import type { Provider } from '../../shared/providers.js';
 import { hostPlatformFrom } from '../../shared/directoryPaths.js';
 import { SELECT_CLASS } from '../formStyles.js';
 import { Problem } from '../Problem.js';
+import { ProviderIcon, providerLabel } from '../providers/ProviderIcon.js';
 import { unreachable } from '../useOperation.js';
 import { Busy, CommandBox, useFocusOnMount } from './CopyButton.js';
 import { COPY } from './copy.js';
@@ -94,18 +96,21 @@ export function ConfirmStep({
       <div className="grid max-w-md gap-4">
         <div className="grid gap-1.5">
           <Label htmlFor="onboarding-provider">{COPY.confirm.provider}</Label>
-          <select
-            id="onboarding-provider"
-            className={SELECT_CLASS}
-            value={choices.provider}
-            onChange={(event) => onChange({ ...choices, provider: event.target.value })}
-          >
-            {providers.map((entry) => (
-              <option key={entry.name} value={entry.name}>
-                {entry.installed ? COPY.confirm.providerInstalled(entry.name) : COPY.confirm.providerMissing(entry.name)}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <ProviderIcon provider={choices.provider} size="md" decorative />
+            <select
+              id="onboarding-provider"
+              className={cn(SELECT_CLASS, 'min-w-0 flex-1')}
+              value={choices.provider}
+              onChange={(event) => onChange({ ...choices, provider: event.target.value })}
+            >
+              {providers.map((entry) => (
+                <option key={entry.name} value={entry.name}>
+                  {entry.installed ? COPY.confirm.providerInstalled(providerLabel(entry.name)) : COPY.confirm.providerMissing(providerLabel(entry.name))}
+                </option>
+              ))}
+            </select>
+          </div>
           {noneInstalled ? <p className="text-xs text-muted-foreground">{COPY.confirm.noProvider}</p> : null}
         </div>
 

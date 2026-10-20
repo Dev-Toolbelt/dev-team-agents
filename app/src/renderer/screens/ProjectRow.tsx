@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { Loading, needsRepair, Problem } from '../Problem.js';
 import { useAction } from '../useOperation.js';
 import { Notice, WriteButton } from '../WriteButton.js';
+import { ProviderIcon } from '../providers/ProviderIcon.js';
 import type {
   EnvironmentReport,
   ProjectRecord,
@@ -268,7 +269,17 @@ export function ProjectRow({
         </span>
       </TableCell>
       <TableCell>{project.mode ?? '—'}</TableCell>
-      <TableCell>{project.providers.length === 0 ? '—' : project.providers.join(', ')}</TableCell>
+      <TableCell>
+        {project.providers.length === 0 ? (
+          '—'
+        ) : (
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {project.providers.map((provider) => (
+              <ProviderIcon key={provider} provider={provider} withLabel />
+            ))}
+          </span>
+        )}
+      </TableCell>
       <TableCell>
         <PreferenceBadge on={project.preferences?.auto_update ?? null} />
       </TableCell>

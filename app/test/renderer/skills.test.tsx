@@ -131,7 +131,9 @@ describe('Skills — details', () => {
     expect(showSkill).toHaveBeenCalledWith('alpha', 'claude');
     const body = screen.getByText(/# Title/);
     expect(body.tagName).toBe('PRE');
-    expect(document.querySelector('img')).toBeNull();
+    // The body is text: no element of its own inside, and the markup shows literally.
+    expect(body.querySelector('*')).toBeNull();
+    expect(body).toHaveTextContent('<img src=x onerror=alert(1)>');
   });
 });
 

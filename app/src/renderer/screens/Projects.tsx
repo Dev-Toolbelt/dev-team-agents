@@ -25,6 +25,7 @@ import { ProjectSettings } from './ProjectSettings.js';
 import { useAction, useOperation } from '../useOperation.js';
 import { toastFailure, toastPartialFailure, toastResult } from '../toasts.js';
 import { Notice, WriteButton } from '../WriteButton.js';
+import { ProviderIcon, providerChoiceLabel } from '../providers/ProviderIcon.js';
 import { hostPlatformFrom, isSameDirectory, isSameOrInside } from '../../shared/directoryPaths.js';
 import { PROVIDERS } from '../../shared/providers.js';
 import type {
@@ -40,15 +41,6 @@ import type {
   SyncAllReport,
   ProjectRecord,
 } from '../../shared/api.js';
-
-
-// The values sent to the CLI — never change these. The label shown to the user is a
-// separate concern (`PROVIDER_LABELS`, below).
-const PROVIDER_LABELS: Record<BindProvider, string> = {
-  claude: 'Claude Code (Anthropic)',
-  codex: 'Codex (OpenAI)',
-  opencode: 'Opencode',
-};
 
 // `link` first: it is what the app recommends, and putting the recommendation first
 // reads as a recommendation rather than as something buried in a list sorted some other
@@ -512,7 +504,10 @@ function ProjectFilters({
                 checked={providers.has(provider)}
                 onCheckedChange={(checked) => onToggleProvider(provider, checked === true)}
               />
-              <Label htmlFor={`filter-provider-${provider}`}>{PROVIDER_LABELS[provider]}</Label>
+              <Label htmlFor={`filter-provider-${provider}`}>
+                <ProviderIcon provider={provider} decorative />
+                {providerChoiceLabel(provider)}
+              </Label>
             </div>
           ))}
         </div>
@@ -815,7 +810,10 @@ function BindDialog({
                           });
                         }}
                       />
-                      <Label htmlFor={`provider-${provider}`}>{PROVIDER_LABELS[provider]}</Label>
+                      <Label htmlFor={`provider-${provider}`}>
+                        <ProviderIcon provider={provider} decorative />
+                        {providerChoiceLabel(provider)}
+                      </Label>
                     </div>
                   ))}
                   </div>

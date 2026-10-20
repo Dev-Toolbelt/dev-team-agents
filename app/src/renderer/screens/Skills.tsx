@@ -17,6 +17,7 @@ import { Hint } from '@/components/ui/tooltip';
 import { Empty, Loading, Problem } from '../Problem.js';
 import { useAction, useOperation } from '../useOperation.js';
 import { Notice, WriteButton } from '../WriteButton.js';
+import { ProviderIcon, providerLabel } from '../providers/ProviderIcon.js';
 import { PROVIDERS } from '../../shared/providers.js';
 import type {
   EnvironmentReport,
@@ -27,14 +28,8 @@ import type {
   SkillRoot,
 } from '../../shared/api.js';
 
-const SKILL_PROVIDER_LABELS: Readonly<Record<SkillProvider, string>> = {
-  claude: 'Claude',
-  codex: 'Codex',
-  opencode: 'opencode',
-};
-
 const PROVIDER_CHOICES: readonly { readonly value: SkillProvider; readonly label: string }[] = PROVIDERS.map(
-  (value) => ({ value, label: SKILL_PROVIDER_LABELS[value] }),
+  (value) => ({ value, label: providerLabel(value) }),
 );
 
 const FILTERS: readonly { readonly value: SkillProviderFilter; readonly label: string }[] = [
@@ -160,7 +155,7 @@ function Roots({ roots }: { roots: readonly SkillRoot[] }) {
             {root.providers.length > 0 ? (
               root.providers.map((provider) => (
                 <Badge key={provider} variant="outline">
-                  {provider}
+                  <ProviderIcon provider={provider} withLabel />
                 </Badge>
               ))
             ) : (
@@ -224,7 +219,7 @@ function SkillTable({
               <div className="flex flex-wrap gap-1">
                 {skill.providers.map((each) => (
                   <Badge key={each} variant="outline">
-                    {each}
+                    <ProviderIcon provider={each} withLabel />
                   </Badge>
                 ))}
               </div>
@@ -303,7 +298,11 @@ function DetailsDialog({
               <dt className="text-muted-foreground">Path</dt>
               <dd className="break-all font-mono text-xs">{state.result.data.path}</dd>
               <dt className="text-muted-foreground">Providers</dt>
-              <dd>{state.result.data.providers.join(', ') || '—'}</dd>
+              <dd className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                {state.result.data.providers.length > 0
+                  ? state.result.data.providers.map((each) => <ProviderIcon key={each} provider={each} withLabel />)
+                  : '—'}
+              </dd>
               {state.result.data.is_symlink ? (
                 <>
                   <dt className="text-muted-foreground">Symlink to</dt>
@@ -485,7 +484,10 @@ function InstallDialog({
                 checked={providers.includes(choice.value)}
                 onCheckedChange={(checked) => toggleProvider(choice.value, checked === true)}
               />
-              <Label htmlFor={`skill-provider-${choice.value}`}>{choice.label}</Label>
+              <Label htmlFor={`skill-provider-${choice.value}`}>
+                <ProviderIcon provider={choice.value} decorative />
+                {choice.label}
+              </Label>
             </div>
           ))}
         </fieldset>
