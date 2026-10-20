@@ -255,6 +255,32 @@ describe('Board — recovery and disappearance', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('a rejection that arrives after a push already delivered a feed does not hide the live data', async () => {
+    let reject: (error: Error) => void = () => undefined;
+    const { push } = renderBoard(boardFeed(), {
+      taskBoard: vi.fn(() => new Promise<BoardFeed>((_resolve, fail) => (reject = fail))),
+    });
+    push(boardFeed({ projects: [boardProject()] }));
+    expect(await overviewCard('storefront')).toBeInTheDocument();
+    await act(async () => {
+      reject(new Error('ipc closed'));
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(await overviewCard('storefront')).toBeInTheDocument();
+  });
+
+  it('two open projects with the same folder name get distinguishable tab labels', async () => {
+    const a = boardProject({ project_id: 'pa', root: '/work/acme/storefront' });
+    const b = boardProject({ project_id: 'pb', root: '/play/storefront' });
+    renderBoard(boardFeed({ projects: [a, b] }));
+    fireEvent.click((await screen.findByText('storefront (acme)')).closest('button')!);
+    fireEvent.click((await screen.findByRole('tab', { name: /Overview/ })));
+    fireEvent.click((await screen.findByText('storefront (play)')).closest('button')!);
+    expect(await screen.findByRole('tab', { name: 'storefront (play)', selected: true })).toHaveAttribute('title', 'storefront (play)');
+    expect(screen.getByRole('tab', { name: 'storefront (acme)' })).toBeInTheDocument();
+  });
+
   it('a project that loses all its tasks leaves the kanban, tells so with no other project, and does not pull the user back', async () => {
     const { push } = await openKanban(boardProject());
     push(boardFeed({ projects: [] }));
@@ -524,6 +550,14 @@ describe('Board kanban — tasks the parser could not place', () => {
     await user.selectOptions(screen.getByLabelText('Session'), 'one');
     expect(screen.queryByText(/not shown/)).not.toBeInTheDocument();
   });
+
+  it('counts the tasks of sessions the parser dropped, for all sessions only', async () => {
+    const one = boardSession({ session_id: 'one', tasks: [boardTask({ key: 'a' })] });
+    const { user } = await openKanban({ ...boardProject({ sessions: [one] }), droppedTasks: 4 });
+    expect(screen.getByText('4 tasks not shown')).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Session'), 'one');
+    expect(screen.queryByText(/not shown/)).not.toBeInTheDocument();
+  });
 });
 
 describe('Board kanban — durations on the minute clock', () => {
@@ -606,6 +640,18 @@ describe('Board kanban — agent and failed badges', () => {
     const b = card('ship it');
     expect(within(b).getByText('Agent: builder')).toBeInTheDocument();
     expect(within(b).getByText('Failed')).toBeInTheDocument();
+  });
+
+  it('badges an interrupted agent next to Failed, so it never reads as a clean success', async () => {
+    const tasks = [
+      boardTask({ key: 'a', content: 'reviewer: check the diff', kind: 'agent', column: 'done', status: 'completed' }),
+      boardTask({ key: 'b', content: 'builder: ship it', kind: 'agent', interrupted: true, column: 'done', status: 'completed' }),
+    ];
+    await openKanban(boardProject({ sessions: [boardSession({ tasks })] }));
+    expect(within(card('check the diff')).queryByText('Interrupted')).not.toBeInTheDocument();
+    const b = card('ship it');
+    expect(within(b).getByText('Interrupted')).toBeInTheDocument();
+    expect(within(b).getByTitle('The agent run was interrupted before it finished')).toBeInTheDocument();
   });
 
   it('keeps the text whole when it does not split cleanly, and draws nothing for a plain task', async () => {

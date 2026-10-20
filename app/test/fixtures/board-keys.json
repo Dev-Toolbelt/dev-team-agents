@@ -1,0 +1,105 @@
+{
+  "counts": [
+    "done",
+    "in_progress",
+    "in_review",
+    "pr_created",
+    "todo",
+    "total"
+  ],
+  "duration": [
+    "completed",
+    "in_progress",
+    "in_review",
+    "pending",
+    "pr_created"
+  ],
+  "link_host": [
+    "base_path",
+    "host",
+    "kinds"
+  ],
+  "project": [
+    "abandoned",
+    "as_of",
+    "counts",
+    "last_activity_at",
+    "link_hosts",
+    "project_id",
+    "providers",
+    "root",
+    "sessions",
+    "sessions_active",
+    "sessions_total",
+    "stale",
+    "with_findings"
+  ],
+  "ref": [
+    "key",
+    "system",
+    "url"
+  ],
+  "review": [
+    "findings",
+    "since",
+    "state"
+  ],
+  "session": [
+    "branch",
+    "counts",
+    "created_at",
+    "cwd",
+    "ended_at",
+    "last_activity_at",
+    "provider",
+    "prs",
+    "resume_command",
+    "session_id",
+    "status",
+    "tasks",
+    "title"
+  ],
+  "session_pr": [
+    "head",
+    "kind",
+    "number",
+    "state",
+    "url"
+  ],
+  "task": [
+    "abandoned",
+    "agent_type",
+    "column",
+    "completed_at",
+    "content",
+    "created_at",
+    "durations",
+    "failed",
+    "interrupted",
+    "key",
+    "kind",
+    "owner",
+    "pr",
+    "refs",
+    "review",
+    "stale",
+    "status",
+    "status_since",
+    "turns",
+    "worktree"
+  ],
+  "task_pr": [
+    "kind",
+    "number",
+    "state",
+    "url"
+  ],
+  "turn": [
+    "at",
+    "text"
+  ],
+  "worktree": [
+    "branch",
+    "path"
+  ]
+}

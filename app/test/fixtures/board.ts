@@ -34,6 +34,7 @@ export function boardTask(overrides: Partial<BoardTask> = {}): BoardTask {
     abandoned: false,
     kind: 'todo',
     failed: false,
+    interrupted: false,
     review: null,
     worktree: null,
     turns: [],

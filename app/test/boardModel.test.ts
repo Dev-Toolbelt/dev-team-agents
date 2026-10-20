@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   boardProjectName,
+  disambiguatedNames,
   buildKanban,
   countUnshown,
   formatDateTime,
@@ -42,6 +43,12 @@ describe('countUnshown', () => {
     const b = boardSession({ session_id: 'b', tasks: [boardTask({ key: 'b' })] });
     expect(countUnshown([a, { ...b, counts: { ...b.counts, total: 4 } }])).toBe(3);
     expect(countUnshown([{ ...a, counts: { ...a.counts, total: 0 } }])).toBe(0);
+  });
+
+  it('adds the tasks of sessions that were dropped whole', () => {
+    const a = boardSession({ tasks: [boardTask({ key: 'a' })] });
+    expect(countUnshown([a], 3)).toBe(3);
+    expect(countUnshown([{ ...a, counts: { ...a.counts, total: 4 } }], 2)).toBe(5);
   });
 });
 
@@ -258,6 +265,15 @@ describe('viewProject', () => {
     expect(view.stale).toBe(1);
   });
 
+  it('a narrowed period counts every non-ended session as active, like the CLI', () => {
+    const idle = boardSession({ session_id: 'idle', status: 'idle', last_activity_at: NOW - 60, tasks: tasksOf('i', 1, 0, 0) });
+    const ended = boardSession({ session_id: 'ended', status: 'ended', last_activity_at: NOW - 60, tasks: tasksOf('e', 1, 0, 0) });
+    const live = boardSession({ session_id: 'live', status: 'active', last_activity_at: NOW - 60, tasks: tasksOf('l', 1, 0, 0) });
+    const view = viewProject(boardProject({ sessions: [idle, ended, live, old] }), 'today', NOW)!;
+    expect(view.sessionsTotal).toBe(3);
+    expect(view.sessionsActive).toBe(2);
+  });
+
   it('a narrower period recomputes from the sessions that remain', () => {
     const view = viewProject(project, '7d', NOW)!;
     expect(view.counts).toEqual({ todo: 1, in_progress: 1, in_review: 0, pr_created: 0, done: 1, total: 3 });
@@ -340,6 +356,55 @@ describe('boardProjectName', () => {
     expect(boardProjectName(project, { 'uuid-1': 'Shop' })).toBe('Shop');
     expect(boardProjectName(project, {})).toBe('storefront');
     expect(boardProjectName(boardProject({ project_id: 'uuid-1', root: '' }), {})).toBe('uuid-1');
+  });
+});
+
+describe('disambiguatedNames', () => {
+  it('adds the parent directory only to projects whose displayed names clash', () => {
+    const a = boardProject({ project_id: 'a', root: '/work/acme/storefront' });
+    const b = boardProject({ project_id: 'b', root: '/play/storefront/' });
+    const c = boardProject({ project_id: 'c', root: '/work/other' });
+    const names = disambiguatedNames([a, b, c], {});
+    expect(boardProjectName(a, names)).toBe('storefront (acme)');
+    expect(boardProjectName(b, names)).toBe('storefront (play)');
+    expect(boardProjectName(c, names)).toBe('other');
+  });
+
+  it('leaves unique names and app-local names alone, and clashes on the app-local name too', () => {
+    const a = boardProject({ project_id: 'a', root: '/x/one' });
+    const b = boardProject({ project_id: 'b', root: '/y/two' });
+    expect(disambiguatedNames([a, b], {})).toEqual({});
+    const named = disambiguatedNames([a, b], { a: 'Shop', b: 'Shop' });
+    expect(boardProjectName(a, named)).toBe('Shop (x)');
+    expect(boardProjectName(b, named)).toBe('Shop (y)');
+  });
+
+  const shownAll = (projects: ReturnType<typeof boardProject>[], names: Record<string, string> = {}) => {
+    const merged = { ...names, ...disambiguatedNames(projects, names) };
+    return projects.map((project) => boardProjectName(project, merged));
+  };
+
+  it('tells apart clashing projects with the same parent directory name', () => {
+    const a = boardProject({ project_id: 'aaaa1111', root: '/one/acme/storefront' });
+    const b = boardProject({ project_id: 'bbbb2222', root: '/two/acme/storefront' });
+    const shown = shownAll([a, b]);
+    expect(new Set(shown).size).toBe(2);
+    expect(shown.every((name) => name.startsWith('storefront (acme'))).toBe(true);
+  });
+
+  it('tells apart a clashing project with no parent directory, and never clashes with a unique name', () => {
+    const a = boardProject({ project_id: 'aaaa1111', root: '/x/same' });
+    const b = boardProject({ project_id: 'bbbb2222', root: '' });
+    const c = boardProject({ project_id: 'cccc3333', root: '/' });
+    const shown = shownAll([a, b, c], { bbbb2222: 'same', cccc3333: 'same' });
+    expect(new Set(shown).size).toBe(3);
+    expect(shown.every((name) => name.startsWith('same'))).toBe(true);
+  });
+
+  it('grows the id suffix when ids share a prefix', () => {
+    const a = boardProject({ project_id: 'abcdef-1', root: '/p/q/same' });
+    const b = boardProject({ project_id: 'abcdef-2', root: '/p/q/same' });
+    expect(new Set(shownAll([a, b])).size).toBe(2);
   });
 });
 

@@ -367,6 +367,90 @@ describe('asBoardProject', () => {
   });
 });
 
+describe('interrupted, provider fallback and session drops (audit issues 5, 16)', () => {
+  it('parses interrupted, defaulting to false when absent or not a boolean (an older CLI)', () => {
+    const raw = boardTask({ key: 'k' }) as unknown as Record<string, unknown>;
+    expect(asBoardTask({ ...raw, interrupted: true })?.interrupted).toBe(true);
+    expect(asBoardTask({ ...raw, interrupted: false })?.interrupted).toBe(false);
+    const old = { ...raw };
+    delete old['interrupted'];
+    expect(asBoardTask(old)?.interrupted).toBe(false);
+    for (const bad of ['true', 1, null, {}]) expect(asBoardTask({ ...raw, interrupted: bad })?.interrupted, JSON.stringify(bad)).toBe(false);
+  });
+
+  it.each([['absent', undefined], ['empty', ''], ['not a string', 7]])(
+    'keeps a session whose provider is %s, as unknown, with its tasks',
+    (_name, provider) => {
+      const raw = { ...JSON.parse(JSON.stringify(boardSession({ tasks: [boardTask()] }))), provider };
+      if (provider === undefined) delete raw.provider;
+      const parsed = asBoardProject(boardProject({ sessions: [raw] })) as BoardProject;
+      expect(parsed.sessions.map((s) => [s.session_id, s.provider, s.tasks.length])).toEqual([['session-aaaaaaaa', 'unknown', 1]]);
+    },
+  );
+
+  it('drops only the invalid session, keeps the project, and says which session and why', () => {
+    const notes: string[] = [];
+    const raw = JSON.parse(JSON.stringify(boardProject({ sessions: [boardSession(), boardSession({ session_id: 'bad-one' }), boardSession({ session_id: 'bad-two' })] })));
+    raw.sessions[1].status = 'zombie';
+    raw.sessions[2].counts = 'x';
+    const parsed = asBoardProject(raw, (detail) => notes.push(detail)) as BoardProject;
+    expect(parsed.sessions.map((s) => s.session_id)).toEqual(['session-aaaaaaaa']);
+    expect(notes).toHaveLength(2);
+    expect(notes[0]).toMatch(/bad-one.*proj-a.*status/);
+    expect(notes[1]).toMatch(/bad-two.*proj-a.*counts/);
+  });
+
+  it('carries the task total of a dropped session as droppedTasks, and omits it when nothing was dropped', () => {
+    const raw = JSON.parse(JSON.stringify(boardProject({ sessions: [boardSession(), boardSession({ session_id: 'bad-one' }), boardSession({ session_id: 'bad-two' })] })));
+    raw.sessions[1].status = 'zombie';
+    raw.sessions[1].counts.total = 5;
+    raw.sessions[2].counts = 'x';
+    expect((asBoardProject(raw) as BoardProject).droppedTasks).toBe(5);
+    expect(asBoardProject(JSON.parse(JSON.stringify(boardProject()))) as BoardProject).not.toHaveProperty('droppedTasks');
+  });
+
+  it('routes a dropped session to onDropped when given, else to onInvalid', () => {
+    const project = JSON.parse(JSON.stringify(boardProject({ sessions: [boardSession(), boardSession({ session_id: 'bad-one' })] })));
+    project.sessions[1].status = 'zombie';
+    for (const withDropped of [true, false]) {
+      const invalid: string[] = [];
+      const dropped: string[] = [];
+      let deliver: (raw: Record<string, unknown>) => void = () => undefined;
+      watchTasks(
+        { binary: '/b', cwd: '/' },
+        { staleAfterSeconds: 60 },
+        { onEvent: () => undefined, onInvalid: (d) => invalid.push(d), ...(withDropped ? { onDropped: (d: string) => dropped.push(d) } : {}), onEnd: () => undefined },
+        (options) => {
+          deliver = options.onEvent;
+          return { stop: () => undefined, pid: 1 };
+        },
+      );
+      deliver({ event: 'snapshot', project });
+      expect(withDropped ? invalid : dropped).toEqual([]);
+      expect((withDropped ? dropped : invalid).some((n) => n.includes('bad-one'))).toBe(true);
+    }
+  });
+
+  it('reports a dropped session through onInvalid while still delivering the snapshot', () => {
+    const notes: string[] = [];
+    const events: TaskWatchEvent[] = [];
+    let deliver: (raw: Record<string, unknown>) => void = () => undefined;
+    watchTasks(
+      { binary: '/b', cwd: '/' },
+      { staleAfterSeconds: 60 },
+      { onEvent: (event) => events.push(event), onInvalid: (detail) => notes.push(detail), onEnd: () => undefined },
+      (options) => {
+        deliver = options.onEvent;
+        return { stop: () => undefined, pid: 1 };
+      },
+    );
+    const project = boardProject({ sessions: [boardSession(), { ...boardSession({ session_id: 'bad-one' }), status: 'zombie' as never }] });
+    deliver({ event: 'snapshot', project: JSON.parse(JSON.stringify(project)) });
+    expect(events.map((e) => e.event)).toEqual(['snapshot']);
+    expect(notes.some((n) => n.includes('bad-one'))).toBe(true);
+  });
+});
+
 describe('asTaskWatchEvent', () => {
   it('types each event of the stream', () => {
     expect(asTaskWatchEvent({ event: 'snapshot', project: boardProject() })).toMatchObject({ event: 'snapshot' });
@@ -489,6 +573,27 @@ function harness(overrides: Partial<TaskBoardDeps> = {}) {
 
 const exit1: StreamEnd = { kind: 'exited', code: 1, signal: null, stderr: '' };
 const snap = (project: BoardProject): TaskWatchEvent => ({ event: 'snapshot', project });
+
+describe('TaskBoard — dropped sessions', () => {
+  it('logs a dropped session once per reason with its own wording, and again after a restart', async () => {
+    const log = vi.fn();
+    const h = harness({ log });
+    await h.board.start();
+    const handlers = () => h.streams[h.streams.length - 1]!.handlers;
+    const a = 'dropped session s1 of project p1: unknown status "zombie"';
+    handlers().onDropped?.(a);
+    handlers().onDropped?.(a);
+    handlers().onDropped?.('dropped session s2 of project p1: unknown status "zombie"');
+    expect(log.mock.calls.map((c) => c[0] as string)).toEqual([`task board: ${a}`, 'task board: dropped session s2 of project p1: unknown status "zombie"']);
+    expect(log.mock.calls.every((c) => !(c[0] as string).includes('ignored an event'))).toBe(true);
+    h.end(exit1);
+    await h.flush();
+    h.fire(BOARD_BACKOFF_MIN_MS);
+    await h.flush();
+    handlers().onDropped?.(a);
+    expect(log).toHaveBeenCalledTimes(3);
+  });
+});
 
 describe('TaskBoard — snapshots', () => {
   it('goes live on ready and keeps the latest snapshot per project, newest activity first', async () => {
