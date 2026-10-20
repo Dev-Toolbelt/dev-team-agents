@@ -18,6 +18,7 @@ The Electron app in `app/` runs its renderer tests (vitest with jsdom) on the No
 
 ## Gotchas
 - The error text does not mention Node or jsdom. Check `node -v` first.
+- Under Node 20 the worker can also die with `webidl.util.markAsUncloneable is not a function`. That line looks like a broken vitest or jsdom config, but the cause is the Node version.
 - Run tests with either:
   - `cd app && nvm use && npx vitest run <path>`
   - `PATH=$HOME/.nvm/versions/node/v24.21.0/bin:$PATH npx vitest run <path>`

@@ -1,5 +1,5 @@
-<!-- last-updated: 2026-10-19 -->
-**Last entries added:** Vitest asset inlining, XSS assertion scope, design-tool SVG C2PA metadata (2026-10-19)
+<!-- last-updated: 2026-10-20 -->
+**Last entries added:** bash 3.2 case inside command substitution, nested checkout git identity, python unittest from tests/ (2026-10-20)
 # Wiki
 
 Domain knowledge that is **not derivable from reading the code** — non-obvious behaviors,
@@ -39,6 +39,8 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `hooks/a-plan-is-not-a-task-list.md` | task board, plan, plan-mode, TaskCreate, update_plan, todowrite, native task list, empty board, Task List Mirroring, agent spawn, direct work, read-only turn, To Do, lifetime, hook, settings.json | The board shows nothing although the session planned and ran work, an agent was spawned, or the session edited files itself |
 | `hooks/hook-stdout-never-reaches-the-user.md` | hook, stdout, SessionStart, Stop, notification, banner, DEV TEAM AGENTS, model context, provider, desktop app | A hook needs to tell the user something, or a notice a hook prints is never seen |
 | `hooks/review-state-is-inferred-not-reported.md` | review state, task board, review window, marker, inferred, outcome, in review, findings | The In Review column is empty, or a task shows "result not read" after a review |
+| `hooks/case-pattern-in-command-substitution-bash-3-2.md` | bash 3.2, case, command substitution, syntax error, macOS /bin/bash, esac, NESTED_GUARD, hooks.py | A shell script with `case` inside `$(…)` fails to parse on macOS `/bin/bash` |
+| `hooks/nested-checkout-git-cannot-vouch-for-itself.md` | git rev-parse, git-common-dir, gitfile, nested checkout, worktrees, GIT_DIR, GIT_COMMON_DIR, ADR-0043 | Deciding whether a nested directory really belongs to the project's repository |
 | `hooks/provider-todo-tool-payloads.md` | hook, todo tool, TaskCreate, TaskUpdate, update_plan, todowrite, provider payload, PreToolUse, PostToolUse, task id, undocumented | Capturing task activity from each provider's different todo tool payload shape |
 | `hooks/contributor-repo-runs-vendored-hooks.md` | hook, vendored hooks, .dev-team-agents/scripts/hooks, scripts/hooks, settings.json, post-tool-use, trace, interrupted spans, self-heal, sync | A hook edit in this repository has no effect, or execution trace spans settle as `interrupted` after editing `scripts/hooks/` |
 | `hooks/claude-transcript-repeats-usage-per-streamed-line.md` | claude transcript, usage, message.id, subagent, jsonl, streaming, token count, overcount, final count | Summing a subagent transcript's token usage gives a count that is too high |
@@ -77,6 +79,7 @@ decide whether an entry is worth opening; entries are never deleted, only supers
 | `testing/cli-subprocess-tests-and-the-dev-auth-config.md` | scripts/lib/auth-config.json, scripts/lib/auth-config.dev.json, unconfigured_cli, Identity.configured, unconfigured build, shipped_cli, auth_support, devteam_support, subprocess, network leak, test isolation, entitlement | A test that runs the CLI as a subprocess and expects an unconfigured build sends real requests because the checkout's auth config is real |
 | `testing/diagnosing-the-windows-ci-job.md` | windows, CI, windows-latest, hang, timeout, faulthandler, dump_traceback_later, temporary branch, gh api, job logs, subtests, unittest, set +e | The Windows python job hangs or fails with no usable trace in its log |
 | `testing/fixture-circularity.md` | fixture, migration, test design, circular, legacy layout, false confidence | Writing a test for a migration away from a layout the current code no longer produces |
+| `testing/python-tests-run-from-the-tests-directory.md` | python tests, unittest, pytest, tests directory, devteam_support, python3 -m unittest, __init__.py, import error | Running the Python test suite, or `unittest` reports that `devteam_support` cannot be imported |
 | `testing/wait-for-the-data-a-control-depends-on.md` | async, flaky test, fixture, wait, disabled control, Radix, DropdownMenu, data loading, ProjectList, folders, sonner, toasts, race condition | Wait for the readiness signal of the data a control depends on, not for unrelated text rendered earlier |
 | `testing/vitest-inlines-small-assets.md` | vitest, assetsInlineLimit, data URI, svg import, inline limit, img src, renderer tests, filename assertion, providerIcon, vite | A renderer test asserts an imported image's filename, or passes for one asset and fails for another |
 | `testing/xss-assertions-scope-to-the-body.md` | xss, onerror, innerHTML, img, querySelector, toBeNull, skills.test.tsx, sanitize, text rendering, regression test | An XSS guard fails because a legitimate image appears on the same screen, or a payload-specific selector looks too narrow |
