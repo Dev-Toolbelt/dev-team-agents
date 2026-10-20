@@ -23,7 +23,8 @@
  *   `chat.message`                    → scripts/hooks/user-prompt-submit.sh
  *     (the user's prompt text, for review commands and requests and issue references on the task board;
  *     its `[DEVTEAM:LANGUAGE]` stdout line is re-emitted by `experimental.chat.system.transform`)
- *   `experimental.session.compacting` → scripts/hooks/pre-compact.sh
+ *   `experimental.session.compacting` → scripts/hooks/pre-compact.sh, then
+ *                                       scripts/hooks/backlog-prime.sh (active sprint work)
  *   `session.idle` (event bus)        → scripts/hooks/stop.sh
  *   `session.updated` (a rename)      → scripts/hooks/session-retitle.sh
  *     (stdin carries a synthetic transcript_path built from the SDK's
@@ -512,6 +513,12 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       const text = r.stdout.trim() || r.stderr.trim()
       if (text) {
         output.context.push(`## dev-team-agents session summary\n${text}`)
+      }
+      // opencode fires no SessionStart after a compaction, so the active sprint work that
+      // session-start.sh re-injects on Claude Code and Codex joins the compaction context here.
+      const prime = (await runHook(`${hooksDir()}/backlog-prime.sh`)).stdout.trim()
+      if (prime) {
+        output.context.push(`## dev-team-agents active sprint work\n${prime}`)
       }
     },
   }
