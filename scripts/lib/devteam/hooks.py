@@ -101,13 +101,42 @@ PREVIOUS_MATCHERS = {
 ROOT_WALK = (
     'for d in "$PWD" "$(pwd -P)"; do '
     'while [ -n "$d" ] && [ ! -d "$d/{hooks}" ] && [ ! -f "$d/{pointer}" ]; do p=${{d%/*}}; [ "$p" = "$d" ] && p=; d=$p; done; '
-    '[ -n "$d" ] && break; done; '
+    '[ -n "$d" ] && break; done; {guard}'
     'cd "${{d:-{fallback}}}" && {{ [ -d {hooks} ] || [ ! -f {pointer} ] || {{ c=$(cat {pointer}) && exec bash "$c/versions/$(cat "$c/current")/scripts/hooks/lib/self-heal.sh" {script}; }}; exec bash {hooks}/{script}; }}'
+)
+
+#: The walk can land BELOW the opened project, in a directory the agent `cd`-ed into — and the
+#: script it finds there is what runs, unprompted. A cloned repository or an installed package
+#: carrying its own `.dev-team-agents/` would then replace the project's hooks (credential guard
+#: included) with its own. So a match is kept only when it is the opened project or one of its
+#: ancestors, or lies below it in a work tree the PROJECT's own `.git` vouches for: its git dir is
+#: the project's (then the toplevel must be the project's too), or one of the project's
+#: `worktrees/<name>` whose back-link names that very work tree. Asking the nested directory's git
+#: alone is not enough: a planted `.git` gitfile can claim the project's git dir. Inside the work
+#: tree, a git-ignored directory (`node_modules/<pkg>`) is refused. Anything else — outside the
+#: project, another repository, git failing — falls back to the opened project (ADR-0043). It all
+#: runs in one subshell with the `GIT_*` overrides unset; only a match below the project pays for it.
+#: `case` patterns open with `(`: bash 3.2 (macOS `/bin/bash`) cannot parse a bare `pat)` inside `$(…)`.
+NESTED_GUARD = (
+    'r=${{CLAUDE_PROJECT_DIR:-}}; '
+    'if [ -n "$d" ] && [ -n "$r" ]; then v=$(unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE; '
+    'dp=$(cd "$d" && pwd -P) && rp=$(cd "$r" && pwd -P) || exit; '
+    'case "$rp/" in ("$dp"/*) echo ok; exit;; esac; case "$dp" in ("$rp"/*) ;; (*) exit;; esac; '
+    'a=$(cd "$d" && x=$(git rev-parse --absolute-git-dir 2>/dev/null) && cd "$x" && pwd -P) || exit; '
+    't=$(cd "$d" && git rev-parse --show-toplevel 2>/dev/null) || exit; '
+    'g=$(cd "$r" && x=$(git rev-parse --absolute-git-dir 2>/dev/null) && cd "$x" && pwd -P) || exit; '
+    'c=$(cd "$r" && x=$(git rev-parse --git-common-dir 2>/dev/null) && cd "$x" && pwd -P) || exit; '
+    'if [ "$a" = "$g" ]; then w=$(cd "$r" && git rev-parse --show-toplevel 2>/dev/null) || exit; '
+    'else case "$a" in ("$c"/worktrees/*) b=$(cat "$a/gitdir") && w=$(cd "${{b%/.git}}" && pwd -P) || exit;; (*) exit;; esac; fi; '
+    '[ -n "$w" ] && [ "$t" = "$w" ] || exit; [ "$dp" = "$w" ] || ! git -C "$w" check-ignore -q "$dp" || exit; echo ok); '
+    '[ "$v" = ok ] || {{ echo "dev-team-agents: ignored the hooks in $d (not part of this project); running the project ones" >&2; d=; }}; fi; '
 )
 
 
 def command_for(script):
-    body = ROOT_WALK.format(hooks=HOOK_DIR, pointer=CORE_POINTER, fallback="${CLAUDE_PROJECT_DIR:-.}", script=script)
+    body = ROOT_WALK.format(
+        hooks=HOOK_DIR, pointer=CORE_POINTER, guard=NESTED_GUARD.format(), fallback="${CLAUDE_PROJECT_DIR:-.}", script=script,
+    )
     return "{} bash -c '{}'".format(ENV_PREFIX, body)
 
 
