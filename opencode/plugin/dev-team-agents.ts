@@ -257,7 +257,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
       // Fall through with no stdin — stop.sh's notifier falls back to the
       // turn-count heuristic, same as it does today.
     }
-    // No token usage yet: still name the session, so stop/04b-task-board.sh can mark it idle.
+    // No token usage yet: still name the session, so stop/00b-task-board.sh can mark it idle.
     return {
       stdin: JSON.stringify({
         session_id: sessionID,

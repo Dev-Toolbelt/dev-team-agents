@@ -59,6 +59,7 @@ WRITE_RES=(
     '(^|[^=-])>>?[[:space:]]*([^&[:space:]/\\"]|/[^d])'
 )
 SUBAGENT_RE='"(agent_id|parent_id)"[[:space:]]*:[[:space:]]*"[^"]'
+PARENT_RE='"parent_id"[[:space:]]*:[[:space:]]*"[^"]'
 
 writes_shaped() {
     local re
@@ -70,6 +71,9 @@ writes_shaped() {
 
 MODE=""
 if [[ "$INPUT" =~ $CODEX_RE ]] || [[ "$INPUT" =~ $OPENCODE_RE ]]; then
+    # An opencode child session's todos are its agent task's, never a session of their own: the
+    # CLI refuses them too (`tasks.normalize`), this only saves the fork.
+    [[ "$INPUT" =~ $OPENCODE_RE && "$INPUT" =~ $PARENT_RE ]] && exit 0
     MODE="todo"
 elif [[ "$INPUT" =~ $SPAWN_RE ]]; then
     # A spawn that names no agent type is the provider's default agent: no task, no review. Free to

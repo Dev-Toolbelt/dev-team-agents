@@ -3,7 +3,7 @@
 **Date:** 2026-10-19  
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
-**Applies to:** `scripts/lib/devteam/trace.py`, `scripts/lib/devteam/usage.py`, `scripts/lib/devteam/tasks.py`, `scripts/hooks/lib/agent-usage.sh`, `scripts/hooks/lib/task-board.sh`, `scripts/hooks/pre-tool-use/04-task-board.sh`, `scripts/hooks/post-tool-use/01-task-board.sh`, `scripts/hooks/stop/04b-task-board.sh`, `scripts/lib/ensure-claude-framework.sh`, `opencode/plugin/dev-team-agents.ts`  
+**Applies to:** `scripts/lib/devteam/trace.py`, `scripts/lib/devteam/usage.py`, `scripts/lib/devteam/tasks.py`, `scripts/hooks/lib/agent-usage.sh`, `scripts/hooks/lib/task-board.sh`, `scripts/hooks/pre-tool-use/04-task-board.sh`, `scripts/hooks/post-tool-use/01-task-board.sh`, `scripts/hooks/stop/00b-task-board.sh`, `scripts/lib/ensure-claude-framework.sh`, `opencode/plugin/dev-team-agents.ts`  
 **Relates to:** [ADR-0018](0018-the-task-board-is-captured-by-hooks-into-a-machine-local-per-session-record.md) (task board), [ADR-0013](0013-portable-and-machine-local-split-of-the-data-store.md) (machine-local records), [ADR-0014](0014-store-schemas-as-the-normative-write-gate-and-the-json-contract-deprecation-policy.md) (`--json` contract)
 
 ## Context
