@@ -266,6 +266,23 @@ def _spawned_agent_id(response):
     return ""
 
 
+#: A Codex multi-agent v2 task path, as `spawn_agent` answers it and a `FINAL_ANSWER` names its author.
+_TASK_PATH = re.compile(r"^/[A-Za-z0-9_./-]{1,200}$")
+
+
+def _spawned_task_path(response):
+    """The task path a Codex multi-agent v2 ``spawn_agent`` answered with (``/root/<name>``), else ``""``.
+
+    v2 answers ``{"task_name": …}`` and no agent id; the agent's end then reaches only the parent's
+    rollout, as a ``FINAL_ANSWER`` message (:func:`_scan_codex_v2`).
+    """
+    for found in _json_objects(response):
+        name = found.get("task_name")
+        if isinstance(name, str) and _TASK_PATH.match(name) and ".." not in name:
+            return name
+    return ""
+
+
 #: Codex's final agent states (`AgentStatus`, snake_case) -> (task status, failed).
 _WAIT_FINAL = {
     "completed": ("completed", False),
@@ -338,9 +355,9 @@ def _agent_op(payload, provider, bare):
     if failed:
         return ("agent_end", {"id": use_id, "agent": name, "status": "cancelled", "failed": True})
     if bare == "spawn_agent":
-        ref = _spawned_agent_id(payload.get("tool_response"))
+        ref = _spawned_agent_id(payload.get("tool_response")) or _spawned_task_path(payload.get("tool_response"))
         if ref:
-            return ("agent_ref", {"id": use_id, "ref": ref}) if use_id else None
+            return ("agent_ref", {"id": use_id, "ref": ref, "transcript": transcript}) if use_id else None
         # The spawn answered with no agent id: no agent exists, and no wait can ever settle it.
         return ("agent_end", {"id": use_id, "agent": name, "status": "cancelled", "failed": True})
     if background or _async_launch(payload):
@@ -1137,6 +1154,69 @@ def _follow_background(record, task, path, opened_at):
         pass
 
 
+def _mark_rollout(task, path):
+    """Where the parent rollout ends now: a v2 ``FINAL_ANSWER`` for ``task`` can only come after it.
+
+    Taken at the spawn (``PreToolUse``), before the child can have answered, and kept per task, so a
+    fast child is never missed and an earlier answer under a reused task path never ends this one.
+    """
+    if task.get("rollout_path") or not (isinstance(path, str) and path and os.path.isfile(path)):
+        return
+    try:
+        task["rollout_offset"] = os.path.getsize(path)
+        task["rollout_path"] = path
+    except OSError:
+        pass
+
+
+def _is_v2(task):
+    return _is_agent(task) and task["status"] == "in_progress" and str(task.get("agent_ref", "")).startswith("/")
+
+
+def _scan_codex_v2(rec, payload, now):
+    """Settle the Codex v2 agent tasks: by their ``FINAL_ANSWER`` in the parent rollout, else by age.
+
+    A task ends at the first answer from its task path written after its own spawn mark, at the
+    answer's time; when one path has several open tasks, the oldest is ended first. A v2
+    ``wait_agent`` names no agent, so this scan is the only end signal. A task with no answer after
+    :data:`PENDING_MAX_AGE` (an errored or killed child writes none; a resumed thread writes to
+    another rollout) is cancelled as ``interrupted``. Returns True when it changed something.
+    """
+    open_tasks = [t for t in rec["tasks"] if _is_v2(t)]
+    if not open_tasks:
+        return False
+    changed = False
+    path = payload.get("transcript_path") if isinstance(payload, dict) else None
+    readable = [t for t in open_tasks if isinstance(path, str) and t.get("rollout_path") == path and os.path.isfile(path)]
+    if readable:
+        from . import usage
+        scan = rec.get("codex_scan") if isinstance(rec.get("codex_scan"), dict) else {}
+        # Resume where the last scan stopped (every answer before it was already matched), or at the
+        # oldest open mark when that is later: nothing before it can end an open task.
+        start = min(t.get("rollout_offset") or 0 for t in readable)
+        if scan.get("tx_path") == path and isinstance(scan.get("tx_offset"), int):
+            start = max(start, scan["tx_offset"])
+        answers, offset = usage.codex_final_answers(path, start)
+        rec["codex_scan"] = {"tx_path": path, "tx_offset": offset}
+        changed = True
+        for answer in answers:
+            waiting = sorted(
+                (t for t in readable if _is_v2(t) and t["agent_ref"] == answer["author"]
+                 and (t.get("rollout_offset") or 0) <= answer["offset"]),
+                key=lambda t: t["created_at"],
+            )
+            if waiting:
+                task = waiting[0]
+                last = task["history"][-1]["at"] if task.get("history") else task["created_at"]
+                _end_agent(task, "completed", False, max(last, min(now, answer["at"] or now)))
+    for task in open_tasks:
+        if _is_v2(task) and now - task["created_at"] > PENDING_MAX_AGE:
+            task["interrupted"] = True
+            _push(task, "cancelled", now)
+            changed = True
+    return changed
+
+
 def _end_agent(task, status, failed, now):
     if failed:
         task["failed"] = True
@@ -1162,6 +1242,8 @@ def _apply_agent(record, call, now):
             record, call, {"id": body["id"] or None, "content": body["content"], "status": "in_progress"}, now
         )
         task.update(kind="agent", agent_type=body["agent"], background=bool(body["background"]), failed=False)
+        if call["provider"] == "codex":
+            _mark_rollout(task, body.get("transcript"))
         if body["background"]:
             _follow_background(record, task, body.get("transcript"), now)
         return True
@@ -1179,6 +1261,8 @@ def _apply_agent(record, call, now):
         return False
     if kind == "agent_ref":
         task["agent_ref"] = body["ref"]
+        if body["ref"].startswith("/"):
+            _mark_rollout(task, body.get("transcript"))  # only when the spawn carried no rollout
         return True
     if kind == "agent_bg":
         task["background"] = True
@@ -2680,6 +2764,7 @@ def mark(root, payload, state, now=None):
                 for outcomes in (_scan_background(rec, payload, now), _expire(rec, now), _retire_at_stop(rec, payload, now)):
                     done.extend(o for o in outcomes if o["result"])
                 _scan_agent_tasks(rec, payload, now)
+                _scan_codex_v2(rec, payload, now)
                 _interrupt_agents(rec, now)
                 pr_marks = _fix_prs(rec, now, links) if links is not None else []
                 done_now = _cleanly_done(rec, _review_members(rec), skip_direct=True)
