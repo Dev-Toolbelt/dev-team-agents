@@ -219,36 +219,33 @@ def check_contracts(report, specs, contracts):
 
 
 def check_tasks(report, root, specs):
-    sprint_dir = os.path.join(root, "docs", "backlog", "sprints")
-    if not os.path.isdir(sprint_dir):
-        return
-    for name in sorted(os.listdir(sprint_dir)):
-        path = os.path.join(sprint_dir, name)
-        if not name.endswith(".md") or name == "sprints.md" or not regular(path):
+    # The sprint task block has one reader, shared with `devteam backlog` (ADR-0044): it decides
+    # where a task's fields end and which files are sprint files (no symlink, no oversized file).
+    from devteam import backlog
+
+    for sprint in backlog.sprint_files(root):
+        # Named from the root as given, so a report path never turns into `../../private/var/…`.
+        path = os.path.join(root, "docs", "backlog", "sprints", sprint.name)
+        if not regular(path):
             continue
-        text = read(path)
+        text = backlog.read_text(sprint)
         if text is None:
             report.add("WARN", path, "unreadable, skipped")
             continue
-        for block in re.split(r"^### (?=TASK-\d+)", text, flags=re.M)[1:]:
-            task = block.split(None, 1)[0]
-            spec_line = re.search(r"^\*\*Spec\*\*:\s*(.*)$", block, re.M)
-            if not spec_line:
-                continue
+        for task in backlog.parse(text)["tasks"]:
             linked = []
-            for ref in re.findall(r"docs/specs/[A-Za-z0-9._/-]+\.md", spec_line.group(1)):
+            for ref in task["spec_refs"]:
                 if not regular(os.path.join(root, ref)):
-                    report.add("ERROR", path, "{} links {}, which does not exist".format(safe(task), safe(ref)))
+                    report.add("ERROR", path, "{} links {}, which does not exist".format(safe(task["id"]), safe(ref)))
                 elif not ref.endswith("-contract.md"):
                     linked.append(spec_name(ref))
-            covers = re.search(r"^\*\*Covers\*\*:\s*(.*)$", block, re.M)
-            if not covers or not linked:
+            if not task["covers"] or not linked:
                 continue
             known = set().union(*(specs.get(n, {}).get("ids", set()) for n in linked))
-            for ident in re.findall(r"\bS\d+\b", covers.group(1)):
+            for ident in task["covers"]:
                 if ident not in known:
                     report.add("ERROR", path, "{} covers {}, which {} does not define".format(
-                        safe(task), ident, ", ".join(safe(n + ".md") for n in linked)))
+                        safe(task["id"]), ident, ", ".join(safe(n + ".md") for n in linked)))
 
 
 def tests_required(root):
