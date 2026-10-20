@@ -442,7 +442,9 @@ class CodexParserTest(unittest.TestCase):
         self.path = os.path.join(self.dir, "rollout-x.jsonl")
 
     def write(self, text, mode="w"):
-        with open(self.path, mode, encoding="utf-8") as handle:
+        # `newline=""`: a Codex rollout is LF-only, and text mode on Windows would write CRLF and
+        # shift every byte offset the parser reports.
+        with open(self.path, mode, encoding="utf-8", newline="") as handle:
             handle.write(text)
 
     def test_a_partial_last_line_waits_and_offsets_point_at_line_starts(self):

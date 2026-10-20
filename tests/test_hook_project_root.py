@@ -603,6 +603,7 @@ class RewriteTest(StoreTestCase):
         post = data["hooks"]["PostToolUse"][0]
         self.assertEqual((post["matcher"], post["hooks"][0]["command"]), ("X", hooks.command_for("post-tool-use.sh")))
 
+    @requires_bash()
     def test_the_v2_installer_upgrades_an_unguarded_root_walk_command(self):
         """A v2 install updated in place gets the nested-checkout guard too (ADR-0043)."""
         text = (REPO_ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")

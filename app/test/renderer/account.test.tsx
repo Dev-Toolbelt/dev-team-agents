@@ -924,7 +924,8 @@ describe('the shell', () => {
     await user.click(avatar);
     expect(await screen.findByRole('heading', { level: 2, name: 'Ana Souza' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Account' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { selected: true })).not.toBeInTheDocument();
+    // The app's own tab strip; the Board keeps its project tabs mounted, Overview selected.
+    expect(within(screen.getAllByRole('tablist')[0]!).queryByRole('tab', { selected: true })).not.toBeInTheDocument();
   });
 
   it('shows only the sign-in screen, no tabs, when the gate enforces and the account is signed out', async () => {

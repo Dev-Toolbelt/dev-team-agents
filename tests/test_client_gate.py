@@ -256,6 +256,8 @@ class IncompatibleDeclarationRefusesEveryMutatingCommandTest(ClientGateTestCase)
             ("prefs", "set"): ("language", "en"),
             ("prefs", "unset"): ("language",),
             ("tasks", "mark"): ("--state", "idle"),
+            # No such suggestion: a gate that let it through fails the id lookup before any write.
+            ("insights", "dismiss"): ("no-such-suggestion",),
             ("plugin", "enable"): ("probe",),
             ("plugin", "disable"): ("probe",),
             ("plugin", "config", "set"): ("probe", "key", "value"),
