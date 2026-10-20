@@ -130,6 +130,8 @@ Os dois instalam só para o seu usuário, colocam o `devteam` no PATH e instalam
 | Conectar contas do GitHub, Jira e Cloudflare | `devteam integration connect github\|jira\|cloudflare`, test, disconnect, config |
 | Ver as tarefas dos agentes em todos os projetos vinculados (o Quadro do app lê o mesmo) | `devteam tasks list\|watch` |
 | Ver a árvore de agentes de uma sessão, com duração, modelo e tokens por agente | `devteam tasks trace <session>` |
+| Ver quais tarefas da sprint estão prontas, bloqueadas ou com claim, e as ondas que as dependências implicam | `devteam backlog ready` |
+| Verificar o grafo de dependências de um arquivo de sprint (ciclos, ids desconhecidos, ondas fora de ordem) | `devteam backlog lint` |
 | Ver custo e confiabilidade por agente e comando, com sugestões que você decide | `devteam insights report` |
 | Atualizar todos os projetos de uma vez | `devteam update` |
 | Manter um projeto numa versão | `devteam pin 3.0.0` |
@@ -218,7 +220,7 @@ Os comandos de implementação também recebem uma tarefa de sprint (`/devteam:b
 | `/devteam:frontend` | Implementação frontend — frontend-developer + ui-ux-designer → frontend-test-specialist |
 | `/devteam:mobile` | Implementação mobile — mobile-developer + ui-ux-designer (quando relevante) |
 | `/devteam:fullstack` | Implementação full-stack — times de backend + frontend em paralelo |
-| `/devteam:sprint` | Executa uma sprint aprovada do `/devteam:plan` onda por onda — worktree por tarefa, o agente da tarefa preso à sua spec, review e merge em `sprint/<scope>-<n>` a cada onda, retomável |
+| `/devteam:sprint` | Executa uma sprint aprovada do `/devteam:plan` onda por onda — worktree por tarefa, o agente da tarefa preso à sua spec, review e merge em `sprint/<scope>-<n>` a cada onda, retomável; o grafo de dependências passa por lint, uma tarefa com bloqueio ainda aberto fica retida, as tarefas recebem claim para que uma segunda sessão na mesma sprint seja avisada em vez de refazer o trabalho, e a sprint ativa é reinjetada após uma compactação |
 | `/devteam:spec` | Spec retroativa — escreve a spec de uma feature que já existe a partir do código, dos testes e dos docs; o qa-specialist confere cada cenário com a feature rodando, os testes existentes recebem o token do cenário e você decide cada divergência (descrever como está construído, ou manter o comportamento pretendido e corrigi-lo) |
 | `/devteam:design` | Design UI/UX — ui-ux-designer |
 | `/devteam:relayout` | Refazer o layout de uma tela existente para corresponder a referências visuais — ui-ux-designer + frontend-developer, gate obrigatório de referência/tela alvo, worktree isolada, review automática pós-execução |

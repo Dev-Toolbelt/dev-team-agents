@@ -130,6 +130,8 @@ Both install for your user only, put `devteam` on your PATH and install the fram
 | Connect GitHub, Jira and Cloudflare accounts | `devteam integration connect github\|jira\|cloudflare`, test, disconnect, config |
 | See every agent task across bound projects (the app's Board reads the same) | `devteam tasks list\|watch` |
 | See one session's agent tree with duration, model and tokens per agent | `devteam tasks trace <session>` |
+| See which sprint tasks are ready, blocked or claimed, and the waves their dependencies imply | `devteam backlog ready` |
+| Check a sprint file's dependency graph (cycles, unknown ids, out-of-order waves) | `devteam backlog lint` |
 | See cost and reliability per agent and command, with suggestions you decide | `devteam insights report` |
 | Update every bound project at once | `devteam update` |
 | Hold one project on a version | `devteam pin 3.0.0` |
@@ -218,7 +220,7 @@ Implementation commands also take a sprint task (`/devteam:backend TASK-003`): t
 | `/devteam:frontend` | Frontend implementation — frontend-developer + ui-ux-designer → frontend-test-specialist |
 | `/devteam:mobile` | Mobile implementation — mobile-developer + ui-ux-designer (when relevant) |
 | `/devteam:fullstack` | Full-stack implementation — backend + frontend teams in parallel |
-| `/devteam:sprint` | Execute an approved sprint from `/devteam:plan` wave by wave — worktree per task, the task's agent bound to its spec, review and merge into `sprint/<scope>-<n>` per wave, resumable |
+| `/devteam:sprint` | Execute an approved sprint from `/devteam:plan` wave by wave — worktree per task, the task's agent bound to its spec, review and merge into `sprint/<scope>-<n>` per wave, resumable; the dependency graph is linted, a task whose blocker is still open is held back, tasks are claimed so a second session on the same sprint is told instead of redoing work, and the active sprint is re-injected after a compaction |
 | `/devteam:spec` | Retroactive spec — writes the spec of a feature that already exists from its code, tests and docs; qa-specialist checks every scenario against the running feature, existing tests get the scenario token, and you decide each divergence (describe it as built, or keep the intended behavior and fix it) |
 | `/devteam:design` | UI/UX design — ui-ux-designer |
 | `/devteam:relayout` | Redesign an existing screen to match visual references — ui-ux-designer + frontend-developer, mandatory reference/target-screen gate, isolated worktree, automatic post-execution review |
