@@ -130,12 +130,11 @@ def _command(provider, script):
     """The command each provider registers, built from the one walk both share."""
     if provider == "claude":
         return hooks.command_for(script)
-    return "env -u BASH_ENV -u ENV bash -c '{}'".format(hooks.ROOT_WALK.format(hooks=hooks.HOOK_DIR, pointer=hooks.CORE_POINTER, fallback=".", script=script))
+    return "env -u BASH_ENV -u ENV bash -c '{}'".format(hooks.ROOT_WALK.format(hooks=hooks.HOOK_DIR, pointer=hooks.CORE_POINTER, guard="", fallback=".", script=script))
 
 
-@requires_bash()
-class RootWalkTest(unittest.TestCase):
-    """Where the command lands, on trees a bind does not build: nested roots, worktrees."""
+class _RootFixture(unittest.TestCase):
+    """A scratch tree with probe hooks that record where the command ran. No tests of its own."""
 
     PROBE = 'pwd -P > "{out}/pwd"; cat > "{out}/stdin"; exit "${{PROBE_EXIT:-0}}"\n'
 
@@ -164,6 +163,11 @@ class RootWalkTest(unittest.TestCase):
         )
         ran_in = (self.out / "pwd").read_text(encoding="utf-8").strip() if (self.out / "pwd").exists() else None
         return result, ran_in
+
+
+@requires_bash()
+class RootWalkTest(_RootFixture):
+    """Where the command lands, on trees a bind does not build: nested roots, worktrees."""
 
     def test_a_project_below_the_git_toplevel_is_found_from_its_subdirectory(self):
         outer = self.tmp / "monorepo"
@@ -224,6 +228,177 @@ class RootWalkTest(unittest.TestCase):
                 # PreToolUse exit 2 is how the credential guard blocks a call.
                 self.assertEqual(result.returncode, 2)
                 self.assertEqual((self.out / "stdin").read_text(encoding="utf-8"), '{"x": 1}')
+
+
+def _git(*args):
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "init.defaultBranch=main", *args],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
+    )
+
+
+@requires_bash()
+class NestedCheckoutTest(_RootFixture):
+    """Hooks found below the opened project run only when they belong to its own repository.
+
+    A Claude Code session keeps the directory a Bash call `cd`-ed into, so a cloned repository or
+    an installed package carrying its own `.dev-team-agents/` would otherwise have its hooks run on
+    the next tool call, in place of the project's own (credential guard included).
+    """
+
+    def project(self):
+        root = self.root(self.tmp / "proj")
+        (root / ".gitignore").write_text("node_modules/\n.worktrees/\n", encoding="utf-8")
+        _git("init", "-q", str(root))
+        _git("-C", str(root), "add", ".gitignore")
+        _git("-C", str(root), "commit", "-q", "-m", "init")
+        return root
+
+    def nested(self, path, out_name):
+        hooks_dir = path / hooks.HOOK_DIR
+        hooks_dir.mkdir(parents=True)
+        (hooks_dir / "probe.sh").write_text('touch "{}/{}"\n'.format(self.out, out_name), encoding="utf-8")
+        return path
+
+    def claude(self, root, cwd):
+        return self.run_from("claude", cwd, {"CLAUDE_PROJECT_DIR": str(root)})
+
+    def test_a_cloned_repository_does_not_get_its_hooks_run(self):
+        root = self.project()
+        clone = self.nested(root / "vendor" / "evil", "planted")
+        _git("init", "-q", str(clone))
+        result, ran_in = self.claude(root, clone / "src")
+        self.assertEqual(ran_in, str(root.resolve()))
+        self.assertFalse((self.out / "planted").exists())
+        self.assertIn("not part of this project", result.stderr.decode("utf-8"))
+
+    def test_a_planted_core_pointer_is_not_followed(self):
+        root = self.project()
+        store = self.tmp / "fake-store"
+        heal = store / "versions" / "1" / "scripts" / "hooks" / "lib"
+        heal.mkdir(parents=True)
+        (heal / "self-heal.sh").write_text('touch "{}/planted"\n'.format(self.out), encoding="utf-8")
+        (store / "current").write_text("1", encoding="utf-8")
+        clone = root / "vendor" / "evil"
+        (clone / ".dev-team-agents").mkdir(parents=True)
+        (clone / hooks.CORE_POINTER).write_text(str(store), encoding="utf-8")
+        _git("init", "-q", str(clone))
+        _result, ran_in = self.claude(root, clone)
+        self.assertEqual(ran_in, str(root.resolve()))
+        self.assertFalse((self.out / "planted").exists())
+
+    def test_an_ignored_package_does_not_get_its_hooks_run(self):
+        root = self.project()
+        package = self.nested(root / "node_modules" / "pkg", "planted")
+        _result, ran_in = self.claude(root, package)
+        self.assertEqual(ran_in, str(root.resolve()))
+        self.assertFalse((self.out / "planted").exists())
+
+    def test_a_nested_project_outside_any_repository_is_refused(self):
+        root = self.root(self.tmp / "workspace")  # opened above, not a git work tree
+        clone = self.nested(root / "other", "planted")
+        _git("init", "-q", str(clone))
+        _result, ran_in = self.claude(root, clone)
+        self.assertEqual(ran_in, str(root.resolve()))
+        self.assertFalse((self.out / "planted").exists())
+
+    def test_a_sub_project_of_the_same_repository_keeps_its_own_hooks(self):
+        root = self.project()
+        package = self.root(root / "packages" / "svc")
+        result, ran_in = self.claude(root, package / "src")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(ran_in, str(package.resolve()))
+
+    def test_a_worktree_of_the_same_repository_keeps_its_own_hooks(self):
+        root = self.project()
+        worktree = root / ".worktrees" / "feat"
+        _git("-C", str(root), "worktree", "add", "-q", str(worktree))
+        self.root(worktree)
+        result, ran_in = self.claude(root, worktree / "apps")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(ran_in, str(worktree.resolve()))
+
+    def refused(self, root, cwd, env_extra=None):
+        env = {"CLAUDE_PROJECT_DIR": str(root)}
+        env.update(env_extra or {})
+        _result, ran_in = self.run_from("claude", cwd, env)
+        self.assertEqual(ran_in, str(root.resolve()))
+        self.assertFalse((self.out / "planted").exists())
+
+    def test_a_gitfile_claiming_the_project_repository_is_refused(self):
+        root = self.project()
+        planted = self.nested(root / "vendor" / "evil", "planted")
+        (planted / ".git").write_text("gitdir: ../../.git\n", encoding="utf-8")
+        self.refused(root, planted)
+
+    def test_an_ignored_package_with_a_gitfile_is_refused(self):
+        root = self.project()
+        planted = self.nested(root / "node_modules" / "pkg", "planted")
+        (planted / ".git").write_text("gitdir: ../../.git\n", encoding="utf-8")
+        self.refused(root, planted)
+
+    def test_a_gitfile_borrowing_a_real_worktree_is_refused(self):
+        root = self.project()
+        _git("-C", str(root), "worktree", "add", "-q", str(root / ".worktrees" / "real"))
+        planted = self.nested(root / "vendor" / "fake", "planted")
+        admin = root / ".git" / "worktrees" / "real"
+        (planted / ".git").write_text("gitdir: {}\n".format(admin), encoding="utf-8")
+        self.refused(root, planted)
+
+    def test_hooks_outside_the_project_are_refused(self):
+        root = self.project()
+        outside = self.nested(self.tmp / "elsewhere", "planted")
+        self.refused(root, outside)
+        (root / "lnk").symlink_to(outside)
+        self.refused(root, root / "lnk")
+
+    def test_an_inherited_git_dir_does_not_vouch_for_a_clone(self):
+        root = self.project()
+        clone = self.nested(root / "vendor" / "evil", "planted")
+        _git("init", "-q", str(clone))
+        self.refused(root, clone, {"GIT_DIR": str(root / ".git")})
+
+    def test_a_sub_project_inside_a_worktree_keeps_its_own_hooks(self):
+        root = self.project()
+        worktree = root / ".worktrees" / "feat"
+        _git("-C", str(root), "worktree", "add", "-q", str(worktree))
+        package = self.root(worktree / "packages" / "svc")
+        result, ran_in = self.claude(root, package)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(ran_in, str(package.resolve()))
+
+    def test_the_project_itself_and_its_ancestors_are_unchanged(self):
+        root = self.project()
+        result, ran_in = self.claude(root / "apps", root / "apps" / "api")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(ran_in, str(root.resolve()))
+
+
+#: Which providers' launchers walk from a directory the agent can move into, and so carry the
+#: nested-checkout guard. One entry per provider in `providers.ALL_PROVIDERS`.
+NESTED_GUARD = {
+    "claude": "guarded: the session keeps the directory a Bash call cd-ed into",
+    "codex": None,  # each exec_command is its own process: the hook directory never follows a cd
+    "opencode": None,  # the plugin spawns hooks with cwd = the project directory, no walk
+}
+
+
+class NestedGuardParityTest(unittest.TestCase):
+    def test_every_provider_has_its_nested_checkout_exposure_decided(self):
+        self.assertEqual(set(NESTED_GUARD), set(providers.ALL_PROVIDERS))
+
+    def test_only_the_guarded_providers_carry_the_guard(self):
+        registered = {"claude": hooks.command_for, "codex": CodexCommandTest()._merge().command_for}
+        for provider, guarded in NESTED_GUARD.items():
+            if CASES[provider] is None:
+                continue  # registers no command: the plugin's cwd is pinned by its own test
+            with self.subTest(provider=provider):
+                build = registered[provider]
+                command = build("stop.sh") if provider == "claude" else build(hooks.HOOK_DIR, "stop.sh", windows=False)
+                if guarded:
+                    self.assertIn("not part of this project", command)
+                else:
+                    self.assertNotIn("not part of this project", command)
 
 
 @requires_bash()
@@ -427,6 +602,30 @@ class RewriteTest(StoreTestCase):
         self.assertEqual(pre[1], self.THIRD_PARTY)
         post = data["hooks"]["PostToolUse"][0]
         self.assertEqual((post["matcher"], post["hooks"][0]["command"]), ("X", hooks.command_for("post-tool-use.sh")))
+
+    def test_the_v2_installer_upgrades_an_unguarded_root_walk_command(self):
+        """A v2 install updated in place gets the nested-checkout guard too (ADR-0043)."""
+        text = (REPO_ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
+        functions = text[text.index("_HOOK_TEMPLATE="):text.index("\nif [ ! -f \"$SETTINGS_FILE\" ]")]
+        start = text.index("    # An entry written before the command found the project root")
+        end = text.index("PYEOF\n    fi\n", start) + len("PYEOF\n    fi\n")
+
+        def unguarded(script):
+            body = hooks.ROOT_WALK.format(
+                hooks=hooks.HOOK_DIR, pointer=hooks.CORE_POINTER, guard="", fallback="${CLAUDE_PROJECT_DIR:-.}", script=script)
+            return "env -u BASH_ENV -u ENV bash -c '{}'".format(body)
+
+        wrapper = {"hooks": [{"type": "command", "command": "my-wrapper " + unguarded("stop.sh")}]}
+        settings = self.tmp / "settings.json"
+        settings.write_text(json.dumps({"hooks": {
+            "PreToolUse": [{"matcher": ".*", "hooks": [{"type": "command", "command": unguarded("pre-tool-use.sh")}]}],
+            "Stop": [wrapper],
+        }}), encoding="utf-8")
+        script = 'SETTINGS_FILE="{}"\n{}\n{}'.format(settings, functions, text[start:end])
+        subprocess.run(["bash", "-c", script], stdout=subprocess.PIPE, check=True)
+        data = json.loads(settings.read_text(encoding="utf-8"))
+        self.assertEqual(data["hooks"]["PreToolUse"][0]["hooks"][0]["command"], hooks.command_for("pre-tool-use.sh"))
+        self.assertEqual(data["hooks"]["Stop"][0], wrapper)
 
 
 if __name__ == "__main__":
