@@ -51,6 +51,8 @@ EXEMPT = frozenset(
         ("export",),
         ("quarantine", "restore"),
         ("tasks",),
+        # SessionStart runs it after a compaction (ADR-0044); a hook must never wait on the account check.
+        ("backlog", "prime"),
     }
 )
 

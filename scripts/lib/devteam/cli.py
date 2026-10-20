@@ -18,7 +18,7 @@ from pathlib import Path
 from . import auth, bind as bind_module
 from . import auth_gate as gate
 from . import detect
-from . import catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, trace, insights, update, upgrade, versions
+from . import backlog, catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, trace, insights, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .console import stdin_is_console as _stdin_is_console
@@ -933,6 +933,72 @@ def _insights_lines(result):
     else:
         lines.append("no suggestions ({} subject(s) below a rule's minimum sample)".format(len(result["insufficient"])))
     return lines
+
+
+def _backlog_root(args):
+    return project.resolve_root(args.path)
+
+
+def _backlog_files(root, sprint):
+    return [backlog.resolve_sprint(root, sprint)] if sprint else backlog.sprint_files(root)
+
+
+def cmd_backlog_ready(args, emitter):
+    root = _backlog_root(args)
+    claims = backlog.read_claims(root)
+    everything = backlog.load_all(root)
+    sprints = []
+    for path in _backlog_files(root, args.sprint):
+        view = backlog.analyze(root, path, everything, claims)
+        if args.sprint or view["ready"] or view["in_progress"] or view["blocked"]:
+            sprints.append(view)
+    lines = []
+    for view in sprints:
+        lines.append("{}  ready {} · in progress {} · blocked {} · done {}".format(
+            view["sprint"], len(view["ready"]), len(view["in_progress"]), len(view["blocked"]), len(view["done"])))
+        if view["ready"]:
+            lines.append("  ready: {}".format(", ".join(view["ready"])))
+        for n, layer in enumerate(view["computed_waves"], 1):
+            lines.append("  wave {}: {}".format(n, ", ".join(layer)))
+        if view["in_cycle"]:
+            lines.append("  in a dependency cycle: {}".format(", ".join(view["in_cycle"])))
+        held = [i for i in view["unlayered"] if i not in view["in_cycle"]]
+        if held:
+            lines.append("  not placeable (behind a cycle or an open dependency outside the sprint): {}".format(", ".join(held)))
+    return {"sprints": sprints}, "\n".join(lines) or "no sprint with work left"
+
+
+def cmd_backlog_lint(args, emitter):
+    root = _backlog_root(args)
+    everything = backlog.load_all(root)
+    findings = []
+    for path in _backlog_files(root, args.sprint):
+        findings.extend(backlog.lint_file(root, path, everything))
+    problems = [f for f in findings if f["level"] == "ERROR"]
+    lines = ["{} {} {}: {}".format(f["level"], f["sprint"], f["task"], f["message"]) for f in findings]
+    return {"findings": findings, "problems": problems}, "\n".join(lines) or "backlog: no findings"
+
+
+def cmd_backlog_claim(args, emitter):
+    result = backlog.claim(
+        _backlog_root(args), args.sprint, args.tasks, owner=args.owner, ttl=args.ttl, take_over=args.take_over
+    )
+    human = "claimed {} for {}".format(", ".join(c["task"] for c in result["claimed"]), result["owner"])
+    if result["taken_over"]:
+        human += " (taken over: {})".format(", ".join(c["task"] for c in result["taken_over"]))
+    return result, human
+
+
+def cmd_backlog_release(args, emitter):
+    result = backlog.release(_backlog_root(args), args.sprint, args.tasks, args.owner)
+    return result, "released {}".format(", ".join(result["released"]) or "nothing")
+
+
+def cmd_backlog_prime(args, emitter):
+    result = backlog.prime(_backlog_root(args))
+    if result is None:
+        return {"active": False, "sprints": [], "claims": []}, ""
+    return dict(result, active=True), backlog.prime_text(result)
 
 
 def cmd_insights_report(args, emitter):
@@ -1984,6 +2050,34 @@ def build_parser():
         "--interval", type=_watch_interval, default=1.0, help="seconds between checks (>= 0.01)"
     )
     tasks_watch.set_defaults(func=cmd_tasks_watch)
+    backlog_parser = leaf(
+        sub, "backlog", help="the sprint backlog as a graph: ready work, computed waves, lint, claims"
+    ).add_subparsers(dest="backlog_cmd")
+    backlog_ready = leaf(backlog_parser, "ready", help="ready, in-progress and blocked tasks plus the waves the dependencies imply")
+    backlog_ready.add_argument("sprint", nargs="?", help="a sprint file stem or path (default: every sprint with work left)")
+    backlog_ready.add_argument("--path", help="the project or worktree (default: the current directory)")
+    backlog_ready.set_defaults(func=cmd_backlog_ready)
+    backlog_lint = leaf(backlog_parser, "lint", help="cycles, unknown dependencies, dependencies in a non-earlier wave")
+    backlog_lint.add_argument("sprint", nargs="?", help="a sprint file stem or path (default: every sprint file)")
+    backlog_lint.add_argument("--path", help="the project or worktree (default: the current directory)")
+    backlog_lint.set_defaults(func=cmd_backlog_lint)
+    backlog_claim = leaf(backlog_parser, "claim", help="claim tasks for one orchestrator, all or none (machine-local, expires)")
+    backlog_claim.add_argument("sprint", help="a sprint file stem or path")
+    backlog_claim.add_argument("tasks", nargs="+", metavar="TASK", help="task ids, e.g. TASK-003")
+    backlog_claim.add_argument("--owner", help="the owner token a previous claim returned (default: a new one)")
+    backlog_claim.add_argument("--ttl", type=int, default=backlog.DEFAULT_TTL, help="seconds until the claim expires (default 14400)")
+    backlog_claim.add_argument("--take-over", action="store_true", help="replace another owner's live claim (only after the user chose to)")
+    backlog_claim.add_argument("--path", help="the project or worktree (default: the current directory)")
+    backlog_claim.set_defaults(func=cmd_backlog_claim)
+    backlog_release = leaf(backlog_parser, "release", help="release an owner's claims (every task of the sprint when none is named)")
+    backlog_release.add_argument("sprint", help="a sprint file stem or path")
+    backlog_release.add_argument("tasks", nargs="*", metavar="TASK", help="task ids (default: all of the owner's)")
+    backlog_release.add_argument("--owner", required=True, help="the owner token the claim returned")
+    backlog_release.add_argument("--path", help="the project or worktree (default: the current directory)")
+    backlog_release.set_defaults(func=cmd_backlog_release)
+    backlog_prime = leaf(backlog_parser, "prime", help="hook-facing: a short block of the active sprint work, empty when idle")
+    backlog_prime.add_argument("--path", help="the project (default: the current directory)")
+    backlog_prime.set_defaults(func=cmd_backlog_prime)
     insights_parser = leaf(
         sub, "insights", help="optimization loop: metrics and suggestions from execution traces (never applied)"
     ).add_subparsers(dest="insights_cmd")

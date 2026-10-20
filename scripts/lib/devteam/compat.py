@@ -506,6 +506,9 @@ READ_ONLY = {
     ("tasks", "trace"): "reads one session's execution trace in the project's machine-local "
     "state directory; writes nothing",
     ("cred", "backends"): "probes which secret stores this machine offers",
+    ("backlog", "ready"): "reads the sprint files and the machine-local claims record; writes nothing",
+    ("backlog", "lint"): "reads the sprint files; writes nothing",
+    ("backlog", "prime"): "reads the sprint files, the claims record and `git worktree list`; writes nothing",
     ("detect",): "reads a folder, `git` and `PATH`; writes nothing and creates no identity",
     ("catalog",): "read-only browse — asserted to create nothing, machine id included",
     ("catalog", "agents"): "read-only browse",
@@ -523,6 +526,9 @@ READ_ONLY = {
 #: declared client — a user must always be able to sign in and out, including from a client
 #: that has fallen behind — but they are not called read-only, because they are not.
 STORE_NEUTRAL = {
+    ("backlog", "claim"): "writes the machine-local claims record (ADR-0044), which is not a declared "
+    "store shape; the sprint files themselves are never written",
+    ("backlog", "release"): "marks claims released in the machine-local claims record (ADR-0044)",
     ("integration", "call"): "sends one request to the integration's API with the stored "
     "token; with --allow-write it can change the remote account. It writes no declared "
     "store shape (only an audit line), so a client's schema declaration has nothing to "
