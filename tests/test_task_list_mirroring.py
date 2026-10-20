@@ -14,7 +14,7 @@ from devteam_support import REPO_ROOT
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
 
 import render_provider  # noqa: E402
-from devteam import providers, tasks  # noqa: E402
+from devteam import providers, tasks, trace  # noqa: E402
 from test_tasks import (  # noqa: E402
     T0, BoardCase, codex_plan, opencode_todos, task_create, task_update, todo, todo_write,
 )
@@ -135,6 +135,57 @@ class MirroredPlanOnTheBoardTest(BoardCase):
         self.rec(_mirrored("codex", "long", [(1, "x" * 5000, "pending")]))
         (content, _), = self.board("long")
         self.assertEqual(len(content), tasks.MAX_TASK_TEXT)
+
+
+#: A todo-list write per provider in ALL_PROVIDERS: a provider added without a case fails
+#: `test_every_provider_has_its_own_list_write_decided`.
+LIST_WRITES = {
+    "claude": lambda session, **extra: dict(todo_write(session, [todo("A")]), **extra),
+    "codex": lambda session, **extra: dict(codex_plan(session, [("A", "pending")]), **extra),
+    "opencode": lambda session, **extra: dict(opencode_todos(session, [("1", "A", "pending")]), **extra),
+}
+
+
+class ChildSessionTest(BoardCase):
+    """A child session or thread is its parent's subagent: it never gets a record of its own."""
+
+    def exists(self, session):
+        return tasks.record_path(self.root, self.project_id, session).exists()
+
+    def test_every_provider_has_its_own_list_write_decided(self):
+        self.assertEqual(set(LIST_WRITES), set(providers.ALL_PROVIDERS))
+
+    def test_a_write_without_a_parent_is_recorded_on_every_provider(self):
+        for provider, build in LIST_WRITES.items():
+            with self.subTest(provider=provider):
+                self.assertTrue(self.rec(build("s-" + provider))["recorded"])
+
+    def test_an_opencode_child_session_todowrite_creates_no_record(self):
+        result = self.rec(LIST_WRITES["opencode"]("child", parent_id="top"))
+        self.assertFalse(result["recorded"])
+        self.assertFalse(self.exists("child"))
+
+    def test_an_opencode_child_session_spawn_creates_no_record_and_leaves_the_parent_alone(self):
+        from test_agent_tasks import AGENT, opencode_cycle
+        self.rec(LIST_WRITES["opencode"]("top"))
+        before = self.load("top")
+        spawn, _ = opencode_cycle("child", AGENT, "c1", parent_id="top")
+        self.assertFalse(self.rec(spawn)["recorded"])
+        self.assertFalse(self.exists("child"))
+        self.assertEqual(self.load("top"), before)
+
+    def test_a_codex_child_thread_is_folded_away_through_the_trace_aliases(self):
+        from test_agent_tasks import AGENT, codex_cycle
+        spawn, (ack, _wait) = codex_cycle("top", AGENT, "c1")
+        self.assertTrue(self.rec(spawn)["recorded"])
+        for payload in (spawn, ack):
+            trace.capture(self.root, payload, now=T0)
+        # `ag-c1` is the child thread's id: its hooks now come in under that session id.
+        for payload in (LIST_WRITES["codex"]("ag-c1"),
+                        {"session_id": "ag-c1", "tool_name": "apply_patch", "turn_id": "t1", "tool_input": {}}):
+            self.assertFalse(self.rec(payload)["recorded"])
+        self.assertFalse(self.exists("ag-c1"))
+        self.assertTrue(self.rec(LIST_WRITES["codex"]("top"))["recorded"])
 
 
 class RenderedCommandsReachTheRuleTest(unittest.TestCase):

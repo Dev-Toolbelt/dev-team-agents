@@ -8,6 +8,7 @@ redaction, the Stop that completes the card, and the gate that keeps python off 
 
 import json
 import os
+import time
 import unittest
 
 from devteam_support import requires_bash
@@ -145,6 +146,69 @@ class RedactTest(unittest.TestCase):
         ):
             self.assertEqual(tasks.redact(text), text)
 
+    def test_secret_shapes_beyond_the_keyword_forms_are_masked(self):
+        cases = {
+            "the pass is Sup3rSecret": "Sup3rSecret",
+            "pwd is hunter2": "hunter2",
+            "PGPASSWORD=hunter2 psql db": "hunter2",
+            "MYSQL_PWD=hunter2 mysqldump x": "hunter2",
+            "DB_PASS=s3cr3t run": "s3cr3t",
+            "curl -u admin:Sup3rPw https://x": "Sup3rPw",
+            "curl https://x --user admin:Sup3rPw": "Sup3rPw",
+            "sshpass -p Sup3rPw ssh host": "Sup3rPw",
+            "redis-cli -a Sup3rPw ping": "Sup3rPw",
+            "docker login -u me -p Sup3rPw": "Sup3rPw",
+            "docker login --password Sup3rPw reg": "Sup3rPw",
+            "curl -H 'Cookie: sid=abc123def; theme=dark' x": "abc123def",
+            "Set-Cookie: session=abc123def; HttpOnly": "abc123def",
+            "-----BEGIN RSA PRIVATE KEY-----\nMIIEabcdef\n-----END RSA PRIVATE KEY----- then": "MIIEabcdef",
+            "-----BEGIN PRIVATE KEY-----\nMIIEabcdef cut with no end": "MIIEabcdef",
+            "token hf_" + "a" * 34: "a" * 34,
+        }
+        for text, secret in cases.items():
+            self.assertNotIn(secret, tasks.redact(text), text)
+        self.assertIn("then", tasks.redact(next(t for t in cases if t.endswith("then"))))
+
+    def test_look_alikes_of_those_shapes_are_left_alone(self):
+        for text in (
+            "the pass is clear",
+            "the pass is clear.",
+            "pass is fine, thanks",
+            "BYPASS=1 make",
+            "COMPASS=north go",
+            "pwd is /Users/me/project",
+            "docker login",
+            "docker login --password-stdin",
+            "curl --user-agent foo https://x",
+            "curl -u admin https://x",
+            "set the cookie banner",
+            "sshpass is installed",
+            "redis-cli ping",
+            "HF_HOME=/data",
+        ):
+            self.assertEqual(tasks.redact(text), text, text)
+
+    def test_a_bare_pass_keeps_its_credential_shape_past_trailing_punctuation(self):
+        self.assertNotIn("hunter2", tasks.redact("pass is hunter2!"))
+        self.assertNotIn("hunter2", tasks.redact("the pass is hunter2."))
+        for text in ("PGPASSWORD=hunter2 x", "MYSQL_PWD=hunter2 x", "DB_PASS=hunter2 x", "API_TOKEN=hunter2 x", "X_SECRET=hunter2 x"):
+            self.assertNotIn("hunter2", tasks.redact(text), text)
+
+    def test_the_excerpt_cuts_a_huge_line_before_redacting(self):
+        started = time.perf_counter()
+        tasks._excerpt("+a" * 500000)
+        self.assertLess(time.perf_counter() - started, 0.5)
+
+    def test_redaction_is_linear_on_adversarial_runs(self):
+        budget = 0.5
+        for shape in ("+a" * 40000, "+-" * 40000, "a" * 80000, "A_" * 40000, "://a" * 20000,
+                      "-----BEGIN PRIVATE KEY-----" * 3000, "+a" * 40000 + ".", "Cookie:" * 10000):
+            for fn in (tasks.redact, tasks._task_text):
+                started = time.perf_counter()
+                fn(shape)
+                self.assertLess(time.perf_counter() - started, budget, (shape[:12], fn.__name__))
+        self.assertLessEqual(len(tasks._task_text("x " * 40000)), tasks.MAX_TASK_TEXT)
+
     def test_every_task_text_is_redacted_and_cleaned_like_the_excerpt(self):
         spawn = {"session_id": "s1", "tool_name": "Agent", "hook_event_name": "PreToolUse",
                  "tool_input": {"subagent_type": "backend-developer", "description": "deploy with GITHUB_TOKEN=ghp_abcdefghijklmnop1234"}}
@@ -169,6 +233,22 @@ class RedactTest(unittest.TestCase):
 class DirectWorkTest(BoardCase):
     def directs(self, session):
         return [t for t in self.load(session)["tasks"] if t.get("kind") == "direct"]
+
+    def test_turn_markers_left_behind_for_a_day_are_swept_at_stop(self):
+        directory = tasks.tasks_dir(self.root, self.project_id)
+        self.rec(claude_edit("live"), now=T0)
+        old, fresh = time.time() - 25 * 3600, time.time() - 3600
+        kept = {}
+        for name in (".prompt-gone", ".direct-gone", ".directw-gone", ".prompt-fresh", ".direct-fresh", "notes-gone", ".promptly-gone", ".direct", "gone.json"):
+            path = directory / name
+            path.write_text("x", encoding="utf-8")
+            stamp = fresh if "fresh" in name else old
+            os.utime(path, (stamp, stamp))
+        tasks.mark(self.root, {"session_id": "live"}, "idle")
+        for name in (".prompt-gone", ".direct-gone", ".directw-gone"):
+            self.assertFalse((directory / name).exists(), name)
+        for name in (".prompt-fresh", ".direct-fresh", "notes-gone", ".promptly-gone", ".direct", "gone.json"):
+            self.assertTrue((directory / name).exists(), name)
 
     def prompt(self, session, text, at):
         path = tasks.record_path(self.root, self.project_id, session)

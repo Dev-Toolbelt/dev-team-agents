@@ -7,6 +7,8 @@ derived state, the cross-project aggregation the app codes against, the watch li
 and the bash hooks — including that a tool that is not a todo tool forks no python.
 """
 
+import contextlib
+import io
 import json
 import os
 import shlex
@@ -29,7 +31,7 @@ PRE_TOOL_USE = HOOKS / "pre-tool-use" / "04-task-board.sh"
 POST_TOOL_USE = HOOKS / "post-tool-use" / "01-task-board.sh"
 POST_DISPATCHER = HOOKS / "post-tool-use.sh"
 SESSION_END = HOOKS / "session-end.sh"
-STOP_SUB = HOOKS / "stop" / "04b-task-board.sh"
+STOP_SUB = HOOKS / "stop" / "00b-task-board.sh"
 
 T0 = 1_700_000_000
 
@@ -350,6 +352,100 @@ class RecordTest(BoardCase):
         self.assertIsNotNone(self.load("s1")["ended_at"])
         self.rec(todo_write("s1", [todo("A", "in_progress")]), now=T0 + 9)
         self.assertIsNone(self.load("s1")["ended_at"])
+
+
+class RecordRobustnessTest(BoardCase):
+    def stderr(self):
+        return contextlib.redirect_stderr(io.StringIO())
+
+    def test_a_retitle_landing_between_the_read_and_the_write_is_not_overwritten(self):
+        self.rec(dict(opencode_todos("s1", [("1", "A", "pending")]), session_title="old"), now=T0)
+        real = tasks._prefetch_refs
+
+        def retitled_meanwhile(*args, **kwargs):
+            tasks.retitle(self.root, {"session_id": "s1", "session_title": "new"})
+            return real(*args, **kwargs)
+
+        with mock.patch.object(tasks, "_prefetch_refs", retitled_meanwhile):
+            self.rec(dict(opencode_todos("s1", [("1", "A", "in_progress")]), session_title="old"), now=T0 + 5)
+        self.assertEqual(self.load("s1")["title"], "new")
+
+    def test_a_call_dropped_on_a_lock_timeout_is_reported_once_and_changes_nothing(self):
+        self.rec(todo_write("s1", [todo("A")]), now=T0)
+        before = self.load("s1")
+        path = tasks.record_path(self.root, self.project_id, "s1")
+        from test_agent_tasks import claude_cycle
+        calls = {
+            "record": lambda: tasks.record(self.root, todo_write("s1", [todo("A", "completed")]), now=T0 + 5)["recorded"],
+            "mark": lambda: tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + 5)["marked"],
+            "review": lambda: tasks.review_open(self.root, claude_cycle("s1", "qa-specialist", "q1")[0], now=T0 + 5)["recorded"],
+        }
+        for name, call in calls.items():
+            with self.subTest(call=name), mock.patch.object(tasks, "LOCK_TIMEOUT", 0.1):
+                with tasks._session_lock(path), self.stderr() as err:
+                    self.assertFalse(call())
+                lines = err.getvalue().splitlines()
+                self.assertEqual(len(lines), 1, lines)
+                self.assertIn("s1", lines[0])
+        self.assertEqual(self.load("s1"), before)
+
+    def test_an_unreadable_or_future_record_is_reported_once_and_other_sessions_are_unaffected(self):
+        self.rec(todo_write("good", [todo("A")]), now=T0)
+        directory = tasks.tasks_dir(self.root, self.project_id)
+        (directory / "future.json").write_text('{"schema": 99, "tasks": []}', encoding="utf-8")
+        (directory / "broken.json").write_text("{not json", encoding="utf-8")
+        tasks._REPORTED_UNREADABLE.clear()
+        with self.stderr() as err:
+            first = self.view()
+            second = self.view()
+        self.assertEqual([s["session_id"] for s in first[0]["sessions"]], ["good"])
+        self.assertEqual(first, second)
+        lines = err.getvalue().splitlines()
+        self.assertEqual(len(lines), 2, lines)
+        self.assertTrue(any("future.json" in l for l in lines) and any("broken.json" in l for l in lines))
+        # Never overwritten.
+        self.assertEqual((directory / "broken.json").read_text(encoding="utf-8"), "{not json")
+
+    def test_reworded_lists_cap_the_record_by_dropping_the_oldest_removed_tasks(self):
+        for i in range(300):
+            self.rec(todo_write("s1", [todo("version {}".format(i))]), now=T0 + i)
+        record = self.load("s1")
+        self.assertLessEqual(len(record["tasks"]), tasks.MAX_TASKS)
+        keys = [t["key"] for t in record["tasks"]]
+        self.assertEqual(len(keys), len(set(keys)))
+        live = [t for t in record["tasks"] if t["removed_at"] is None]
+        self.assertEqual([t["content"] for t in live], ["version 299"])
+        # The oldest went first.
+        self.assertNotIn("version 0", [t["content"] for t in record["tasks"]])
+        self.assertIn("version 298", [t["content"] for t in record["tasks"]])
+
+    def test_open_tasks_are_never_dropped_by_the_cap(self):
+        items = [todo("item {}".format(i)) for i in range(tasks.MAX_TASKS + 50)]
+        self.rec(todo_write("s1", items), now=T0)
+        self.rec(todo_write("s1", items + [todo("one more")]), now=T0 + 1)
+        self.assertEqual(len([t for t in self.load("s1")["tasks"] if t["removed_at"] is None]), tasks.MAX_TASKS + 51)
+
+
+class CapKeepsKeysUniqueTest(unittest.TestCase):
+    def build(self, count, prs=None):
+        made = [{"key": "t{}".format(i + 1), "removed_at": i, "created_at": i, "status": "pending", "history": []}
+                for i in range(count)]
+        return {"tasks": made, "prs": prs or [], "reviews": []}
+
+    def test_a_task_named_by_a_pr_is_never_dropped(self):
+        record = self.build(tasks.MAX_TASKS + 5, prs=[{"task_keys": ["t1", "t2"]}])
+        tasks._cap_tasks(record)
+        kept = {t["key"] for t in record["tasks"]}
+        self.assertTrue({"t1", "t2"} <= kept)
+
+    def test_the_highest_key_is_never_dropped_so_it_is_not_reused(self):
+        record = self.build(tasks.MAX_TASKS + 5)
+        for t in record["tasks"]:
+            t["removed_at"] = 100 - int(t["key"][1:])  # the highest key is the oldest removed
+        top = "t{}".format(tasks.MAX_TASKS + 5)
+        tasks._cap_tasks(record)
+        self.assertIn(top, {t["key"] for t in record["tasks"]})
+        self.assertEqual(tasks._next_key(record), "t{}".format(tasks.MAX_TASKS + 6))
 
 
 class SessionTitleTest(BoardCase):
@@ -727,12 +823,17 @@ class HookTest(BoardCase):
         self.calls = self.tmp / "python-calls"
         real = shutil.which("python3")
         (self.shim / "python3").write_text(
-            '#!/bin/sh\necho x >> "{}"\nexec "{}" "$@"\n'.format(self.calls, real), encoding="utf-8"
+            '#!/bin/sh\necho "$*" >> "{}"\nexec "{}" "$@"\n'.format(self.calls, real), encoding="utf-8"
         )
         (self.shim / "python3").chmod(0o755)
 
-    def python_calls(self):
-        return len(self.calls.read_text().splitlines()) if self.calls.is_file() else 0
+    def python_calls(self, trace=None):
+        """Forks of python by the hook under test. ``trace`` True counts only the execution trace's
+        (`tasks trace-record`, ADR-0041), False everything else, None all of them."""
+        lines = self.calls.read_text().splitlines() if self.calls.is_file() else []
+        if trace is None:
+            return len(lines)
+        return len([l for l in lines if ("trace-record" in l) == trace])
 
     def run_script(self, script, payload, extra_env=None, cwd=None):
         env = dict(os.environ, PATH="{}{}{}".format(self.shim, os.pathsep, os.environ["PATH"]))
@@ -746,6 +847,13 @@ class HookTest(BoardCase):
     def queue(self):
         path = self.state / "notifications.jsonl"
         return [json.loads(l) for l in path.read_text().splitlines()] if path.is_file() else []
+
+    def test_pre_tool_use_forks_nothing_for_an_opencode_child_session_todowrite(self):
+        # A child session names its parent: its todos are its agent task's (ChildSessionTest).
+        self.run_script(PRE_TOOL_USE, dict(opencode_todos("child", [("1", "A", "pending")]), parent_id="top"))
+        self.assertEqual(self.python_calls(), 0)
+        self.run_script(PRE_TOOL_USE, opencode_todos("top", [("1", "A", "pending")]))
+        self.assertEqual(self.python_calls(), 1)
 
     def test_pre_tool_use_forks_python_once_a_turn_for_any_other_tool(self):
         # Any other tool is the session's own work (test_direct_work.py): the first call of a
@@ -1305,6 +1413,100 @@ class InstallInjectHookTest(StoreTestCase):
         entries = json.loads(self.settings.read_text())["hooks"]["PostToolUseFailure"]
         self.assertEqual(len(entries), 2)
         self.assertEqual((entries[1]["matcher"], entries[1]["hooks"][0]["command"]), ("Agent|Task|Bash|mcp__.*create_pull_request", self.POST))
+
+
+BOARD_KEYS = REPO_ROOT / "app" / "test" / "fixtures" / "board-keys.json"
+
+
+class BoardJsonKeysPinTest(unittest.TestCase):
+    """Pins every key the board JSON carries, so the app side (``app/test/boardContract.test.ts``)
+    has to account for a new one: parse it, or list it as ignored with a reason."""
+
+    NOW = T0 + 1000
+
+    def record(self):
+        def task(key, owner, status, **extra):
+            return dict({
+                "key": key, "id": None, "owner": owner, "agent_type": None, "content": "work " + key,
+                "status": status, "created_at": T0, "removed_at": None,
+                "history": [{"status": "pending", "at": T0}, {"status": status, "at": T0 + 100}],
+            }, **extra)
+
+        return {
+            "schema": tasks.SCHEMA, "session_id": "s1", "project_id": "p1", "provider": "claude", "cwd": "/tmp",
+            "branch": "main", "title": "A session", "created_at": T0, "updated_at": T0 + 500, "last_seen_at": T0 + 500,
+            "idle_at": None, "ended_at": None,
+            "tasks": [
+                task("t1", "main", "completed", refs=[{"system": "jira", "key": "ABC-1", "seen_at": T0}]),
+                task("t2", "agent-1", "completed", kind="agent", agent_type="Explore", background=True,
+                     failed=True, interrupted=True, agent_ref="a1"),
+                task("t3", "main", "in_progress", kind="direct", turns=[{"text": "hi", "at": T0 + 50}],
+                     worktree={"path": "/tmp/wt", "branch": "feat"}),
+                task("t4", "main", "in_progress"),
+            ],
+            "reviews": [{"opened_at": T0 + 200, "task_keys": ["t4"], "findings": 2, "result_at": T0 + 300}],
+            "prs": [{"kind": "pr", "host": "github.com", "repo": "o/r", "number": 7, "head": "feat",
+                     "seen_at": T0 + 10, "fixed_at": T0 + 20, "task_keys": ["t1"]}],
+            "refs": [{"system": "github", "repo": "o/r", "number": 3, "seen_at": T0}],
+        }
+
+    def links(self):
+        return {
+            "remotes": [{"host": "github.com", "repo": "o/r"}],
+            "github": {"web_host": "github.com", "repository": "o/r"},
+            "jira": {"site_url": "https://x.atlassian.net", "host": "x.atlassian.net", "path": "", "project_key": "ABC"},
+        }
+
+    def emitted(self):
+        links = self.links()
+        context = {"links": links, "vouched": {}, "hosts": links, "merges": []}
+        ended = self.record()
+        ended["ended_at"] = T0 + 600
+        records = [self.record(), ended]
+        views = [tasks.session_view(rec, Path("/tmp"), self.NOW, context=context) for rec in records]
+        self.assertEqual([v["status"] for v in views], ["active", "ended"])
+        found = {name: set() for name in (
+            "project", "session", "task", "counts", "session_pr", "task_pr", "ref", "review", "worktree",
+            "turn", "link_host", "duration")}
+        for view in views:
+            found["session"] |= set(view)
+            found["counts"] |= set(view["counts"])
+            for pr in view["prs"]:
+                found["session_pr"] |= set(pr)
+            for t in view["tasks"]:
+                found["task"] |= set(t)
+                found["duration"] |= set(t["durations"])
+                for name, key in (("task_pr", "pr"), ("review", "review"), ("worktree", "worktree")):
+                    if t[key]:
+                        found[name] |= set(t[key])
+                for ref in t["refs"]:
+                    found["ref"] |= set(ref)
+                for turn in t["turns"]:
+                    found["turn"] |= set(turn)
+        with mock.patch.object(tasks, "_project_records", return_value=records), \
+                mock.patch.object(tasks.pr_refs, "load_context", return_value=links):
+            project = tasks.project_view(Path("/tmp"), "p1", self.NOW)
+        self.assertIsNotNone(project)
+        found["project"] |= set(project)
+        found["counts"] |= set(project["counts"])
+        for host in project["link_hosts"]:
+            found["link_host"] |= set(host)
+        return {name: sorted(keys) for name, keys in found.items()}
+
+    def test_the_keys_the_board_emits_match_the_committed_contract(self):
+        committed = json.loads(BOARD_KEYS.read_text(encoding="utf-8"))
+        self.assertEqual(
+            self.emitted(), committed,
+            "the board JSON keys changed: update app/test/fixtures/board-keys.json, then make "
+            "app/test/boardContract.test.ts pass (parse the new key in app/src/cli/operations.ts or list it as ignored)",
+        )
+
+    def test_the_scenario_reaches_every_optional_path(self):
+        emitted = self.emitted()
+        for name in ("review", "worktree", "turn", "task_pr", "session_pr", "ref", "link_host"):
+            self.assertTrue(emitted[name], name)
+        self.assertIn("base_path", emitted["link_host"])
+        self.assertIn("interrupted", emitted["task"])
 
 
 if __name__ == "__main__":

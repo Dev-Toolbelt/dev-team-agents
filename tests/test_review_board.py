@@ -1093,9 +1093,17 @@ class ReviewHookTest(tt.HookTest):
         self.assertEqual(self.load("s1").get("reviews", []), [])
         self.assertEqual([t for t in self.load("s1")["tasks"] if t.get("kind") == "agent"], [])
 
-    def test_pre_tool_use_forks_no_python_for_a_review_agent_in_a_session_without_a_record(self):
+    def test_pre_tool_use_forks_no_board_python_for_a_review_agent_in_a_session_without_a_record(self):
         self.run_script(PRE_TOOL_USE, claude_spawn("ghost"))
-        self.assertEqual(self.python_calls(), 0)
+        self.assertEqual(self.python_calls(trace=False), 0)
+
+    def test_pre_tool_use_forks_exactly_the_trace_for_a_review_agent_in_a_session_without_a_record(self):
+        # Every spawn is a span of the execution trace, review agents included (ADR-0041): that one
+        # fork is owed whether or not the session has a board record, and it is the only one.
+        for payload in (claude_spawn("ghost"), codex_spawn("ghost"), opencode_spawn("ghost")):
+            self.calls.write_text("")
+            self.run_script(PRE_TOOL_USE, payload)
+            self.assertEqual((self.python_calls(trace=True), self.python_calls()), (1, 1), payload)
 
     def test_post_tool_use_reads_a_claude_result_and_raises_findings_once(self):
         self.start()

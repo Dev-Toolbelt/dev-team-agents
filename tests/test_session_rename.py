@@ -169,6 +169,43 @@ class SessionRenameTest(tt.BoardCase):
         self.assertFalse(tasks.retitle(self.root, {"sessionID": "oc", "session_title": "Two"})["retitled"])
         self.assertFalse(tasks.retitle(self.root, {"sessionID": "nobody", "session_title": "X"})["retitled"])
 
+    def test_every_title_path_is_cleaned_like_a_task_text(self):
+        dirty = "Ship it API_KEY=hunter2xyz\u202e " + "x" * 5000
+        for provider, kind in RENAMES.items():
+            with self.subTest(provider=provider):
+                session = "dirty-" + provider
+                source = kind(self, session)
+                self.rec(source.start("Clean"), now=T0)
+                source.rename(dirty)
+                title = self.title_in_view(session)
+                self.assertIn("[redacted]", title)
+                for bad in ("hunter2xyz", "\u202e"):
+                    self.assertNotIn(bad, title)
+                self.assertLessEqual(len(title), tasks.MAX_TASK_TEXT)
+                stored = self.load(session).get("title") or ""
+                self.assertNotIn("hunter2xyz", stored)
+                self.assertLessEqual(len(stored), tasks.MAX_TASK_TEXT)
+
+    def test_a_title_recorded_with_the_first_call_is_cleaned(self):
+        result = self.rec(opencode_edit("first", session_title="T API_KEY=hunter2xyz\u202e"), now=T0)
+        self.assertTrue(result["recorded"])
+        self.assertEqual(self.load("first")["title"], "T API_KEY=[redacted]")
+
+    def test_the_live_title_cache_evicts_the_oldest_entry_not_everything(self):
+        paths = []
+        for index in range(tasks._LIVE_CACHE_MAX + 1):
+            path = self.tmp / "t{}.jsonl".format(index)
+            _line(path, {"type": "custom-title", "customTitle": "T{}".format(index)})
+            paths.append(str(path))
+        with mock.patch.object(tasks, "_transcript_title", wraps=tasks._transcript_title) as read:
+            for path in paths:
+                tasks.live_title({"provider": "claude", "transcript_path": path})
+            self.assertEqual(read.call_count, tasks._LIVE_CACHE_MAX + 1)
+            for path in paths[1:tasks._LIVE_CACHE_MAX]:
+                tasks.live_title({"provider": "claude", "transcript_path": path})
+            self.assertEqual(read.call_count, tasks._LIVE_CACHE_MAX + 1)
+        self.assertLessEqual(len(tasks._LIVE_CACHE), tasks._LIVE_CACHE_MAX)
+
     def test_the_retitle_hook_forks_no_python_without_a_record(self):
         self.run_script(RETITLE, {"sessionID": "no-record", "session_title": "X"})
         self.assertEqual(self.python_calls(), 0)

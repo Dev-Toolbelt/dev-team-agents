@@ -788,3 +788,21 @@ class RefViewTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GlabMergedPerformanceTest(unittest.TestCase):
+    GLAB = {"tool": "glab", "op": "mr_merge"}
+
+    def test_a_large_punctuation_and_blank_output_is_scanned_in_linear_time(self):
+        import time
+        blobs = ("\n" * 200_000, "\n".join(["  -  "] * 40_000), "!" * 200_000, "\r\n" * 100_000)
+        for blob in blobs:
+            start = time.monotonic()
+            self.assertIsNone(pr_refs.merge_confirmed(self.GLAB, blob))
+            self.assertLess(time.monotonic() - start, 1.0)
+
+    def test_punctuated_merged_lines_still_match_and_a_match_never_spans_lines(self):
+        for text in ("✓ Merged!\n", "- merged.\n", "\n\n  Merged!  \n", "Merged\r\n"):
+            self.assertIs(pr_refs.merge_confirmed(self.GLAB, text), True, text)
+        self.assertIsNone(pr_refs.merge_confirmed(self.GLAB, "Merged and then\nsomething\n"))
+

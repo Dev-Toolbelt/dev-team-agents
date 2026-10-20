@@ -20,6 +20,33 @@ class JsonIoTest(StoreTestCase):
         leftovers = [p.name for p in target.parent.iterdir() if p.name != "file.json"]
         self.assertEqual(leftovers, [])
 
+    def test_replace_is_retried_after_a_transient_permission_error(self):
+        target = self.tmp / "out" / "retry.json"
+        real = os.replace
+        calls = []
+
+        def flaky(src, dst):
+            calls.append(src)
+            if len(calls) == 1:
+                raise PermissionError("sharing violation")
+            return real(src, dst)
+
+        with mock.patch.object(jsonio.os, "replace", side_effect=flaky), \
+                mock.patch.object(jsonio.time, "sleep"):
+            jsonio.write_json_atomic(target, {"a": 1})
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(jsonio.read_json(target), {"a": 1})
+        self.assertEqual([p.name for p in target.parent.iterdir() if p.name != "retry.json"], [])
+
+    def test_a_permanent_permission_error_fails_and_cleans_the_temp_file(self):
+        target = self.tmp / "out" / "locked.json"
+        with mock.patch.object(jsonio.os, "replace", side_effect=PermissionError("denied")) as rep, \
+                mock.patch.object(jsonio.time, "sleep"):
+            with self.assertRaises(EnvError):
+                jsonio.write_json_atomic(target, {"a": 1})
+        self.assertGreater(rep.call_count, 1)
+        self.assertEqual(list(target.parent.iterdir()), [])
+
     def test_missing_file_returns_default(self):
         self.assertIsNone(jsonio.read_json(self.tmp / "nope.json"))
         self.assertEqual(jsonio.read_json(self.tmp / "nope.json", default={}), {})

@@ -818,5 +818,103 @@ class WorktreeTest(BoardCase):
         self.assertEqual(tasks._worktree_view({"path": "/abs/wt", "branch": ""}), {"path": "/abs/wt", "branch": None})
 
 
+def _claude_subagent(case, session="s1", agent_id="ag-1", status="in_progress"):
+    """A Claude subagent that leaves its own todo item open, then ends; ``(end payload)``."""
+    spawn, (end,) = claude_cycle(session, AGENT, "c1")
+    tasks.record(case.root, spawn, now=T0)
+    tasks.record(case.root, tt.todo_write(session, [tt.todo("sub work", status)], agent_id=agent_id), now=T0 + 1)
+    return dict(end, tool_response={"agentId": agent_id, "content": [{"type": "text", "text": "done"}]})
+
+
+def _codex_subagent(case, session="s1", agent_id="ag-c1", status="in_progress"):
+    # The Codex retire branch is defensive: a Codex child normally hooks under its own session id,
+    # which is skipped as a child session. This covers a payload that carries an agent_id instead.
+    spawn, (ack, wait) = codex_cycle(session, AGENT, "c1")
+    tasks.record(case.root, spawn, now=T0)
+    tasks.record(case.root, ack, now=T0 + 1)
+    plan = dict(tt.codex_plan(session, [("sub work", status)]), agent_id=agent_id)
+    tasks.record(case.root, plan, now=T0 + 2)
+    return wait
+
+
+#: One builder per provider in `providers.ALL_PROVIDERS`. opencode is `None` on purpose: its subagent
+#: runs in a child session whose todos are never recorded (`parent_id`, test_task_list_mirroring.py),
+#: so there is nothing of its own to retire.
+SUBAGENT_ENDS = {"claude": _claude_subagent, "codex": _codex_subagent, "opencode": None}
+
+
+class SubagentOwnedTasksTest(BoardCase):
+    def owned(self, session="s1"):
+        return [t for t in self.load(session)["tasks"] if t["owner"] not in ("main",) and t.get("kind") != "agent"]
+
+    def test_every_provider_has_its_subagent_end_decided(self):
+        self.assertEqual(set(SUBAGENT_ENDS), set(providers.ALL_PROVIDERS))
+
+    def test_an_ended_agent_retires_its_own_open_todos_and_the_session_is_done(self):
+        for provider, build in SUBAGENT_ENDS.items():
+            if build is None:
+                continue
+            with self.subTest(provider=provider):
+                session = "s-" + provider
+                end = build(self, session)
+                result = tasks.record(self.root, end, now=T0 + 10)
+                self.assertTrue(result["all_done"])
+                self.assertIsNotNone(self.owned(session)[0]["removed_at"])
+                marked = tasks.mark(self.root, {"session_id": session}, "idle", now=T0 + 20)
+                self.assertTrue(marked["became_all_done"])
+                again = tasks.mark(self.root, {"session_id": session}, "idle", now=T0 + 30)
+                self.assertFalse(again["became_all_done"])
+
+    def test_only_the_open_native_tasks_of_that_owner_are_retired(self):
+        end = _claude_subagent(self)
+        tasks.record(self.root, tt.todo_write("s1", [tt.todo("main work", "in_progress")]), now=T0 + 2)
+        tasks.record(self.root, tt.todo_write("s1", [tt.todo("sub work", "in_progress"), tt.todo("sub done", "completed")],
+                                              agent_id="ag-1"), now=T0 + 3)
+        tasks.record(self.root, tt.todo_write("s1", [tt.todo("other", "in_progress")], agent_id="ag-2"), now=T0 + 4)
+        tasks.record(self.root, end, now=T0 + 10)
+        by = {t["content"]: t for t in self.load("s1")["tasks"] if t.get("kind") != "agent"}
+        self.assertIsNotNone(by["sub work"]["removed_at"])
+        self.assertIsNone(by["sub done"]["removed_at"])
+        self.assertEqual(by["sub done"]["status"], "completed")
+        self.assertIsNone(by["main work"]["removed_at"])
+        self.assertIsNone(by["other"]["removed_at"])
+
+    def test_a_background_hand_back_naming_only_the_task_id_ends_and_retires(self):
+        transcript = self.tmp / "t.jsonl"
+        transcript.write_text("", encoding="utf-8")
+        spawn, (end,) = claude_cycle("s1", AGENT, "toolu_bg", input={"run_in_background": True},
+                                     transcript_path=str(transcript))
+        tasks.record(self.root, spawn, now=T0)
+        tasks.record(self.root, tt.todo_write("s1", [tt.todo("sub work", "in_progress")], agent_id="ag-bg"), now=T0 + 1)
+        tasks.record(self.root, dict(end, tool_response={"isAsync": True, "agentId": "ag-bg",
+                                                          "status": "async_launched"}), now=T0 + 2)
+        line = {"type": "queue-operation", "timestamp": "2023-11-14T22:14:30Z",
+                "content": "<task-notification><task-id>ag-bg</task-id><result>ok</result></task-notification>"}
+        transcript.write_text(json.dumps(line) + "\n", encoding="utf-8")
+        marked = tasks.mark(self.root, {"session_id": "s1", "transcript_path": str(transcript)}, "idle", now=T0 + 100)
+        (agent,) = [t for t in self.load("s1")["tasks"] if t.get("kind") == "agent"]
+        self.assertEqual(agent["status"], "completed")
+        self.assertIsNotNone(self.owned()[0]["removed_at"])
+        self.assertTrue(marked["became_all_done"])
+
+
+class AgentRefAgeTest(BoardCase):
+    def spawn_v1(self):
+        spawn, (ack, _wait) = codex_cycle("s1", AGENT, "c1")
+        tasks.record(self.root, spawn, now=T0)
+        tasks.record(self.root, ack, now=T0 + 1)
+
+    def task(self):
+        return next(t for t in self.load("s1")["tasks"] if t.get("kind") == "agent")
+
+    def test_a_v1_agent_never_waited_on_is_interrupted_after_the_age_limit(self):
+        self.spawn_v1()
+        tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + tasks.PENDING_MAX_AGE - 1)
+        self.assertEqual(self.task()["status"], "in_progress")
+        tasks.mark(self.root, {"session_id": "s1"}, "idle", now=T0 + tasks.PENDING_MAX_AGE + 1)
+        task = self.task()
+        self.assertEqual((task["status"], task["interrupted"]), ("cancelled", True))
+
+
 if __name__ == "__main__":
     unittest.main()
