@@ -65,9 +65,10 @@ function renderBoard(feed: BoardFeed, overrides: Parameters<typeof fakeBridge>[0
   return { bridge, push: (next: BoardFeed) => act(() => push(next)) };
 }
 
+/** A project card on the overview — not the project's tab, which carries the same name. */
 async function card(name: string): Promise<HTMLElement> {
-  const label = await screen.findByText(name);
-  return label.closest('button')!;
+  const list = await screen.findByRole('list', { name: 'Projects with tasks', hidden: true });
+  return within(list).getByText(name).closest('button')!;
 }
 
 describe('Board overview', () => {
@@ -212,7 +213,7 @@ describe('Project kanban', () => {
     const user = userEvent.setup();
     const harness = renderBoard(boardFeed({ projects: [project] }), overrides);
     await user.click(await card('storefront'));
-    await screen.findByRole('button', { name: /^Back to Board$/ });
+    await screen.findByRole('tab', { name: 'storefront', selected: true });
     return { user, ...harness };
   }
 
@@ -466,21 +467,20 @@ describe('Project kanban', () => {
     expect(screen.getByRole('region', { name: /^To do/ })).not.toHaveAttribute('data-tone');
   });
 
-  it('returns to the overview when the tab is left and shown again', async () => {
+  it('keeps the open project tabs and the one on show when the app tab is left and shown again', async () => {
     const user = userEvent.setup();
     installBridge(fakeBridge({ taskBoard: vi.fn(() => Promise.resolve(boardFeed({ projects: [projectA()] }))) }));
     const { rerender } = render(<Board clock={clock} active />);
     await user.click(await card('storefront'));
-    await screen.findByRole('button', { name: /^Back to Board$/ });
+    await screen.findByRole('tab', { name: 'storefront', selected: true });
     rerender(<Board clock={clock} active={false} />);
     rerender(<Board clock={clock} active />);
-    expect(screen.queryByRole('button', { name: /^Back to Board$/ })).not.toBeInTheDocument();
-    expect(await card('storefront')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'storefront', selected: true })).toBeInTheDocument();
   });
 
   it('goes back to the board', async () => {
     const { user } = await openKanban();
-    await user.click(screen.getByRole('button', { name: /^Back to Board$/ }));
+    await user.click(screen.getByRole('tab', { name: 'Overview' }));
     expect(await card('storefront')).toBeInTheDocument();
   });
 
@@ -490,6 +490,144 @@ describe('Project kanban', () => {
     push(boardFeed({ projects: [projectB()] }));
     expect(await card('billing')).toBeInTheDocument();
     expect(screen.getByText('That project no longer has tasks.')).toBeInTheDocument();
+  });
+});
+
+describe('Board tabs', () => {
+  const order = () => screen.getAllByRole('tab').map((each) => each.textContent);
+
+  async function openBoth() {
+    const user = userEvent.setup();
+    const harness = renderBoard(boardFeed({ projects: [projectA(), projectB()] }));
+    await user.click(await card('storefront'));
+    await user.click(screen.getByRole('tab', { name: 'Overview' }));
+    await user.click(await card('billing'));
+    await screen.findByRole('tab', { name: 'billing', selected: true });
+    return { user, ...harness };
+  }
+
+  it('opens one tab per project, keeps the overview first, and reuses an open tab', async () => {
+    const { user } = await openBoth();
+    expect(order()).toEqual(['Overview', 'storefront', 'billing']);
+    await user.click(screen.getByRole('tab', { name: 'Overview' }));
+    await user.click(await card('storefront'));
+    expect(order()).toEqual(['Overview', 'storefront', 'billing']);
+    expect(screen.getByRole('tab', { name: 'storefront' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { name: 'storefront' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'billing' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a kanban filter when switching tabs and back', async () => {
+    const { user } = await openBoth();
+    await user.click(screen.getByRole('tab', { name: 'storefront' }));
+    const panel = screen.getByRole('tabpanel', { name: 'storefront' });
+    const select = within(panel).getByLabelText('Session');
+    await user.selectOptions(select, within(select).getAllByRole('option')[1]!);
+    const chosen = (select as HTMLSelectElement).value;
+    await user.click(screen.getByRole('tab', { name: 'billing' }));
+    await user.click(screen.getByRole('tab', { name: 'storefront' }));
+    expect(within(screen.getByRole('tabpanel', { name: 'storefront' })).getByLabelText('Session')).toHaveValue(chosen);
+  });
+
+  it('reorders project tabs by drag and drop', async () => {
+    await openBoth();
+    // jsdom lays nothing out, so the pointer is always past the target's midpoint: an "after" drop.
+    const source = screen.getByTestId('board-tab-proj-a');
+    const target = screen.getByTestId('board-tab-proj-b');
+    const dataTransfer = { setData: vi.fn(), effectAllowed: '', dropEffect: '' };
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.dragOver(target, { dataTransfer });
+    expect(target).toHaveAttribute('data-drop', 'after');
+    fireEvent.drop(target, { dataTransfer });
+    expect(order()).toEqual(['Overview', 'billing', 'storefront']);
+    expect(target).not.toHaveAttribute('data-drop');
+  });
+
+  it('reorders project tabs from the keyboard, never past the overview', async () => {
+    const { user } = await openBoth();
+    screen.getByRole('tab', { name: 'billing' }).focus();
+    await user.keyboard('{Control>}{Shift>}{ArrowLeft}{/Shift}{/Control}');
+    expect(order()).toEqual(['Overview', 'billing', 'storefront']);
+    expect(screen.getByRole('tab', { name: 'billing' })).toHaveFocus();
+    await user.keyboard('{Control>}{Shift>}{ArrowLeft}{/Shift}{/Control}');
+    expect(order()).toEqual(['Overview', 'billing', 'storefront']);
+  });
+
+  it('closes a tab by its button, showing the neighbour', async () => {
+    const { user } = await openBoth();
+    await user.click(screen.getByLabelText('Close billing'));
+    expect(order()).toEqual(['Overview', 'storefront']);
+    expect(screen.getByRole('tab', { name: 'storefront' })).toHaveAttribute('aria-selected', 'true');
+    await user.click(screen.getByLabelText('Close storefront'));
+    expect(order()).toEqual(['Overview']);
+    expect(await card('storefront')).toBeVisible();
+  });
+
+  it('closes a tab by middle click or the Delete key', async () => {
+    const { user } = await openBoth();
+    fireEvent(screen.getByTestId('board-tab-proj-a'), new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+    expect(order()).toEqual(['Overview', 'billing']);
+    screen.getByRole('tab', { name: 'billing' }).focus();
+    await user.keyboard('{Delete}');
+    expect(order()).toEqual(['Overview']);
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveFocus();
+  });
+
+  it('moves between tabs with the arrow keys', async () => {
+    const { user } = await openBoth();
+    screen.getByRole('tab', { name: 'billing' }).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+    await user.keyboard('{End}');
+    expect(screen.getByRole('tab', { name: 'billing' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('closing the tab on show moves to its right-hand neighbour', async () => {
+    const { user } = await openBoth();
+    await user.click(screen.getByRole('tab', { name: 'storefront' }));
+    await user.click(screen.getByLabelText('Close storefront'));
+    expect(order()).toEqual(['Overview', 'billing']);
+    expect(screen.getByRole('tab', { name: 'billing' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('the overview tab has no close button and ignores Delete', async () => {
+    const { user } = await openBoth();
+    expect(screen.queryByLabelText('Close Overview')).not.toBeInTheDocument();
+    screen.getByRole('tab', { name: 'Overview' }).focus();
+    await user.keyboard('{Delete}');
+    expect(order()).toEqual(['Overview', 'storefront', 'billing']);
+  });
+
+  it('does not reorder a tab past the end from the keyboard', async () => {
+    const { user } = await openBoth();
+    screen.getByRole('tab', { name: 'billing' }).focus();
+    await user.keyboard('{Control>}{Shift>}{ArrowRight}{/Shift}{/Control}');
+    expect(order()).toEqual(['Overview', 'storefront', 'billing']);
+  });
+
+  it('a project that vanishes while another tab is on show closes quietly', async () => {
+    const { push } = await openBoth();
+    push(boardFeed({ projects: [projectB()] }));
+    expect(order()).toEqual(['Overview', 'billing']);
+    expect(screen.getByRole('tab', { name: 'billing' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByText('That project no longer has tasks.')).not.toBeInTheDocument();
+  });
+
+  it('a project that comes back does not reopen its tab; opening it again appends it', async () => {
+    const { user, push } = await openBoth();
+    push(boardFeed({ projects: [projectB()] }));
+    push(boardFeed({ projects: [projectA(), projectB()] }));
+    expect(order()).toEqual(['Overview', 'billing']);
+    await user.click(screen.getByRole('tab', { name: 'Overview' }));
+    await user.click(await card('storefront'));
+    expect(order()).toEqual(['Overview', 'billing', 'storefront']);
+  });
+
+  it('closes the tab of a project that stops having tasks, leaving the other tabs alone', async () => {
+    const { push } = await openBoth();
+    push(boardFeed({ projects: [projectA()] }));
+    expect(await screen.findByText('That project no longer has tasks.')).toBeInTheDocument();
+    expect(order()).toEqual(['Overview', 'storefront']);
   });
 });
 
@@ -546,7 +684,7 @@ describe('Board — timers and time in column', () => {
     expect(intervals(spy)).toEqual([60_000]); // the overview: once a minute, never every second
 
     fireEvent.click(await card('storefront'));
-    await screen.findByRole('button', { name: /^Back to Board$/ });
+    await screen.findByRole('tab', { name: 'storefront', selected: true });
     expect(intervals(spy)).toEqual([60_000, 60_000, 1_000]); // kanban: filters each minute, running cards each second
 
     spy.mockClear();
@@ -660,12 +798,12 @@ describe('Board — one period, honest percentages', () => {
     const old = boardSession({ session_id: 'o', last_activity_at: NOW - 20 * 86_400, tasks: [boardTask({ key: 'ancient', content: 'Ancient chore' })] });
     renderBoard(boardFeed({ projects: [boardProject({ root: '/repo/storefront', sessions: [boardSession({ tasks: [boardTask({ key: 'n', content: 'New chore' })] }), old] })] }));
     await user.click(await card('storefront'));
-    await screen.findByRole('button', { name: /^Back to Board$/ });
+    await screen.findByRole('tab', { name: 'storefront', selected: true });
     expect(screen.getAllByLabelText('Period')).toHaveLength(1);
     expect(screen.queryByText('Ancient chore')).not.toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Period'), '30d');
     expect(screen.getByText('Ancient chore')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^Back to Board$/ }));
+    await user.click(screen.getByRole('tab', { name: 'Overview' }));
     expect(screen.getByLabelText('Period')).toHaveValue('30d');
   });
 

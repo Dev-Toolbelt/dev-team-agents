@@ -6,7 +6,7 @@
 import './setup.js';
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -268,7 +268,8 @@ describe('App — the header menu', () => {
 
     await openFromMenu(user, 'Catalog');
     expect(await screen.findByText('catalog is fine')).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { selected: true })).not.toBeInTheDocument();
+    // The app's own tab strip; the Board screen keeps a tab strip of its own, mounted while hidden.
+    expect(within(screen.getAllByRole('tablist')[0]!).queryByRole('tab', { selected: true })).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('tabpanel', { name: 'Catalog' })).toHaveFocus());
     await user.click(screen.getByRole('button', { name: 'Menu' }));
     expect(await screen.findByRole('menuitem', { name: 'Catalog' })).toHaveAttribute('aria-current', 'page');

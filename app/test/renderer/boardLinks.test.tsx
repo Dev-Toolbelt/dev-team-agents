@@ -33,7 +33,7 @@ function renderBoard(feed: BoardFeed, overrides: Parameters<typeof fakeBridge>[0
 async function openKanban(project: BoardProject, overrides: Parameters<typeof fakeBridge>[0] = {}) {
   const bridge = renderBoard(boardFeed({ projects: [project] }), overrides);
   fireEvent.click((await screen.findByText('storefront')).closest('button')!);
-  await screen.findByRole('button', { name: /^Back to Board$/ });
+  await screen.findByRole('tab', { name: 'storefront', selected: true });
   return bridge;
 }
 
