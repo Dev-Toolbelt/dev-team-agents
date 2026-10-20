@@ -585,7 +585,6 @@ NEEDS_MACHINE_LAYOUT = {
     "it runs",
     ("insights", "report"): "finds each project's traces through the registry — on a "
     "pre-split store it would report no data at all, with exit 0",
-    ("insights", "dismiss"): "checks the id against the same registry walk as `insights report`",
 }
 
 
