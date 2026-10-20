@@ -71,7 +71,14 @@ devteam_queue_agent_usage() {
     scan_result=$(python3 -I -c "
 import json, sys
 sys.path.insert(0, sys.argv[3])
-from devteam import usage
+try:
+    from devteam import usage
+except ImportError:
+    # A tree without the CLI package: say so on stderr (the caller discards it) and count nothing,
+    # rather than keep the offset and miss these agents forever.
+    sys.stderr.write('agent-usage: devteam package not found under ' + sys.argv[3] + '\\n')
+    print('OFFSET\\x1f' + sys.argv[2])
+    sys.exit(0)
 
 path = sys.argv[1]
 start_offset = int(sys.argv[2])

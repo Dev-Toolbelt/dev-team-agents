@@ -94,6 +94,16 @@ ensure_claude_framework() {
       cp -f "$source_dir/scripts/lib/"*.json "$framework_dir/scripts/lib/" 2>/dev/null || true
       cp -f "$source_dir/scripts/lib/"*.sh "$framework_dir/scripts/lib/" 2>/dev/null || true
       cp -f "$source_dir/scripts/lib/"*.py "$framework_dir/scripts/lib/" 2>/dev/null || true
+      # The CLI's package: hooks import from it (agent-usage.sh reads token usage through
+      # devteam/usage.py, ADR-0041), so a mirror without it would lose that silently.
+      if [[ -d "$source_dir/scripts/lib/devteam" ]]; then
+        mkdir -p "$framework_dir/scripts/lib/devteam"
+        cp -f "$source_dir/scripts/lib/devteam/"*.py "$framework_dir/scripts/lib/devteam/" 2>/dev/null || true
+        if [[ -d "$source_dir/scripts/lib/devteam/integrations" ]]; then
+          mkdir -p "$framework_dir/scripts/lib/devteam/integrations"
+          cp -f "$source_dir/scripts/lib/devteam/integrations/"*.py "$framework_dir/scripts/lib/devteam/integrations/" 2>/dev/null || true
+        fi
+      fi
       if [[ -d "$source_dir/scripts/hooks" ]]; then
         cp -rf "$source_dir/scripts/hooks/." "$framework_dir/scripts/hooks/"
       fi

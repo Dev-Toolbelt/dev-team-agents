@@ -59,6 +59,8 @@ const HOOK_TIMEOUT_MS = 5000
 // scripts/lib/devteam/tasks.py); killing the hook first would lose the write it was waiting to
 // make. Their budget therefore outlasts the lock. The lock stays at 10 s.
 const TASK_BOARD_HOOK_TIMEOUT_MS = 12000
+// How long a finished `task` waits for its child session's messages before going without usage.
+const CHILD_USAGE_TIMEOUT_MS = 3000
 // `tool.execute.before` remembers a `task` call's `subagent_type` here, keyed by callID, for the
 // matching `after` when opencode does not repeat the args. Bounded: an unmatched call is evicted.
 const SUBAGENT_CALLS_KEPT = 256
@@ -273,7 +275,11 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
     if (!child) return {}
     const model = typeof metadata?.model?.modelID === "string" ? metadata.model.modelID : undefined
     try {
-      const res = await client.session.messages({ path: { id: child } })
+      // Bounded: a slow server must not hold up the task's completion hook (or the turn).
+      const res: any = await Promise.race([
+        client.session.messages({ path: { id: child } }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), CHILD_USAGE_TIMEOUT_MS)),
+      ])
       const usage = { input: 0, output: 0, cache_read: 0, cache_write: 0 }
       let seen = false
       for (const message of res.data ?? []) {

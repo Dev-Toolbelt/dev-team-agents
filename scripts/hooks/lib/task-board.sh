@@ -253,8 +253,9 @@ devteam_task_board_has_trace() {
     session="$(devteam_task_board_session_id "$1")"
     [ -n "$session" ] || return 1
     [ -f "${TB_STATE_DIR}/task-board/trace/${session}.json" ] && return 0
+    # As a key only (`"<id>":`); the same id as a value names a top session, which has its own file.
     [ -f "${TB_STATE_DIR}/task-board/trace/aliases.json" ] \
-        && grep -qF "\"${session}\"" "${TB_STATE_DIR}/task-board/trace/aliases.json"
+        && grep -qE "\"${session//./\\.}\"[[:space:]]*:" "${TB_STATE_DIR}/task-board/trace/aliases.json"
 }
 
 # devteam_task_board_trace <payload> [--stop] — fold an agent spawn or result into the session's
