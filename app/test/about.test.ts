@@ -24,7 +24,7 @@ describe('aboutCredits', () => {
       cli: { path: '/usr/local/bin/devteam', source: 'homebrew', storeVersion: '2.48.0', jsonContract: 1 },
     } as never);
     expect(text).toContain('devteam CLI: /usr/local/bin/devteam (via Homebrew)');
-    expect(text).toContain('Store version: 2.48.0');
+    expect(text).toContain('Harness version: 2.48.0');
     expect(text).toContain('JSON contract: 1');
     expect(text).toContain('Write actions: doctor, bind');
     expect(text).toContain('Electron 44.5.1 · development · unsigned build');

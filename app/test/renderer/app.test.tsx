@@ -14,19 +14,24 @@ import { App } from '../../src/renderer/App.js';
 import { isPrerelease } from '../../src/shared/appVersion.js';
 import { buildInfo, cliResolutionFound, cliResolutionNotFound, fakeBridge, installBridge } from './support.js';
 
-const state = vi.hoisted(() => ({ doctorThrows: true }));
+const state = vi.hoisted(() => ({ catalogThrows: true }));
 
-vi.mock('../../src/renderer/screens/Doctor.js', () => ({
-  Doctor: () => {
-    if (state.doctorThrows) throw new Error('doctor exploded');
-    return <p>doctor is fine</p>;
+vi.mock('../../src/renderer/screens/Catalog.js', () => ({
+  Catalog: () => {
+    if (state.catalogThrows) throw new Error('catalog exploded');
+    return <p>catalog is fine</p>;
   },
 }));
+
+async function openFromMenu(user: ReturnType<typeof userEvent.setup>, item: string) {
+  await user.click(await screen.findByRole('button', { name: 'Menu' }));
+  await user.click(await screen.findByRole('menuitem', { name: item }));
+}
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  state.doctorThrows = true;
+  state.catalogThrows = true;
 });
 
 describe('App — start-up', () => {
@@ -51,14 +56,18 @@ describe('App — start-up', () => {
   });
 });
 
-describe('App — the header names this app’s version', () => {
-  it('shows the app version before the store’s, with a beta badge while it is a pre-release', async () => {
+describe('App — the status bar names this app’s version', () => {
+  it('shows the app version before the harness’s, in the footer, with a beta badge while it is a pre-release', async () => {
     installBridge(fakeBridge({ buildInfo: vi.fn(() => Promise.resolve(buildInfo({ appVersion: '0.0.0' }))) }));
     render(<App />);
     const version = await screen.findByText('app 0.0.0');
     expect(version).toHaveTextContent('beta');
-    const store = screen.getByText(/^store /);
-    expect(version.compareDocumentPosition(store) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const harness = await screen.findByText(/^harness /);
+    expect(version.compareDocumentPosition(harness) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const footer = screen.getByRole('contentinfo');
+    expect(footer).toContainElement(version);
+    expect(footer).toContainElement(harness);
+    expect(screen.queryByText(/^store /)).not.toBeInTheDocument();
   });
 
   it('drops the badge at a stable version', async () => {
@@ -92,17 +101,18 @@ describe('App — a failing screen', () => {
     installBridge(fakeBridge());
 
     render(<App />);
-    await user.click(await screen.findByRole('tab', { name: 'Diagnosis' }));
+    await openFromMenu(user, 'Catalog');
 
-    expect(await screen.findByText(/The Diagnosis screen hit an unexpected error/)).toBeInTheDocument();
-    expect(screen.getByText('doctor exploded')).toBeInTheDocument();
-    // The shell is still there: the other tabs work.
-    expect(screen.getByRole('tab', { name: 'Global Skills' })).toBeInTheDocument();
+    expect(await screen.findByText(/The Catalog screen hit an unexpected error/)).toBeInTheDocument();
+    expect(screen.getByText('catalog exploded')).toBeInTheDocument();
+    // The shell is still there: the tabs and the menu work.
+    expect(screen.getByRole('tab', { name: 'Integrations' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Menu' })).toBeInTheDocument();
 
-    state.doctorThrows = false;
+    state.catalogThrows = false;
     await user.click(screen.getByRole('button', { name: /try again/i }));
 
-    expect(await screen.findByText('doctor is fine')).toBeInTheDocument();
+    expect(await screen.findByText('catalog is fine')).toBeInTheDocument();
   });
 
   it('moves focus to the fallback when a screen throws', async () => {
@@ -111,7 +121,7 @@ describe('App — a failing screen', () => {
     installBridge(fakeBridge());
 
     render(<App />);
-    await user.click(await screen.findByRole('tab', { name: 'Diagnosis' }));
+    await openFromMenu(user, 'Catalog');
 
     const fallback = await screen.findByRole('alert');
     await waitFor(() => expect(fallback).toHaveFocus());
@@ -120,7 +130,6 @@ describe('App — a failing screen', () => {
 
 describe('App — the Integrations tab', () => {
   it('keeps a typed token while another tab is shown', async () => {
-    state.doctorThrows = false;
     const user = userEvent.setup();
     const notConnected = {
       name: 'github', title: 'GitHub', description: '', homepage: null,
@@ -134,7 +143,7 @@ describe('App — the Integrations tab', () => {
     await user.click(await screen.findByRole('tab', { name: 'Integrations' }));
     await user.click(await screen.findByRole('button', { name: 'Show GitHub details' }));
     await user.type(await screen.findByLabelText('Personal access token'), 'ghp_draft');
-    await user.click(screen.getByRole('tab', { name: 'Diagnosis' }));
+    await user.click(screen.getByRole('tab', { name: 'Board' }));
     await user.click(screen.getByRole('tab', { name: 'Integrations' }));
     expect(screen.getByLabelText('Personal access token')).toHaveValue('ghp_draft');
   });
@@ -242,5 +251,32 @@ describe('App — the unsigned-build banner names the platform it is read on', (
     render(<App />);
     const banner = (await screen.findByText('This build is not signed or notarised')).closest('[role="alert"]')!;
     expect(banner).toHaveTextContent(/Apple Developer ID/);
+  });
+});
+
+describe('App — the header menu', () => {
+  it('lists Catalog and Global Skills instead of tabs, and opens them', async () => {
+    state.catalogThrows = false;
+    const user = userEvent.setup();
+    installBridge(fakeBridge());
+    render(<App />);
+    await screen.findByRole('tab', { name: 'Projects' });
+    for (const gone of ['Catalog', 'Global Skills', 'Diagnosis', 'Account']) {
+      expect(screen.queryByRole('tab', { name: gone })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText('unsigned build')).not.toBeInTheDocument();
+
+    await openFromMenu(user, 'Catalog');
+    expect(await screen.findByText('catalog is fine')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { selected: true })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('tabpanel', { name: 'Catalog' })).toHaveFocus());
+    await user.click(screen.getByRole('button', { name: 'Menu' }));
+    expect(await screen.findByRole('menuitem', { name: 'Catalog' })).toHaveAttribute('aria-current', 'page');
+    await user.click(screen.getByRole('menuitem', { name: 'Global Skills' }));
+    expect(screen.queryByText('catalog is fine')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('tabpanel', { name: 'Global Skills' })).toHaveFocus());
+
+    await user.click(screen.getByRole('tab', { name: 'Projects' }));
+    expect(screen.getByRole('tab', { name: 'Projects', selected: true })).toBeInTheDocument();
   });
 });

@@ -397,7 +397,9 @@ describe('the argv boundary refuses before it spawns', () => {
     expect(argvProblem(['catalog', '--path', '/tmp/x'])).toBeNull();
     expect(argvProblem(['catalog', 'agents', '--path', '/tmp/x'])).toBeNull();
     expect(argvProblem(['catalog', 'show', 'backend-developer', '--path', '/tmp/x'])).toBeNull();
-    expect(argvProblem(['doctor', '--no-project'])).toBeNull();
+    expect(argvProblem(['doctor', '--machine'])).toBeNull();
+    // The store-only report had no screen left to show it, so its flag left the allow-list too.
+    expect(argvProblem(['doctor', '--no-project'])).not.toBeNull();
   });
 
   it('refuses an empty argv rather than spawning a bare `devteam --json`', () => {

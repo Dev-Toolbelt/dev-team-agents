@@ -915,7 +915,7 @@ describe('profile', () => {
 });
 
 describe('the shell', () => {
-  it('shows the initials in the header, opens the Account tab from them, and gates the tabs', async () => {
+  it('shows the initials in the header, opens the Account screen from them, which has no tab of its own', async () => {
     installBridge(fakeBridge());
     const user = userEvent.setup();
     render(<App />);
@@ -923,7 +923,8 @@ describe('the shell', () => {
     expect(avatar).toHaveTextContent('AS');
     await user.click(avatar);
     expect(await screen.findByRole('heading', { level: 2, name: 'Ana Souza' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Account', selected: true })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Account' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { selected: true })).not.toBeInTheDocument();
   });
 
   it('shows only the sign-in screen, no tabs, when the gate enforces and the account is signed out', async () => {
@@ -931,6 +932,7 @@ describe('the shell', () => {
     render(<App />);
     expect(await screen.findByRole('heading', { name: /sign in to dev-team-agents/i })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Projects' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
   });
 
   it('asks the CLI nothing about the account while no CLI was found', async () => {

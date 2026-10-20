@@ -493,7 +493,6 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     catalogSummary: vi.fn(),
     catalogListing: vi.fn(),
     catalogEntry: vi.fn(),
-    doctor: vi.fn(() => Promise.resolve(ok(doctorReport()))),
     doctorMachine: vi.fn(() => Promise.resolve(ok(doctorReport()))),
     runMachineFix: vi.fn(() => Promise.resolve({ ran: false as const, message: 'not stubbed' })),
     detectProject: vi.fn(() => Promise.resolve(ok(detectReport()))),

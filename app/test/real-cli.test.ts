@@ -34,7 +34,6 @@ import {
   applyMigration,
   bindProject,
   catalogSummary,
-  doctor,
   listNotifications,
   planMigration,
   installSkill,
@@ -333,31 +332,6 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
     expect(again.data.version).toBe(STORE_VERSION);
   });
 
-  it('runs `doctor` with --no-project, so the report does not follow the directory', async () => {
-    installStoreVersion();
-    const project = await bindRealProject('doctor');
-
-    const fromWork = await doctor(context());
-    const fromProject = await doctor({ ...context(), cwd: project });
-    if (!fromWork.ok || !fromProject.ok) throw new Error('expected two reports');
-    // Without `--no-project` these two differed: `ok` from inside a bound project, `warn`
-    // with "… is not a bound project" from anywhere else.
-    expect(fromProject.data.status).toBe(fromWork.data.status);
-    expect(fromWork.data.findings.some((finding) => finding.category === 'project')).toBe(false);
-    expect(fromProject.data.findings.some((finding) => finding.category === 'project')).toBe(false);
-  });
-
-  it('reads `doctor --json` as findings — exit 1 with a full report, not an error', async () => {
-    const result = await doctor(context());
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error('unreachable');
-    // The store is empty, so doctor has something to say and exits 1.
-    expect(result.outcome).toBe('findings');
-    expect(result.data.status).toBeTypeOf('string');
-    expect(result.data.findings.length).toBeGreaterThan(0);
-    expect(result.data.findings.some((finding) => finding.category === 'store')).toBe(true);
-  });
-
   it('reports `catalog` on a store with no version as an environment problem with the CLI’s own hint', async () => {
     const result = await catalogSummary(context());
     expect(result.ok).toBe(false);
@@ -388,9 +362,8 @@ describe.skipIf(!available)('against scripts/cli/devteam', () => {
     await invokeDevteam({ ...context(), args: ['version'] });
     await invokeDevteam({ ...context(), args: ['compat'] });
     await listProjects(context());
-    await doctor(context());
     await catalogSummary(context());
-    // `devteam path`, `version`, `compat`, `list`, `doctor` and `catalog` are all in
+    // `devteam path`, `version`, `compat`, `list` and `catalog` are all in
     // `compat.READ_ONLY` and are asserted there to create nothing — including not minting
     // a machine identity. This is that claim, checked from the client side.
     expect(await readdir(home)).toEqual([]);

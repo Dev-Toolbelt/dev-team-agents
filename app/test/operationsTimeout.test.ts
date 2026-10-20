@@ -40,7 +40,7 @@ const CONTEXT = { binary: '/x/devteam', cwd: '/x' };
 
 /** A spelled-out, allow-list-valid argv for each gated command. */
 const GATED_ARGV: Readonly<Record<string, readonly string[]>> = {
-  doctor: ['doctor', '--no-project'],
+  doctor: ['doctor', '--machine'],
   bind: ['bind', '/p'],
   unbind: ['unbind', '--project-id', 'p'],
   sync: ['sync', '--all'],
