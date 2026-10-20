@@ -53,6 +53,7 @@ Still reading `user-data/` directly as of 2026-09-30:
 - **`--git-common-dir` outside a git repository.** Written inline as `cd "$(git rev-parse --git-common-dir)/.."`, the empty output makes it `cd "/.."`, which **succeeds** — `ROOT` becomes `/`, and a `[ -n "$ROOT" ] || ROOT="$PWD"` fallback never fires. Capture the output first and `cd` only when it is non-empty.
 - **Use `--git-common-dir`, not `--show-toplevel`.** From a linked worktree, `--show-toplevel` gives the worktree's root; the pointer files live only in the main checkout, which `data-dirs.sh` requires as its argument.
 - **`unset STATE_FILE USER_DATA_DIR` before calling.** `devteam_state_dir` returns an inherited `$STATE_FILE`'s directory or `$USER_DATA_DIR` ahead of the pointer.
+- **Dated note, 2026-10-19:** `commands/learn.md` still reads `.dev-team-agents/user-data/session-summary.md`. The session summary the hooks and agents write lives at the path in `.dev-team-agents/memory-dir`. Entries written on 2026-10-19 exist only in the memory-dir file.
 
 ## References
 
