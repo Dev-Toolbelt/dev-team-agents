@@ -265,6 +265,33 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
     }
   }
 
+  // A finished `task` agent's own session and token usage, for the execution trace (ADR-0041):
+  // the child session id comes from the call's metadata, and its usage is the sum of its
+  // assistant messages' `info.tokens`. Any failure leaves the fields out, never the hook call.
+  const childAgent = async (metadata: any): Promise<Record<string, unknown>> => {
+    const child = typeof metadata?.sessionId === "string" ? metadata.sessionId : ""
+    if (!child) return {}
+    const model = typeof metadata?.model?.modelID === "string" ? metadata.model.modelID : undefined
+    try {
+      const res = await client.session.messages({ path: { id: child } })
+      const usage = { input: 0, output: 0, cache_read: 0, cache_write: 0 }
+      let seen = false
+      for (const message of res.data ?? []) {
+        const info: any = message?.info
+        if (info?.role !== "assistant" || !info.tokens) continue
+        const t = info.tokens
+        usage.input += Number(t.input) || 0
+        usage.output += (Number(t.output) || 0) + (Number(t.reasoning) || 0)
+        usage.cache_read += Number(t.cache?.read) || 0
+        usage.cache_write += Number(t.cache?.write) || 0
+        seen = true
+      }
+      return { agent_session_id: child, agent_model: model, agent_usage: seen ? usage : undefined }
+    } catch {
+      return { agent_session_id: child, agent_model: model }
+    }
+  }
+
   const prArgsByCall = new Map<string, any>()
   const subagentByCall = new Map<string, string>()
   const rememberSubagent = (callID: unknown, type: unknown) => {
@@ -437,6 +464,7 @@ export const DevTeamAgents: Plugin = async ({ client, directory }) => {
         session_title: await sessionTitle(input.sessionID),
         args,
         output: output.output,
+        ...(await childAgent((output as any).metadata)),
       })
       await safe("post-tool-use", () => runHook(`${hooksDir()}/post-tool-use.sh`, payload, TASK_BOARD_HOOK_TIMEOUT_MS))
     },

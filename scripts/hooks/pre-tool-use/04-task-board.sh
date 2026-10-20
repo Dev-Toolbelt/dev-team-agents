@@ -100,6 +100,8 @@ if [ "$MODE" = "direct" ]; then
 elif [ "$MODE" = "todo" ]; then
     devteam_task_board_record "$INPUT" >/dev/null 2>&1
 else
+    # Every spawn is a span of the execution trace, review agents and built-ins included (ADR-0041).
+    devteam_task_board_trace "$INPUT"
     if [[ "$INPUT" =~ $REVIEW_TYPE_RE ]]; then
         devteam_task_board_has_record "$INPUT" || exit 0
         devteam_task_board_review_open "$INPUT" >/dev/null 2>&1

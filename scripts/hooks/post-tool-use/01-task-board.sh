@@ -5,7 +5,8 @@
 #                             Codex `spawn_agent` (the spawned agent id), `wait_agent`
 #                             (tool_response) and `close_agent`, opencode `task` (the plugin adds "output")
 #                                                                          → the agent task, and a
-#                                                                            review result when it carries one
+#                                                                            review result when it carries one,
+#                                                                            and the trace span (ADR-0041)
 #   a subagent launch that failed  Claude Code `PostToolUseFailure` on `Agent`/`Task`
 #                             (same payload shape, no tool_response)      → task cancelled, review retired as unread
 # The settings matcher already narrows the event; the string tests below repeat it so a
@@ -51,6 +52,8 @@ if [ "$MODE" = "todo" ]; then
     devteam_task_board_record "$INPUT" >/dev/null 2>&1
     exit 0
 fi
+# The trace keeps every agent's end, with or without a task record (ADR-0041).
+devteam_task_board_has_trace "$INPUT" && devteam_task_board_trace "$INPUT"
 # An agent's end settles what its spawn recorded: with no record there is nothing to settle.
 devteam_task_board_has_record "$INPUT" || exit 0
 if [[ "$INPUT" =~ $REVIEW_TYPE_RE ]]; then
