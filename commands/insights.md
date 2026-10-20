@@ -45,9 +45,11 @@ On **Dismiss**, run `devteam --json insights dismiss <id>` with the suggestion's
 
 For each **Plan the change**, load `skills/shared/plan-mode/SKILL.md` and present a plan in the canonical template. Its Context quotes the suggestion's rule, evidence and example sessions (`devteam tasks trace <session>` shows any of them).
 
-The plan follows the repository's own rules for what it touches:
-- A tier change edits `scripts/lib/tiers.json` and its mirrors.
-- An effort entry applies the `_why_qa_specialist` test before anything else.
-- A spawn-classifier change edits `skills/shared/spawn-classifier/SKILL.md`.
+Where the change lands depends on where this runs. Framework files under `.dev-team-agents/` are replaced on every update, so a plan never edits them in a bound project:
+
+| Running in | Agent behavior (prompt, spawns, effort guidance) | Tier or effort of an agent |
+|---|---|---|
+| A bound project (`.dev-team-agents/` exists) | A project-level override: `.agents/<agent>.md` for one agent, the project's `CLAUDE.md` / `AGENTS.md` for spawn rules | No per-project override exists. Draft upstream feedback (title, the suggestion's evidence, the proposed change) for the user to file; edit nothing |
+| The dev-team-agents repository itself (`scripts/lib/tiers.json` and `agents/` at the root) | The canonical files: `agents/<agent>.md`, `skills/shared/spawn-classifier/SKILL.md` | `scripts/lib/tiers.json` and its mirrors; an effort entry applies the `_why_qa_specialist` test before anything else |
 
 Nothing is edited before the user approves the plan. A suggestion is evidence for a decision, never the decision.
