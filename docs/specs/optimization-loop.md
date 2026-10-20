@@ -21,7 +21,7 @@ Read-only. The command walks every bound project (or `--project`), and every tra
 | `agents` | agent, provider | `kind`, `tier`, `spans`, `sessions`, `failed_rate`, `interrupted_rate`, `duration_p50`, `duration_p90` (s), `tokens_mean`, `tokens_p90` (spans with usage only), `usage_coverage`, `models` (model → spans), `reviews` (`count`, `zero_findings_rate`, `findings_mean`; review spans with a known `findings` only) |
 | `commands` | command, provider | `runs` (distinct session + turn), `tokens_per_run`, `agents_per_run`, `builtin_token_share`, `usage_coverage` |
 | `versions` | harness_version, command, provider | `runs`, `tokens_per_run`, `usage_coverage` |
-| `reviews` | — | `windows`, `unread_rate`, `findings_mean`, `fixed_after_findings` (from the board's review windows) |
+| `reviews` | provider | `windows`, `unread_rate`, `findings_mean`, `fixed_after_findings` (from the board's review windows; per provider, so one provider's capture gap, such as Codex v2 reviewer windows settled unread, is not read as every provider's reliability) |
 
 A turn with no command counts under command `null`. Percentiles are nearest-rank.
 
@@ -46,7 +46,7 @@ Only well-formed traces are read: a file over 4 MiB, a session id outside the `s
 
 #### Command — `/devteam:insights`
 
-Runs `devteam --json insights report` and presents the metrics and suggestions. For each suggestion, it asks one `AskUserQuestion`: **Plan the change**, **Dismiss**, or **Later**. **Plan the change** hands off to the plan-mode flow with the evidence. **Dismiss** runs `devteam insights dismiss`. The command never edits a file itself.
+Runs `devteam --json insights report` and presents the metrics and suggestions. For each suggestion, it asks one `AskUserQuestion`: **Plan the change**, **Dismiss**, or **Later**. **Plan the change** hands off to the plan-mode flow with the evidence. In a bound project that plan targets a project-level override, or drafts upstream feedback for a tier or effort; it edits the canonical files only inside the dev-team-agents repository. **Dismiss** runs `devteam insights dismiss`. The command never edits a file itself.
 
 ### Acceptance Criteria
 
@@ -96,3 +96,4 @@ Runs `devteam --json insights report` and presents the metrics and suggestions. 
 - **Blocks**: none
 
 ### Amendment Log
+- 2026-10-19 | main conversation | Review windows grouped per provider; accepted suggestions land in a project override or upstream feedback in a bound project; the dismissal lock is machine-local | Branch review findings (architect A1, A2, A6)

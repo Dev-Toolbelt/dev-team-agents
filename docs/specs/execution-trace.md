@@ -10,7 +10,7 @@ depends_on: [task-board.md]
 As a developer tuning the harness, I want every agent a session ran laid out as a tree, with who spawned it, how long it took and how many tokens it spent, so that an optimization loop can rank agents, commands and review rounds by cost instead of guessing.
 
 ### Context
-The task board (ADR-0018, `task-board.md`) captures agent spawns as board tasks but leaves out review/QA agents and provider built-ins, and stores no cost. This spec adds a trace beside it: one span per agent spawn of any type, kept in its own file so the board is untouched. Decision record: [ADR-0041](../development/adrs/0041-execution-trace-kept-beside-the-task-board-record-as-one-span-per-agent-spawn.md).
+The task board (ADR-0018, `task-board.md`) captures agent spawns as board tasks but leaves out review/QA agents and provider built-ins, and stores no cost. This spec adds a trace beside it: one span per agent spawn of any named type (a spawn that names no agent type has none, ADR-0041 Decision 2), kept in its own file so the board is untouched. Decision record: [ADR-0041](../development/adrs/0041-execution-trace-kept-beside-the-task-board-record-as-one-span-per-agent-spawn.md).
 
 #### Capture per provider
 
@@ -72,7 +72,7 @@ The tree is derived on read: session → turn (`turn_at`, `command`) → span �
 
 **Scenario S4: tokens per provider**
 - Given an agent whose provider exposes its usage
-- When the agent ends
+- When the agent ends and the next `Stop` runs
 - Then its span carries `usage` and `model`, and Claude Code usage counts each message once, however many transcript lines it streamed
 
 **Scenario S5: background agents are counted once they finish**
@@ -107,3 +107,4 @@ The tree is derived on read: session → turn (`turn_at`, `command`) → span �
 
 ### Amendment Log
 - 2026-10-19 | main conversation | Codex multi-agent v2 is supported: `agent_path` from `task_name`, end from the parent rollout's `FINAL_ANSWER`, `findings` from its marker, tokens from the child rollout | v2 spawns used to stay `running` with no usage
+- 2026-10-19 | main conversation | Usage is read at the next Stop outside the trace lock within a byte budget, not on the result hook; one v2 matching rule shared with the board; `harness_version` is the installed version directory (pre-releases included); a spawn with no agent type has no span; crafted names are hidden in `tasks trace`; the session id `aliases` is refused | Branch review findings (security S1-S3, architect A7, code C1, C7)

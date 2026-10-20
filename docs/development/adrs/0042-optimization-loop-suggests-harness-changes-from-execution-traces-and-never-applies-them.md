@@ -18,7 +18,7 @@ The execution trace (ADR-0041) records, per agent spawn, its status, duration, t
    - `/devteam:insights` presents the suggestions and asks the user about each one.
 2. **Suggest, never apply.** No layer edits `tiers.json`, an agent, a skill or the classifier. A suggestion the user accepts enters the normal plan-mode flow and is reviewed like any other change.
 3. **Every suggestion carries its evidence:** the rule id, the threshold, the sample (spans and sessions) and up to three example session ids. A rule fires only above a minimum sample, and below it the report says "insufficient data". Metrics are grouped by `harness_version`, so a cost regression is only claimed between two consecutive versions that each have a sample.
-4. **Dismissals are user decisions, so they are portable.** They live in `data/insights-decisions.json` at the top of the data store (ADR-0013), written under a lock and atomically. A dismissed suggestion comes back only once its sample has at least doubled. Traces stay machine-local; only the user's decision travels.
+4. **Dismissals are user decisions, so they are portable.** They live in `data/insights-decisions.json` at the top of the data store (ADR-0013), written atomically under a machine-local store lock (`locks/insights-decisions.lock`). A dismissed suggestion comes back only once its sample has at least doubled. Traces stay machine-local; only the user's decision travels.
 5. **Local only.** Nothing the loop computes is sent off the machine.
 
 ## Consequences
@@ -32,6 +32,9 @@ The execution trace (ADR-0041) records, per agent spawn, its status, duration, t
 - Sessions recorded before ADR-0041 have no trace, so early reports are mostly "insufficient data".
 
 ### Neutral
+- A suggestion that changes an agent lands where the change can live: in a bound project, a project-level override (`.agents/<agent>.md`, the project's instruction files) or upstream feedback for a tier or effort (no per-project override exists); in this repository, the canonical files. Framework files under `.dev-team-agents/` are never planned for edit, because every update replaces them.
+- Rules read tiers and effort overrides from the CLI's own tree, while the traces may come from projects pinned to other versions: a rule can judge an agent against a tier its version never had. `harness_version` on each trace is the evidence to check against.
+- A dismissal is portable, but its baseline was measured on one machine's traces, which are machine-local: another machine's independent evidence stays hidden until it doubles a sample it never saw.
 - The decision record is project-independent, because suggestions are about agents and commands, which are the same in every bound project.
 
 ## Alternatives Considered

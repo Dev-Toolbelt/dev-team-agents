@@ -3,7 +3,7 @@
 **Date:** 2026-10-19  
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
-**Applies to:** `scripts/lib/devteam/trace.py`, `scripts/lib/devteam/usage.py`, `scripts/hooks/lib/agent-usage.sh`, `opencode/plugin/dev-team-agents.ts`  
+**Applies to:** `scripts/lib/devteam/trace.py`, `scripts/lib/devteam/usage.py`, `scripts/lib/devteam/tasks.py`, `scripts/hooks/lib/agent-usage.sh`, `scripts/hooks/lib/task-board.sh`, `scripts/hooks/pre-tool-use/04-task-board.sh`, `scripts/hooks/post-tool-use/01-task-board.sh`, `scripts/hooks/stop/04b-task-board.sh`, `scripts/lib/ensure-claude-framework.sh`, `opencode/plugin/dev-team-agents.ts`  
 **Relates to:** [ADR-0018](0018-the-task-board-is-captured-by-hooks-into-a-machine-local-per-session-record.md) (task board), [ADR-0013](0013-portable-and-machine-local-split-of-the-data-store.md) (machine-local records), [ADR-0014](0014-store-schemas-as-the-normative-write-gate-and-the-json-contract-deprecation-policy.md) (`--json` contract)
 
 ## Context
@@ -15,13 +15,14 @@ The task board was the obvious base, since it already captures every agent spawn
 ## Decision
 
 1. **One trace file per session**, `<state-dir>/task-board/trace/<session-key>.json`. It sits inside the machine-local `task-board/` directory, so it inherits its classification. Its subdirectory is invisible to the board's listing, which reads `*.json` at the top level only. It is written only by `devteam tasks trace-record`, under its own per-session lock, atomically, and is never deleted.
-2. **One span per agent spawn, every agent type**: board agents, review/QA agents and built-ins alike, each with a `kind` saying which one it is. A span holds spawn id, agent, owner, runtime agent id, turn start and `/devteam:*` command, start and end times, status, model and token usage.
+2. **One span per agent spawn, every named agent type**: board agents, review/QA agents and built-ins alike, each with a `kind` saying which one it is. A span holds spawn id, agent, owner, runtime agent id, turn start and `/devteam:*` command, start and end times, status, model and token usage. A spawn that names no agent type (the provider's default agent) has no span: the hooks leave such a call before forking anything, the same cheap gate the board keeps, so it is a known undercount of `builtin_token_share`.
 3. **The tree is derived on read**: session → turn → agent → nested agent. A span's parent is the span whose runtime agent id equals its owner. Nothing in the file stores the tree.
-4. **Tokens are read once, when the agent ends**, from the provider's own record of the agent: the subagent transcript on Claude Code (last usage per message id), the child rollout's last `token_count` on Codex, and the child session's messages on opencode (summed by the plugin, which owns the SDK client). A provider that exposes nothing leaves `usage: null`. Nothing new runs on ordinary tool calls.
+4. **Tokens are read once the agent has ended, at the next `Stop`, with no lock held** (the trace is snapshotted under its lock, the files are read outside it within a per-Stop byte budget, and the result is merged back under the lock), from the provider's own record of the agent: the subagent transcript on Claude Code (last usage per message id), the child rollout's last `token_count` on Codex, and the child session's messages on opencode (summed by the plugin, which owns the SDK client). A provider that exposes nothing leaves `usage: null`. Nothing new runs on ordinary tool calls.
 5. **One Claude transcript parser**, `devteam/usage.py`, is used by both the trace and `agent-usage.sh`, so per-message dedup applies to telemetry too.
 6. `devteam tasks trace <session> [--json]` is the read surface, additive to the `--json` contract.
-7. **One shared alias map**, `trace/aliases.json`, routes an opencode child session or a Codex child thread to its top session. It is bounded at 200 entries and drops the oldest, because it routes hook calls and records nothing. An id with its own trace is never aliased, and only opencode's `parent_id` creates an alias before an agent's id is known.
-8. **What the optimization loop needs is recorded from day one:** the harness version that wrote the trace, and a review span's `findings` total from its review-result marker.
+7. **Codex multi-agent v2** (`spawn_agent` answering `{"task_name": "/root/<name>"}`, no agent id): the task path is the agent's reference, kept as `agent_path`. Each span keeps where the parent rollout ended at its spawn (`PreToolUse`). At `Stop` the first `FINAL_ANSWER` from that path after that mark ends it, oldest open span first. One rule, `usage.codex_v2_matches`, is shared with the task board. The child's tokens come from the rollout whose first line names the parent thread and that path. A span with no answer is settled by the 6 h running limit.
+8. **One shared alias map**, `trace/aliases.json`, routes an opencode child session or a Codex child thread to its top session. It is bounded at 200 entries and drops the oldest, because it routes hook calls and records nothing. An id with its own trace is never aliased, and only opencode's `parent_id` creates an alias before an agent's id is known.
+9. **What the optimization loop needs is recorded from day one:** the harness version that wrote the trace, and a review span's `findings` total from its review-result marker.
 
 ## Consequences
 
@@ -32,7 +33,7 @@ The task board was the obvious base, since it already captures every agent spawn
 
 ### Negative
 - One extra python fork per agent spawn and per agent result. Spawns are rare next to tool calls, and the ordinary-tool-call gate is untouched.
-- Codex multi-agent v2 (`spawn_agent` answering `task_name`, not `agent_id`) has no runtime id to read a rollout from, so those spans keep `usage: null` until the link is built. *Update 2026-10-19:* the link exists. v2 spans now end at the parent rollout's `FINAL_ANSWER` and read their tokens from the child rollout; see the `execution-trace.md` Amendment Log.
+- Codex multi-agent v2 ends an agent only in the parent rollout (Decision 7): an errored child writes no answer, and a nested spawn or a resumed thread answers in another rollout, so those spans end only at the 6 h limit.
 - opencode usage depends on the plugin's SDK calls, which are verified against stored session data, not yet against a live hook.
 
 ### Neutral
