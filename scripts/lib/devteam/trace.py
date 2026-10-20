@@ -98,6 +98,9 @@ def _root_session(root, project_id, session_id):
     return (found, True) if isinstance(found, str) and found else (session_id, False)
 
 
+root_session = _root_session
+
+
 def _write_alias(root, project_id, child, top):
     """Route ``child``'s later hook calls to ``top``'s trace. A bounded map: the oldest entry drops out."""
     if not child or child == top:
