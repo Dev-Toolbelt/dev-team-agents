@@ -65,7 +65,8 @@ _ENV_VALUE_OPTS = frozenset({"-u", "--unset", "-C", "--chdir"})
 _ENV_REFUSED_OPTS = frozenset({"-S", "--split-string"})
 _HEREDOC_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 _GH_MERGED_RE = re.compile(r"(?i)\bmerged pull request\s+(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#([1-9][0-9]{0,9})\b")
-_GLAB_MERGED_RE = re.compile(r"(?im)^\W*merged!?\W*$")
+#: ``[^\w\n]`` rather than ``\W``: the latter crosses newlines, which made a blank-heavy output quadratic.
+_GLAB_MERGED_RE = re.compile(r"(?im)^[^\w\n]*merged!?[^\w\n]*$")
 _GIT_FF_RE = re.compile(r"(?m)^(?:Fast-forward\b|Merge made by\b)")
 _GIT_FAIL_RE = re.compile(r"(?m)^(?:CONFLICT\b|fatal:|error:|Automatic merge failed)")
 
