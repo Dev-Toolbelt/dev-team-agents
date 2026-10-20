@@ -18,7 +18,7 @@ const makeProject = () => {
   const dir = mkdtempSync(join(tmpdir(), "devteam-plugin-"))
   const hooks = join(dir, ".dev-team-agents", "scripts", "hooks")
   mkdirSync(hooks, { recursive: true })
-  for (const name of ["session-start", "pre-tool-use", "post-tool-use", "user-prompt-submit", "pre-compact", "stop"]) {
+  for (const name of ["session-start", "pre-tool-use", "post-tool-use", "user-prompt-submit", "pre-compact", "backlog-prime", "stop"]) {
     writeFileSync(
       join(hooks, `${name}.sh`),
       [
@@ -112,6 +112,22 @@ test("compaction output reaches the context, from stdout or from stderr", async 
     assert.equal(output.context.length, 1)
     assert.match(output.context[0], new RegExp(out || err))
   }
+})
+
+test("compaction also carries the active sprint work, and nothing when idle", async () => {
+  const dir = makeProject()
+  control(dir, "pre-compact", { code: 0, out: "" })
+  control(dir, "backlog-prime", { code: 0, out: "[DEVTEAM:ACTIVE_WORK]" })
+  const { plugin } = await load(dir)
+  const output = { context: [] }
+  await plugin["experimental.session.compacting"]({}, output)
+  assert.equal(output.context.length, 1)
+  assert.match(output.context[0], /active sprint work\n\[DEVTEAM:ACTIVE_WORK\]/)
+
+  const idle = makeProject()
+  const quiet = { context: [] }
+  await (await load(idle)).plugin["experimental.session.compacting"]({}, quiet)
+  assert.equal(quiet.context.length, 0)
 })
 
 test("a Stop message (exit 2) is logged instead of dropped", async () => {

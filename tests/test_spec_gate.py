@@ -132,6 +132,38 @@ class SpecLintTest(_SpecRepo):
         self.write("docs/backlog/sprints/pay-sprint-1.md", SPRINT.format(spec="checkout", covers="S1, S9"))
         self.assert_error("'TASK-001' covers S9")
 
+    def test_a_field_after_the_next_heading_is_not_the_tasks(self):
+        # One task reader for spec-lint and `devteam backlog` (ADR-0044): fields end at a heading.
+        self.write("docs/specs/checkout.md", spec())
+        sprint = SPRINT.format(spec="checkout", covers="S1").replace("**Covers**: S1\n", "")
+        self.write("docs/backlog/sprints/pay-sprint-1.md", sprint + "\n## Sprint Summary\n**Covers**: S9\n")
+        self.assertEqual(self.lint(), (0, ""))
+
+    def test_a_symlinked_sprint_file_is_skipped_silently(self):
+        self.write("docs/specs/checkout.md", spec())
+        outside = self.tmp / "outside.md"
+        outside.write_text(SPRINT.format(spec="refund", covers="S1"), encoding="utf-8")
+        (self.repo / "docs" / "backlog" / "sprints").mkdir(parents=True)
+        (self.repo / "docs" / "backlog" / "sprints" / "pay-sprint-1.md").symlink_to(outside)
+        self.assertEqual(self.lint(), (0, ""))
+
+    def test_an_oversized_sprint_file_is_skipped_with_a_warning(self):
+        self.write("docs/specs/checkout.md", spec())
+        sprint = SPRINT.format(spec="refund", covers="S1")
+        self.write("docs/backlog/sprints/pay-sprint-1.md", sprint + "x" * (1024 * 1024))
+        code, out = self.lint()
+        self.assertEqual(code, 0, out)
+        self.assertRegex(out, r"WARN .*pay-sprint-1\.md'?: unreadable, skipped")
+
+    def test_a_sprints_directory_leading_outside_the_checkout_is_skipped(self):
+        self.write("docs/specs/checkout.md", spec())
+        outside = self.tmp / "outside-sprints"
+        outside.mkdir()
+        (outside / "pay-sprint-1.md").write_text(SPRINT.format(spec="refund", covers="S1"), encoding="utf-8")
+        (self.repo / "docs" / "backlog").mkdir(parents=True)
+        (self.repo / "docs" / "backlog" / "sprints").symlink_to(outside, target_is_directory=True)
+        self.assertEqual(self.lint(), (0, ""))
+
     def test_a_contract_without_its_spec_blocks(self):
         self.write("docs/specs/refund-contract.md", "---\nspec: refund.md\n---\n")
         self.assert_error("no spec 'refund.md'")

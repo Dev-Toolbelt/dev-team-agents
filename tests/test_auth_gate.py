@@ -22,6 +22,8 @@ from devteam.output import Emitter  # noqa: E402
 #: The command roots ADR-0029 never gates. A new subcommand is gated unless added here AND
 #: to `gate.EXEMPT`, so this list changing is a reviewed decision, not a side effect.
 EXEMPT_ROOTS = {"auth", "version", "path", "compat", "doctor", "unbind", "uninstall", "export", "tasks"}
+#: Single leaves exempt under a gated root: hook plumbing (ADR-0044).
+EXEMPT_LEAVES = {("backlog", "prime")}
 
 
 def leaf_paths():
@@ -46,7 +48,7 @@ class AllowlistTest(unittest.TestCase):
         self.assertGreater(len(paths), 50)
         for path in paths:
             with self.subTest(path=" ".join(path)):
-                self.assertEqual(gate.is_exempt(path), path[0] in EXEMPT_ROOTS)
+                self.assertEqual(gate.is_exempt(path), path[0] in EXEMPT_ROOTS or path in EXEMPT_LEAVES)
 
     def test_the_exempt_list_names_only_known_roots(self):
         roots = {path[0] for path in leaf_paths()}
