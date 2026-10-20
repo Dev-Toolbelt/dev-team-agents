@@ -1155,18 +1155,13 @@ def _follow_background(record, task, path, opened_at):
 
 
 def _mark_rollout(task, path):
-    """Where the parent rollout ends now: a v2 ``FINAL_ANSWER`` for ``task`` can only come after it.
-
-    Taken at the spawn (``PreToolUse``), before the child can have answered, and kept per task, so a
-    fast child is never missed and an earlier answer under a reused task path never ends this one.
-    """
-    if task.get("rollout_path") or not (isinstance(path, str) and path and os.path.isfile(path)):
+    """Keep where the parent rollout ends at this v2 spawn (``usage.rollout_mark``), once."""
+    if task.get("rollout_path"):
         return
-    try:
-        task["rollout_offset"] = os.path.getsize(path)
-        task["rollout_path"] = path
-    except OSError:
-        pass
+    from . import usage
+    mark = usage.rollout_mark(path)
+    if mark:
+        task.update(mark)
 
 
 def _is_v2(task):
@@ -1176,39 +1171,24 @@ def _is_v2(task):
 def _scan_codex_v2(rec, payload, now):
     """Settle the Codex v2 agent tasks: by their ``FINAL_ANSWER`` in the parent rollout, else by age.
 
-    A task ends at the first answer from its task path written after its own spawn mark, at the
-    answer's time; when one path has several open tasks, the oldest is ended first. A v2
+    The matching rule is ``usage.codex_v2_matches``, shared with the execution trace. A v2
     ``wait_agent`` names no agent, so this scan is the only end signal. A task with no answer after
-    :data:`PENDING_MAX_AGE` (an errored or killed child writes none; a resumed thread writes to
-    another rollout) is cancelled as ``interrupted``. Returns True when it changed something.
+    :data:`PENDING_MAX_AGE` (an errored or killed child writes none; a resumed thread or a nested
+    spawn writes to another rollout) is cancelled as ``interrupted``. True when it changed something.
     """
     open_tasks = [t for t in rec["tasks"] if _is_v2(t)]
     if not open_tasks:
         return False
+    from . import usage
     changed = False
     path = payload.get("transcript_path") if isinstance(payload, dict) else None
-    readable = [t for t in open_tasks if isinstance(path, str) and t.get("rollout_path") == path and os.path.isfile(path)]
-    if readable:
-        from . import usage
-        scan = rec.get("codex_scan") if isinstance(rec.get("codex_scan"), dict) else {}
-        # Resume where the last scan stopped (every answer before it was already matched), or at the
-        # oldest open mark when that is later: nothing before it can end an open task.
-        start = min(t.get("rollout_offset") or 0 for t in readable)
-        if scan.get("tx_path") == path and isinstance(scan.get("tx_offset"), int):
-            start = max(start, scan["tx_offset"])
-        answers, offset = usage.codex_final_answers(path, start)
-        rec["codex_scan"] = {"tx_path": path, "tx_offset": offset}
+    pairs, scan = usage.codex_v2_matches(open_tasks, path, rec.get("codex_scan"), "agent_ref", "created_at")
+    if scan is not None and scan is not rec.get("codex_scan"):
+        rec["codex_scan"] = scan
         changed = True
-        for answer in answers:
-            waiting = sorted(
-                (t for t in readable if _is_v2(t) and t["agent_ref"] == answer["author"]
-                 and (t.get("rollout_offset") or 0) <= answer["offset"]),
-                key=lambda t: t["created_at"],
-            )
-            if waiting:
-                task = waiting[0]
-                last = task["history"][-1]["at"] if task.get("history") else task["created_at"]
-                _end_agent(task, "completed", False, max(last, min(now, answer["at"] or now)))
+    for task, answer in pairs:
+        last = task["history"][-1]["at"] if task.get("history") else task["created_at"]
+        _end_agent(task, "completed", False, max(last, min(now, answer["at"] or now)))
     for task in open_tasks:
         if _is_v2(task) and now - task["created_at"] > PENDING_MAX_AGE:
             task["interrupted"] = True
@@ -3754,3 +3734,25 @@ def watch(
             signal.signal(signal.SIGTERM, previous)
     emit({"event": "end", "reason": stop.reason or "stopped"})
     return stop.reason
+
+
+# ── shared surface ───────────────────────────────────────────────────────────
+# What trace.py and insights.py read from this module. They use these names, never the private
+# ones, so a change here is visible as a change to a public name.
+CLAUDE_AGENT_TOOLS = _CLAUDE_AGENT_TOOLS
+CODEX_AGENT_TOOLS = _CODEX_AGENT_TOOLS
+as_dict = _dict
+as_text = _text
+first_text = _first_text
+id_text = _id_text
+json_objects = _json_objects
+async_launch = _async_launch
+agent_report = _output
+spawned_agent_id = _spawned_agent_id
+spawned_task_path = _spawned_task_path
+wait_results = _wait_results
+background_reports = _background_reports
+current_turn = _turn
+bound_id = _bound_id
+bound_projects = _bound
+project_records = _project_records

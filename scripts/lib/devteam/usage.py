@@ -41,21 +41,25 @@ def _int(value):
 
 
 def _lines(path):
+    """JSON objects of a JSONL file, streamed line by line, up to :data:`READ_CAP` bytes."""
+    read = 0
     try:
         with open(str(path), "rb") as handle:
-            data = handle.read(READ_CAP)
+            for raw in handle:
+                read += len(raw)
+                if read > READ_CAP:
+                    return
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    entry = json.loads(raw.decode("utf-8", errors="ignore"))
+                except ValueError:
+                    continue
+                if isinstance(entry, dict):
+                    yield entry
     except OSError:
         return
-    for raw in data.decode("utf-8", errors="ignore").splitlines():
-        raw = raw.strip()
-        if not raw:
-            continue
-        try:
-            entry = json.loads(raw)
-        except ValueError:
-            continue
-        if isinstance(entry, dict):
-            yield entry
 
 
 def claude_transcript_usage(path):
@@ -125,8 +129,12 @@ def codex_home():
 
 
 def codex_rollout(agent_id, started_at):
-    """The rollout file of Codex thread ``agent_id``, looked up on its start day and the next."""
-    if not agent_id or not all(c.isalnum() or c == "-" for c in agent_id):
+    """The rollout file of Codex thread ``agent_id``, looked up on its start day and the next.
+
+    Only a full thread id (36 characters, the shape the rollout file name ends in) is looked up: a
+    short id would match the tail of another thread's file and credit it with that thread's tokens.
+    """
+    if not isinstance(agent_id, str) or len(agent_id) != 36 or not all(c.isalnum() or c == "-" for c in agent_id):
         return None
     base = os.path.join(codex_home(), "sessions")
     days = []
@@ -310,7 +318,8 @@ def codex_child_rollout(parent_thread_id, agent_path, started_at):
 
     Found by its first line (``session_meta``: ``source.subagent.thread_spawn``) among regular
     ``rollout-*`` files of the spawn's day and the next that were written since the spawn, examining at
-    most :data:`CHILD_SCAN_FILES` a day. When the same task path was spawned more than once, the
+    most :data:`CHILD_SCAN_FILES` a day, oldest name first (a child's file is created right after its
+    spawn, so the earliest files written since are the likeliest). When the same task path was spawned more than once, the
     child whose own start is the first at or after ``started_at`` wins. ``None`` when none matches.
     """
     if not parent_thread_id or not isinstance(agent_path, str) or not agent_path:
@@ -354,3 +363,46 @@ def codex_child_rollout(parent_thread_id, agent_path, started_at):
             if began >= since and (best is None or began < best[0]):
                 best = (began, path)
     return best[1] if best else None
+
+
+def rollout_mark(path):
+    """``{"rollout_path", "rollout_offset"}``: where a parent rollout ends now, else ``None``.
+
+    Taken at a v2 spawn, before the child can have answered: only an answer after it can end that
+    agent, so a fast child is never missed and an earlier answer under a reused path never counts.
+    """
+    if not (isinstance(path, str) and path and os.path.isfile(path)):
+        return None
+    try:
+        return {"rollout_path": path, "rollout_offset": os.path.getsize(path)}
+    except OSError:
+        return None
+
+
+def codex_v2_matches(items, path, scan, ref_key, order_key):
+    """``(pairs, scan)``: which open v2 items the parent rollout's new ``FINAL_ANSWER`` lines end.
+
+    The one rule the task board and the execution trace share (ADR-0041, task-board spec): read from
+    the saved cursor, or from the oldest open mark when that is later; an answer ends the oldest open
+    item of its task path whose mark is at or before the answer's line, and each item at most once.
+    ``items`` are those whose spawn mark is in ``path``; ``pairs`` is ``[(item, answer)]``; ``scan`` is
+    the new cursor ``{"tx_path", "tx_offset"}`` (unchanged when nothing could be read).
+    """
+    readable = [i for i in items if i.get("rollout_path") == path]
+    if not readable or not (isinstance(path, str) and os.path.isfile(path)):
+        return [], scan
+    start = min(i.get("rollout_offset") or 0 for i in readable)
+    if isinstance(scan, dict) and scan.get("tx_path") == path and isinstance(scan.get("tx_offset"), int):
+        start = max(start, scan["tx_offset"])
+    answers, offset = codex_final_answers(path, start)
+    taken, pairs = set(), []
+    for answer in answers:
+        waiting = sorted(
+            (i for i in readable if id(i) not in taken and i.get(ref_key) == answer["author"]
+             and (i.get("rollout_offset") or 0) <= answer["offset"]),
+            key=lambda i: i.get(order_key) or 0,
+        )
+        if waiting:
+            taken.add(id(waiting[0]))
+            pairs.append((waiting[0], answer))
+    return pairs, {"tx_path": path, "tx_offset": offset}
