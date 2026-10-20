@@ -9,11 +9,11 @@ import { Hint } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Board } from './screens/Board.js';
 import { Catalog } from './screens/Catalog.js';
-import { Doctor } from './screens/Doctor.js';
 import { Integrations } from './screens/Integrations.js';
 import { Projects } from './screens/Projects.js';
+import { NavMenu, type NavMenuItem } from './NavMenu.js';
 import { NotificationBell } from './NotificationBell.js';
-import { AccountGate } from './account/AccountGate.js';
+import { AccountGate, useAppUnlocked } from './account/AccountGate.js';
 import { AccountMenu } from './account/AccountMenu.js';
 import { AccountProvider } from './account/AccountContext.js';
 import { Profile } from './account/Profile.js';
@@ -45,10 +45,11 @@ import type {
  * The shell: which CLI was resolved, what the compatibility handshake said, and the
  * screens.
  *
- * The header carries only what changes a decision on every screen: the store version (what
- * Projects compares against), whether a CLI was found at all, and the unsigned-build
- * warning. "Which `devteam` is this?" — path, source, contract, write actions — is answered
- * in full in the platform's native About window (ADR-0011) — see `main/about.ts`.
+ * The header carries the brand, the menu, the bell and the account. The versions — this
+ * app's and the harness's, which Projects compares against — and whether a CLI was found at
+ * all sit in the status bar at the bottom, on every screen. "Which `devteam` is this?" —
+ * path, source, contract, write actions — is answered in full in the platform's native
+ * About window (ADR-0011) — see `main/about.ts`.
  */
 export function App() {
   const [build, setBuild] = useState<BuildInfo | null>(null);
@@ -133,13 +134,26 @@ export function App() {
     void load();
   }, []);
 
+  // Which of the main area's screens is showing — decided once, so the header menu and the
+  // main area cannot disagree about whether the tabs are there.
+  const onboarding = shouldRun({ completed: onboardingDone, hasProjects });
+  const screen: 'loading' | 'load-error' | 'onboarding' | 'no-cli' | 'tabs' = busy
+    ? 'loading'
+    : loadError !== null
+      ? 'load-error'
+      : onboarding
+        ? 'onboarding'
+        : resolution === null || !resolution.found
+          ? 'no-cli'
+          : 'tabs';
+
   return (
     // ADR-0029: accounts are mandatory. The provider asks the CLI (`auth check`) once a CLI is
     // known to exist; the gate below decides what the answer lets the person see.
     <AccountProvider enabled={!busy && resolution !== null && resolution.found}>
       <div className="flex h-full flex-col">
         <header className="app-drag border-b bg-card/60 px-6 pt-8 pb-4">
-          <div className="no-drag flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <div className="no-drag flex flex-wrap items-center gap-x-3 gap-y-1">
             {/* The lockup with the slogan cropped off, not the symbol and not the full
                 composition. The guide warns against the slogan at a size that hurts its
                 legibility, which is why this row carried the symbol alone before —
@@ -161,23 +175,16 @@ export function App() {
                 scheme, an `alt` on either would leave the other scheme's heading unnamed. */}
             <h1 className="self-center">
               <span className="sr-only">dev-team-agents</span>
-              <img src={wordmarkLight} alt="" aria-hidden="true" className="h-7 w-auto dark:hidden" />
+              <img src={wordmarkLight} alt="" aria-hidden="true" className="h-9 w-auto dark:hidden" />
               <img
                 src={wordmarkDark}
                 alt=""
                 aria-hidden="true"
-                className="hidden h-7 w-auto mix-blend-screen dark:block"
+                className="hidden h-9 w-auto mix-blend-screen dark:block"
               />
             </h1>
-            {build !== null && !build.codeSigned ? <Badge variant="destructive">unsigned build</Badge> : null}
-            {build !== null ? <AppVersion version={build.appVersion} /> : null}
-            <CliLine
-              resolution={resolution}
-              busy={busy}
-              onRetry={() => void load()}
-              hideStore={!busy && shouldRun({ completed: onboardingDone, hasProjects })}
-            />
             <div className="ml-auto flex items-center gap-2 self-center">
+              {screen === 'tabs' ? <GatedNavMenu current={tab} onSelect={setTab} /> : null}
               <NotificationBell onOpenProject={openProject} />
               <AccountMenu onOpen={() => setTab('account')} />
             </div>
@@ -194,9 +201,9 @@ export function App() {
               search found nothing, and the user needs both facts on the same screen. */}
           <EnvironmentBanner environment={environment} busy={busy} />
 
-          {busy ? (
+          {screen === 'loading' ? (
             <Loading what="the first-run checks" />
-          ) : loadError !== null ? (
+          ) : screen === 'load-error' ? (
             <Alert ref={loadErrorRef} tabIndex={-1} variant="destructive" className="outline-hidden">
               <CircleAlert />
               <AlertTitle>The app could not finish its start-up checks</AlertTitle>
@@ -207,14 +214,14 @@ export function App() {
                 </Button>
               </AlertDescription>
             </Alert>
-          ) : shouldRun({ completed: onboardingDone, hasProjects }) ? (
+          ) : screen === 'onboarding' ? (
             <Onboarding
               cliFound={resolution !== null && resolution.found}
               onRetry={() => void load()}
               onFinished={() => void finishOnboarding()}
               onOpenAccount={() => setTab('account')}
             />
-          ) : resolution === null || !resolution.found ? (
+          ) : screen === 'no-cli' ? (
             <NoCli resolution={resolution} onRetry={() => void load()} />
           ) : (
             <AccountGate onOpenAccount={() => setTab('account')}>
@@ -223,11 +230,7 @@ export function App() {
                 <TabsList>
                   <TabsTrigger value="projects">Projects</TabsTrigger>
                   <TabsTrigger value="board">Board</TabsTrigger>
-                  <TabsTrigger value="catalog">Catalog</TabsTrigger>
-                  <TabsTrigger value="skills">Global Skills</TabsTrigger>
                   <TabsTrigger value="integrations">Integrations</TabsTrigger>
-                  <TabsTrigger value="doctor">Diagnosis</TabsTrigger>
-                  <TabsTrigger value="account">Account</TabsTrigger>
                 </TabsList>
                 {/* Kept mounted while another tab is shown: the project settings screen lives
                     inside this tab, and unmounting it would silently drop unsaved edits. */}
@@ -247,12 +250,15 @@ export function App() {
                 <TabsContent value="board" forceMount className="pt-4 data-[state=inactive]:hidden">
                   <Board active={tab === 'board'} />
                 </TabsContent>
-                <TabsContent value="catalog" className="pt-4">
+                {/* Catalog, Global Skills and Account have no trigger in the strip: the header
+                    menu and the avatar select them through the same `tab` state. Each panel is
+                    named here, since Radix would label it by a trigger that does not exist. */}
+                <TabsContent value="catalog" aria-label="Catalog" className="pt-4">
                   <ErrorBoundary label="The Catalog screen">
                     <Catalog />
                   </ErrorBoundary>
                 </TabsContent>
-                <TabsContent value="skills" className="pt-4">
+                <TabsContent value="skills" aria-label="Global Skills" className="pt-4">
                   <ErrorBoundary label="The Global Skills screen">
                     <Skills environment={environment} />
                   </ErrorBoundary>
@@ -263,12 +269,7 @@ export function App() {
                     <Integrations environment={environment} active={tab === 'integrations'} onAccountChanged={onAccountChanged} />
                   </ErrorBoundary>
                 </TabsContent>
-                <TabsContent value="doctor" className="pt-4">
-                  <ErrorBoundary label="The Diagnosis screen">
-                    <Doctor />
-                  </ErrorBoundary>
-                </TabsContent>
-                <TabsContent value="account" className="pt-4">
+                <TabsContent value="account" aria-label="Account" className="pt-4">
                   <ErrorBoundary label="The Account screen">
                     <Profile />
                   </ErrorBoundary>
@@ -277,6 +278,13 @@ export function App() {
             </AccountGate>
           )}
         </main>
+        <StatusBar
+          build={build}
+          resolution={resolution}
+          busy={busy}
+          onRetry={() => void load()}
+          hideHarness={screen === 'onboarding'}
+        />
         {/* Write results land here, outside every layout — see `toasts.tsx`. */}
         <Toaster position="bottom-right" richColors />
       </div>
@@ -284,9 +292,46 @@ export function App() {
   );
 }
 
+/** The screens reached from the header menu rather than from a tab. */
+const MENU_ITEMS: NavMenuItem[] = [
+  { value: 'catalog', label: 'Catalog' },
+  { value: 'skills', label: 'Global Skills' },
+];
+
+/** The header menu, only while the account gate lets the app through — never a way around it. */
+function GatedNavMenu({ current, onSelect }: { current: string; onSelect: (value: string) => void }) {
+  return useAppUnlocked() ? <NavMenu items={MENU_ITEMS} current={current} onSelect={onSelect} /> : null;
+}
+
 /**
- * This app's own version, beside the store's — two different things, both named so the
- * header never shows a bare number. A pre-release (see `isPrerelease`) carries a "beta"
+ * The status bar fixed to the bottom of every screen: this app's version and the harness's,
+ * or why the harness version is not known yet.
+ */
+function StatusBar({
+  build,
+  resolution,
+  busy,
+  onRetry,
+  hideHarness,
+}: {
+  build: BuildInfo | null;
+  resolution: CliResolution | null;
+  busy: boolean;
+  onRetry: () => void;
+  hideHarness: boolean;
+}) {
+  return (
+    // A top-level <footer>, outside any sectioning element, so it is the page's `contentinfo`.
+    <footer className="flex shrink-0 items-center gap-4 border-t bg-card/60 px-6 py-1.5">
+      {build !== null ? <AppVersion version={build.appVersion} /> : null}
+      <CliLine resolution={resolution} busy={busy} onRetry={onRetry} hideHarness={hideHarness} />
+    </footer>
+  );
+}
+
+/**
+ * This app's own version, beside the harness's — two different things, both named so the
+ * status bar never shows a bare number. A pre-release (see `isPrerelease`) carries a "beta"
  * badge: the build is for testing, and the badge goes away on its own at the first
  * stable version.
  */
@@ -309,13 +354,13 @@ function CliLine({
   resolution,
   busy,
   onRetry,
-  hideStore,
+  hideHarness,
 }: {
   resolution: CliResolution | null;
   busy: boolean;
   onRetry: () => void;
-  /** The first run shows no store version: it is the framework's vocabulary (ADR-0030 section 3). */
-  hideStore: boolean;
+  /** The first run shows no harness version: an internal version number means nothing there (ADR-0030 section 3). */
+  hideHarness: boolean;
 }) {
   if (busy || resolution === null) {
     return <span className="text-xs text-muted-foreground">Looking for a devteam CLI…</span>;
@@ -331,9 +376,9 @@ function CliLine({
       </span>
     );
   }
-  if (hideStore) return null;
+  if (hideHarness) return null;
   return (
-    <span className="text-xs text-muted-foreground">store {resolution.cli.storeVersion ?? 'not installed'}</span>
+    <span className="text-xs text-muted-foreground">harness {resolution.cli.storeVersion ?? 'not installed'}</span>
   );
 }
 

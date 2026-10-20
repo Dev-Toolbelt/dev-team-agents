@@ -48,7 +48,7 @@ export function aboutCredits(facts: AboutFacts, resolution: CliResolution | null
   } else {
     const { cli } = resolution;
     lines.push(`devteam CLI: ${cli.path} (via ${SOURCE_LABEL[cli.source]})`);
-    lines.push(`Store version: ${cli.storeVersion ?? 'not installed'}`);
+    lines.push(`Harness version: ${cli.storeVersion ?? 'not installed'}`);
     lines.push(`JSON contract: ${cli.jsonContract ?? 'unknown'}`);
   }
   lines.push(

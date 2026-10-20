@@ -999,46 +999,6 @@ export interface EnvironmentReport {
   readonly withheld: readonly { readonly command: string; readonly reason: string }[];
 }
 
-// ── the app's own health ──────────────────────────────────────────────────────
-
-/**
- * A finding about **this app**, in `DoctorFinding`'s shape so one table renders both.
- *
- * `devteam doctor` diagnoses the store, the machine, the registry and a project. It says
- * nothing about the app, and it must not: ADR-0015 makes the app a pure client of the CLI,
- * so teaching the CLI to check its callers would invert that dependency. The app's own
- * preconditions were therefore observable — `EnvironmentReport`, `CliResolution` and the
- * `compat` handshake each carry the raw facts — but nothing *evaluated* them, so the one
- * question a user actually asks ("is this app healthy, and is it too old?") had no answer
- * anywhere in the UI.
- *
- * `level` and `category` are narrower here than in `DoctorFinding`, whose strings come from
- * the CLI and are widened on purpose because the app must render a category it has never
- * heard of. These are the app's own, so they are exhaustive and the compiler checks them.
- */
-export interface AppFinding {
-  readonly level: 'ok' | 'warn' | 'fail';
-  readonly category: 'cli' | 'version' | 'declaration' | 'settings' | 'schemas' | 'actions';
-  readonly message: string;
-  readonly hint?: string;
-}
-
-/**
- * The evaluated verdict on this app, derived — never fetched.
- *
- * Computed by a pure function from values the bridge already returns, so this adds **no
- * IPC channel, no preload surface and no new spawn**. A self-check that needed its own
- * channel would have widened the attack surface of the contract to answer a question the
- * renderer could already answer from what it holds.
- *
- * `status` is the worst `level` present, so an all-`ok` report is `ok` and a single `fail`
- * makes the whole report `fail`.
- */
-export interface AppHealth {
-  readonly status: 'ok' | 'warn' | 'fail';
-  readonly findings: readonly AppFinding[];
-}
-
 // ── global skills ─────────────────────────────────────────────────────────────
 
 /** The providers whose user-level skill directories `devteam skills` manages. */
@@ -1250,7 +1210,6 @@ export interface DevteamBridge {
   readonly catalogSummary: () => Promise<OperationResult<CatalogSummary>>;
   readonly catalogListing: (kind: CatalogKind) => Promise<OperationResult<CatalogListing>>;
   readonly catalogEntry: (name: string) => Promise<OperationResult<CatalogDetail>>;
-  readonly doctor: () => Promise<OperationResult<DoctorReport>>;
   /** `doctor --machine`: git, Python and the providers, each finding with its fix. */
   readonly doctorMachine: () => Promise<OperationResult<DoctorReport>>;
   /** Runs the fix of finding `index` of the last `doctorMachine` answer, only when that finding is auto-fixable. */
@@ -1887,7 +1846,6 @@ export const CHANNELS = {
   catalogSummary: 'devteam:catalog-summary',
   catalogListing: 'devteam:catalog-listing',
   catalogEntry: 'devteam:catalog-entry',
-  doctor: 'devteam:doctor',
   doctorMachine: 'devteam:doctor-machine',
   runMachineFix: 'devteam:run-machine-fix',
   detectProject: 'devteam:detect-project',

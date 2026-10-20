@@ -8,6 +8,29 @@ import { Blocked, blockedReason, type BlockedReason } from './Blocked.js';
 import { SignIn } from './SignIn.js';
 import { currentTranslator, type StringKey } from './strings.js';
 
+type Account = ReturnType<typeof useAccount>;
+
+/**
+ * The gate's one decision, shared by `AccountGate` and `useAppUnlocked` so the header menu
+ * can never disagree with what the gate shows: `open` and `warn` let the app through
+ * (`warn` under a banner), `loading` and `locked` do not.
+ */
+function verdictOf(view: Account['view'], mode: Account['mode']): 'loading' | 'open' | 'warn' | 'locked' {
+  if (view.kind === 'loading') return 'loading';
+  if (view.kind === 'entitled') return 'open';
+  return mode === 'enforce' ? 'locked' : 'warn';
+}
+
+/**
+ * Whether the gate below lets the app itself through, for controls outside it (the header
+ * menu) that must not offer screens the gate is hiding.
+ */
+export function useAppUnlocked(): boolean {
+  const { view, mode } = useAccount();
+  const verdict = verdictOf(view, mode);
+  return verdict === 'open' || verdict === 'warn';
+}
+
 /**
  * Accounts are mandatory (ADR-0029): when `auth check` says the account is not entitled the
  * app shows only the account screens. The CLI's `gate_mode` decides how hard that is:
@@ -23,19 +46,22 @@ export function AccountGate({ children, onOpenAccount }: { children: ReactNode; 
   const account = useAccount();
   const [dismissed, setDismissed] = useState<string | null>(null);
   const { view } = account;
+  const verdict = verdictOf(view, account.mode);
+  // The `view.kind` halves below are already implied by `verdict`; they are there so the
+  // compiler narrows `view` for the blocked-reason lookup.
 
-  if (view.kind === 'loading') {
+  if (verdict === 'loading' || view.kind === 'loading') {
     return (
       <p role="status" className="py-8 text-sm text-muted-foreground">
         {t('account.loading')}
       </p>
     );
   }
-  if (view.kind === 'entitled') return <>{children}</>;
+  if (verdict === 'open' || view.kind === 'entitled') return <>{children}</>;
 
   const reason: BlockedReason = view.kind === 'unknown' ? 'error' : blockedReason(view.status);
 
-  if (account.mode === 'enforce') {
+  if (verdict === 'locked') {
     return reason === 'signed_out' ? <SignIn onSignedIn={account.apply} /> : <Blocked reason={reason} />;
   }
 

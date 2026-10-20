@@ -560,7 +560,7 @@ export function BulkActionBar({
         tooltip={
           syncBlocked
             ? 'Another sync is running; this waits for it to finish'
-            : 'Re-apply the store version to each selected project, one after another'
+            : 'Re-apply the harness version to each selected project, one after another'
         }
         disabled={running || syncBlocked}
         onClick={onSync}

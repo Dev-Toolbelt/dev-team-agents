@@ -305,7 +305,7 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'catalog show': { operands: 1, flags: { '--path': 'value' } },
   // `--no-project`: "check the store only, ignoring the cwd". Never `--reassign-identity`.
   // `--machine`: the machine prerequisites only (git, Python, providers), each with its fix.
-  doctor: { operands: 0, flags: { '--no-project': 'bare', '--machine': 'bare' } },
+  doctor: { operands: 0, flags: { '--machine': 'bare' } },
   // The one positional is the directory to bind — the path `chooseProjectDirectory`
   // offered, never one the renderer typed. See `main/ipc.ts` -> `resolveProject`.
   bind: { operands: 1, flags: { '--provider': 'repeatable', '--mode': 'value', '--pin': 'value' } },
@@ -740,15 +740,6 @@ export function validateEntryName(name: unknown): string | null {
 }
 
 // ── doctor ────────────────────────────────────────────────────────────────────
-
-export function doctor(context: CliContext): Promise<OperationResult<DoctorReport>> {
-  // `--no-project`: the CLI's own switch for "check the store only, ignoring the cwd".
-  // Without it the project findings changed with the directory the app happened to be
-  // launched from — `ok` from inside a bound project, `warn` with "/ is not a bound
-  // project" from a Finder launch. This build has no project picker, so "no project" is
-  // the true answer and the Diagnosis screen states it.
-  return run(context, ['doctor', '--no-project'], (body) => parseDoctor(body, false));
-}
 
 /**
  * `devteam doctor --machine` (ADR-0030): git, Python and the providers, each finding with the

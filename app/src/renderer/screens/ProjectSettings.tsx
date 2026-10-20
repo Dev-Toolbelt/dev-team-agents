@@ -388,7 +388,7 @@ export function ProjectSettings({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {loaded !== null ? <Badge variant="outline">store {loaded.version}</Badge> : null}
+          {loaded !== null ? <Badge variant="outline">harness {loaded.version}</Badge> : null}
           <WriteButton
             command="pin"
             environment={environment}
@@ -755,7 +755,7 @@ const ORIGIN_LABELS: Record<string, { label: string; hint: string; className: st
   },
   defaults: {
     label: 'Default',
-    hint: 'The value this store version ships with.',
+    hint: 'The value this harness version ships with.',
     className: 'text-muted-foreground',
   },
   'consent-withheld': {

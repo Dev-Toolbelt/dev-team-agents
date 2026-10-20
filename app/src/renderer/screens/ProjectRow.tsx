@@ -294,7 +294,7 @@ export function ProjectRow({
             environment={environment}
             variant="outline"
             size="xs"
-            tooltip={syncBlocked ? 'Another sync is running' : "Re-apply this project's store version to its files"}
+            tooltip={syncBlocked ? 'Another sync is running' : "Re-apply this project's harness version to its files"}
             disabled={syncState.phase === 'pending' || syncBlocked}
             onClick={onSync}
           >

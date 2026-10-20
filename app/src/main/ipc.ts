@@ -31,7 +31,6 @@ import {
   catalogEntry,
   catalogListing,
   catalogSummary,
-  doctor,
   doctorMachine,
   installSkill,
   credentialsLocalInit,
@@ -490,8 +489,8 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
    *
    * Every gated command needs the same two checks context() does not make on its own —
    * a resolvable CLI, and a declaration that was actually written — so this is the one
-   * place both are made, rather than each handler repeating the `doctor` handler's
-   * pre-write-action shape by hand.
+   * place both are made, rather than each handler repeating that pre-write-action shape
+   * by hand.
    */
   async function gatedContext(
     command: string,
@@ -756,14 +755,6 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     const ctx = await context();
     if (ctx === null) return NO_CLI;
     return catalogEntry(ctx, typeof name === 'string' ? name : '');
-  });
-
-  handle(CHANNELS.doctor, async () => {
-    // With no declaration the framework's write gate has nothing to bind, so this would
-    // run ungated; the app refuses and says why rather than running it anyway.
-    const gated = await gatedContext('doctor');
-    if (!gated.ready) return gated.problem;
-    return doctor(gated.ctx);
   });
 
   // ── first run (ADR-0030) ────────────────────────────────────────────────────

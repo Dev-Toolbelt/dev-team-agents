@@ -69,7 +69,6 @@ const bridge: DevteamBridge = {
   // says it did — a type is a compile-time claim and this is a process boundary.
   catalogListing: (kind: CatalogKind) => ipcRenderer.invoke(CHANNELS.catalogListing, String(kind)),
   catalogEntry: (name: string) => ipcRenderer.invoke(CHANNELS.catalogEntry, String(name)),
-  doctor: () => ipcRenderer.invoke(CHANNELS.doctor),
 
   // First run (ADR-0030). A fix is named by index and a launch by folder: the command each
   // runs is the one main kept from the CLI's own answer, so nothing a command is made of

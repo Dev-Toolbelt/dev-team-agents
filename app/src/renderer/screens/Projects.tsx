@@ -299,12 +299,6 @@ export function Projects({
           <h2 id="projects-heading" className="text-base font-semibold">
             Projects
           </h2>
-          <p className="text-sm text-muted-foreground">
-            {projects.length === 0
-              ? 'None yet.'
-              : `${projects.length} project${projects.length === 1 ? '' : 's'} bound to this store.`}
-            {current !== null ? ` Store version ${current} is current.` : ' No store version is current.'}
-          </p>
           {/* A reload no longer replaces the table — see `useOperation`'s `refreshing`. This
               is how the refresh stays visible without unmounting the row that a write action
               just wrote a notice into. `aria-live` so it is announced rather than only seen. */}
@@ -367,7 +361,7 @@ export function Projects({
                   environment={environment}
                   variant="outline"
                   size="xs"
-                  tooltip="Re-apply the current store version to every bound project that is not pinned"
+                  tooltip="Re-apply the current harness version to every bound project that is not pinned"
                   disabled={syncAll.state.phase === 'pending' || syncs.busy}
                   onClick={() => {
                     void syncAll.run().then((result) => {
