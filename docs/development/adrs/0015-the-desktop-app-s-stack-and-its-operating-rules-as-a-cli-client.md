@@ -286,6 +286,16 @@ This is a sequencing decision, not a scope cut:
 > substance of § 6 holds — nothing that can be gated runs undeclared — but "every invocation" is not
 > what the code does, and an audit that greps for the flag should know which two calls it will not
 > find it on.
+>
+> **Amended 2026-10-19 — the Diagnosis screen is removed from the app.** The shell was reworked
+> (status bar for the app and harness versions, a header menu for Catalog and Global Skills) and the
+> Diagnosis tab was dropped at the user's request, together with what only it used: the renderer's
+> `Doctor` screen, the app self-check (`app/src/cli/selfCheck.ts`) and the `doctor` IPC channel that
+> ran `devteam doctor --no-project`. The decision above ("the Diagnosis screen stays") is superseded
+> on that point only. `doctor` is still the one `compat.MUTATING` command the app runs, now solely as
+> `doctor --machine` from the first-run machine check (ADR-0030), behind the same `gatedContext`
+> declaration gate; the command-not-invocation classification and everything else in this amendment
+> stand. Store diagnosis is left to the CLI (`devteam doctor`).
 
 ## Consequences
 

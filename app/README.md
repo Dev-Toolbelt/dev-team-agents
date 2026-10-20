@@ -74,8 +74,9 @@ Finding a file named `devteam` is not enough: the app runs `devteam version --js
 each candidate and rejects anything that answers without a `compat` block, so another
 program with the same name cannot be mistaken for the CLI.
 
-The header shows the app's own version (`app 0.1.0`, from `app/package.json`) beside the
-store's (`store 2.49.0-dev.1`). Both are semantic versions on separate lines; the app's is bumped
+The status bar at the bottom of every screen shows the app's own version (`app 0.1.0`, from
+`app/package.json`) beside the harness's (`harness 2.49.0-dev.1`, the store version the CLI
+reports). Both are semantic versions on separate lines; the app's is bumped
 with the app change it describes (`CLAUDE-md/versioning.md`). While the app version is a pre-release — `0.x`, or any version
 with a suffix such as `-beta.1` — a **beta** badge sits next to it; the first stable
 version the release step stamps drops it with no other change (`src/shared/appVersion.ts`).
@@ -139,12 +140,12 @@ person's initials, never a picture).
   `needs_online_check`, `invalid`) sees one plain sentence, "Check again" and "Sign out", and that
   their projects are untouched.
 - **Gate mode** — in `enforce` the sign-in or blocked screen **replaces** the app; in `warn` the
-  app stays usable under a dismissible banner that opens the Account tab. `gate_mode` is compiled
+  app stays usable under a dismissible banner that opens the Account screen. `gate_mode` is compiled
   into the CLI's `auth-config.json` and reported in the `auth status` and `auth check` documents;
   the app reads it from there and acts as `warn` until the first document arrives. The check
   re-runs when the window regains focus (at most once a minute) and every 15 minutes, so a trial
   that ends or a ban is seen without a restart; a failed check shows a neutral "Account" button.
-- **Account tab** (and the initials button in the header) — display name, email change (a code to
+- **Account screen** (opened from the initials button in the header; it has no tab) — display name, email change (a code to
   the new address, optionally one to the old), linked providers (link and unlink, which asks for a
   second click; the last one cannot be removed), password change, sign out, and account deletion, which needs the typed word
   "delete" and a fresh emailed code before anything is sent.
@@ -383,7 +384,7 @@ closed and reopened. It is read-only: nothing here edits, moves or deletes a tas
 
 ## The Global Skills screen
 
-The **Global Skills** tab manages the *global* (user-level) skills of Claude Code, Codex and opencode:
+The **Global Skills** screen, opened from the header menu, manages the *global* (user-level) skills of Claude Code, Codex and opencode:
 list, inspect, install and remove. It is a client of `devteam skills list|show|install|remove`
 and writes only through `install` and `remove`, both in `compat.MUTATING`, so they are
 withheld like every other write action when the schema declaration could not be written.
