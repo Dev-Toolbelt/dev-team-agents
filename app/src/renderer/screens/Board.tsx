@@ -26,10 +26,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Hint } from '@/components/ui/tooltip';
-import { BackNav } from '../BackNav.js';
 import { Empty } from '../Problem.js';
 import { toastLinkRefused } from '../toasts.js';
 import { useOnDeactivate } from '../useOnDeactivate.js';
+import { NO_TABS, closeTab, moveTab, openTab, pruneTabs, type BoardTabs as TabsState } from '../boardTabs.js';
+import { BoardTabs, panelId, tabId } from './BoardTabs.js';
 import {
   PERIODS,
   basename,
@@ -118,7 +119,7 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
   const [feed, setFeed] = useState<BoardFeed>(EMPTY_FEED);
   const [names, setNames] = useState<Readonly<Record<string, string>>>({});
   const [settings, setSettings] = useState<BoardSettings>(DEFAULT_SETTINGS);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [tabs, setTabs] = useState<TabsState>(NO_TABS);
   const [period, setPeriod] = useState<Period>('7d');
   const [refreshing, setRefreshing] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -126,7 +127,8 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
   const [projectGone, setProjectGone] = useState(false);
   const loadFailedRef = useRef(false);
   // The overview only shows whole-minute figures (counts, a period cutoff); the seconds live in the kanban.
-  const now = useNow(clock, 60, active);
+  // Its clock runs only while its tab is on show, and re-samples when shown again.
+  const now = useNow(clock, 60, active && tabs.active === null);
 
   useEffect(() => {
     let live = true;
@@ -171,9 +173,9 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
     };
   }, []);
 
-  // Leaving the tab leaves the project: coming back shows the board, not the last kanban.
+  // Leaving the app tab keeps the open project tabs and the one on show, as a browser would;
+  // only the transient notices go.
   useOnDeactivate(active, () => {
-    setSelected(null);
     setProjectGone(false);
     setProblem(null);
   });
@@ -209,16 +211,21 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
     }
   }
 
-  const project = selected === null ? undefined : feed.projects.find((each) => each.project_id === selected);
+  const projectsById = useMemo(() => new Map(feed.projects.map((each) => [each.project_id, each])), [feed.projects]);
+  const openProjects = tabs.order.flatMap((id) => {
+    const each = projectsById.get(id);
+    return each === undefined ? [] : [each];
+  });
 
-  // A project that loses all its tasks leaves the kanban for good: a later snapshot that
-  // brings it back must not pull the user into it again.
+  // A project that loses all its tasks has its tab closed for good: a later snapshot that
+  // brings it back must not reopen it. The overview says why when that tab was on show.
   useEffect(() => {
-    if (selected !== null && project === undefined && !loadFailed && feed.status !== 'starting') {
-      setSelected(null);
-      setProjectGone(true);
-    }
-  }, [selected, project, loadFailed, feed.status]);
+    if (loadFailed || feed.status === 'starting') return;
+    const pruned = pruneTabs(tabs, new Set(projectsById.keys()));
+    if (pruned.tabs === tabs) return;
+    setTabs(pruned.tabs);
+    if (pruned.closedActive) setProjectGone(true);
+  }, [tabs, projectsById, loadFailed, feed.status]);
 
   return (
     <section aria-labelledby="board-heading" className="space-y-4">
@@ -265,33 +272,59 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
 
       <StreamNotice feed={feed} />
 
-      {projectGone && selected === null ? (
-        <p className="text-sm text-muted-foreground" role="status">
-          That project no longer has tasks.
-        </p>
-      ) : null}
-
-      {loadFailed ? null : selected !== null && project !== undefined ? (
-        <Kanban
-          project={project}
-          name={boardProjectName(project, names)}
-          period={period}
-          settings={settings}
-          clock={clock}
-          active={active}
-          onBack={() => setSelected(null)}
-        />
-      ) : (
-        <Overview
-          feed={feed}
-          names={names}
-          period={period}
-          now={now}
-          onOpen={(projectId) => {
-            setProjectGone(false);
-            setSelected(projectId);
-          }}
-        />
+      {loadFailed ? null : (
+        <>
+          <BoardTabs
+            tabs={openProjects.map((each) => ({ id: each.project_id, name: boardProjectName(each, names) }))}
+            active={tabs.active}
+            onSelect={(id) => {
+              setProjectGone(false);
+              setTabs((each) => (id === null ? { ...each, active: null } : openTab(each, id)));
+            }}
+            onClose={(id) => setTabs((each) => closeTab(each, id))}
+            onMove={(id, toIndex) => setTabs((each) => moveTab(each, id, toIndex))}
+          />
+          <div role="tabpanel" id={panelId(null)} aria-labelledby={tabId(null)} hidden={tabs.active !== null} className="space-y-4">
+            {projectGone && tabs.active === null ? (
+              <p className="text-sm text-muted-foreground" role="status">
+                That project no longer has tasks.
+              </p>
+            ) : null}
+            <Overview
+              feed={feed}
+              names={names}
+              period={period}
+              now={now}
+              onOpen={(projectId) => {
+                setProjectGone(false);
+                setTabs((each) => openTab(each, projectId));
+              }}
+            />
+          </div>
+          {openProjects.map((each) => {
+            const shown = tabs.active === each.project_id;
+            // Every open kanban stays mounted so its filters survive switching tabs; only the
+            // one on show keeps its clocks running.
+            return (
+              <div
+                key={each.project_id}
+                role="tabpanel"
+                id={panelId(each.project_id)}
+                aria-labelledby={tabId(each.project_id)}
+                hidden={!shown}
+              >
+                <HiddenAwareKanban
+                  project={each}
+                  name={boardProjectName(each, names)}
+                  period={period}
+                  settings={settings}
+                  clock={clock}
+                  active={active && shown}
+                />
+              </div>
+            );
+          })}
+        </>
       )}
     </section>
   );
@@ -660,6 +693,10 @@ function CountsRow({ counts }: { counts: BoardCounts }) {
 
 // ── the project kanban ────────────────────────────────────────────────────────
 
+// A kanban that is not on show skips re-rendering on feed, period and settings changes; it
+// catches up when shown again, because `active` changes then. Its filters live in its state.
+const HiddenAwareKanban = memo(Kanban, (prev, next) => !prev.active && !next.active);
+
 function Kanban({
   project,
   name,
@@ -667,7 +704,6 @@ function Kanban({
   settings,
   clock,
   active,
-  onBack,
 }: {
   project: BoardProject;
   name: string;
@@ -675,7 +711,6 @@ function Kanban({
   settings: BoardSettings;
   clock: () => number;
   active: boolean;
-  onBack: () => void;
 }) {
   // Filtering (period cutoff, done retention) and the In Review, To do and Done cards only
   // need a fresh reading once a minute; the per-second tick below exists for in-progress
@@ -687,6 +722,7 @@ function Kanban({
   const [sessionId, setSessionId] = useState<string>('all');
   const [hideOldDone, setHideOldDone] = useState(true);
   const [onlyFindings, setOnlyFindings] = useState(false);
+  const sessionSelectId = useId();
   const hideId = useId();
   const findingsId = useId();
   const findingsHintId = `${findingsId}-hint`;
@@ -728,17 +764,16 @@ function Kanban({
 
   return (
     <div className="space-y-4">
-      <header className="space-y-3">
-        <BackNav to="Board" onBack={onBack} />
+      <header>
         <h3 className="text-base font-semibold">{name}</h3>
       </header>
 
       <div className="flex flex-wrap items-center gap-3">
-        <label className="text-sm" htmlFor="kanban-session">
+        <label className="text-sm" htmlFor={sessionSelectId}>
           Session
         </label>
         <select
-          id="kanban-session"
+          id={sessionSelectId}
           value={effectiveSession}
           onChange={(event) => setSessionId(event.target.value)}
           className={SELECT_CLASS}
