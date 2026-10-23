@@ -59,3 +59,8 @@ There was also no way to limit a rule to part of the codebase, and no way to reg
 | Render scoped rules to `.claude/rules/` | Claude-only; breaks provider parity, and the registry would still be needed for the lint |
 | Keep exit 1 and print to stdout | No provider surfaces either to the agent at Stop; the finding would stay invisible |
 | Exit 2 on every Stop while a violation exists | A violation the turn cannot clear would re-block after every reply — the failure `03e-adr-gap-check.sh` already hit |
+
+> **Amendment (2026-10-20) — the registry lives under the docs write root.** `reuse-lint.sh` and the
+> `03c` Stop hook read `<docs-root>/development/reuse-guidelines.md`, where `<docs-root>` is the first
+> `context_paths` entry (ADR-0008, resolved by `scripts/lib/docs-root.sh`), `docs` by default. The
+> registry's format and the gate are unchanged.

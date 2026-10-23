@@ -71,6 +71,7 @@ dev-team-agents/
 │   │   │                            (update.sh, rollback.sh, the auto-update hook path)
 │   │   ├── telemetry-guard.sh     ← single fail-closed definition of _telemetry_enabled
 │   │   ├── python.sh              ← resolves `python3` to a working Python 3.9+ (Windows Git Bash: python / py -3)
+│   │   ├── docs_root.py · docs-root.sh ← single resolver of the docs write root (context_paths[0])
 │   │   ├── provider-ownership.sh  ← which paths the opencode/Codex installers may write (ADR-0022)
 │   │   └── ensure-claude-framework.sh
 │   ├── helpers/     ← SHIPS and runs in user projects — telemetry-send.sh (called by install.sh, update.sh)

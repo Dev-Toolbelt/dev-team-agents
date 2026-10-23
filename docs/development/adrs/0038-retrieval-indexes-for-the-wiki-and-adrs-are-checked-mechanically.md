@@ -47,3 +47,11 @@ Agents never load `docs/` whole. They read two retrieval indexes and open only w
 ### Negative
 - Repositories with existing debt see one WARN banner the first time a session touches their docs. This repository had it too (keyword drift in 21 wiki entries, no ADR index); both were cleared in the change that introduced the lint.
 - `new-adr.sh` refuses to run through a symlinked ADR directory, which a project may have set up deliberately.
+
+> **Amendment (2026-10-20) — the paths are under the docs write root, not a literal `docs/`.**
+> Decisions 1 and 3 name `docs/development/adrs/`, `docs/adr/`, `docs/wiki/` and `docs/development/`.
+> They now mean those folders under the project's docs write root, the first `context_paths` entry
+> (ADR-0008), resolved by `scripts/lib/docs_root.py` (bash: `scripts/lib/docs-root.sh`) and `docs` by
+> default. `new-adr.sh --dir`, `index_lint.py` and the `03g` touched-path gate all ask that resolver,
+> so a project whose write root is `.claude/docs` keeps its ADRs and wiki there. A symlink anywhere
+> on the way to the ADR directory is still refused.

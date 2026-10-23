@@ -120,3 +120,30 @@ pre-existing one, because that file's owner never saw a prompt for a key added l
 > - `bind --json` and `sync --json` gain `preferences_import` (`null` when there was no file), an
 >   additive key under ADR-0014.
 
+
+> **Amendment (2026-10-20) — who may reorder `context_paths`, and when: `.claude/docs` only.**
+> Migrations before this amendment kept a pre-root install's `.claude/docs/` where it was and
+> appended it to `context_paths` after `docs`, so a project without a `docs/` folder ended up with a
+> write root that did not exist while its knowledge sat in the read-only second entry. Two writers
+> now order that entry, both limited to `.claude/docs` (`project.PRE_ROOT_DOCS_DIR`) — any other
+> extra entry is read-only by design and is never moved or reordered:
+>
+> - **`devteam migrate`, without asking, only while adding the entry.** When the current write root
+>   (`context_paths[0]`, `docs` by default) does not exist and `.claude/docs` is a real directory
+>   (never a symlink), it is added **first** (`project.ensure(write_root=…)`) and the missing entry
+>   stays second, read as empty. The preview's action line says so. This is the "keep" outcome, chosen
+>   because the migrate run already has consent to bind and moves no user files.
+> - **`/devteam:health-check`, only after the user's answer**, for a project migrated before this
+>   amendment (`DOCS_ROOT_MISMATCH`): move the files to `docs/` (recommended, dropping the entry) or
+>   keep `.claude/docs` first. It writes only through `devteam.project` — `load`, `validate`, then
+>   `jsonio.write_json_atomic` with `PROJECT_FILE_MODE`. The procedure lives in
+>   `skills/shared/setup-health-check/references/fix-patterns.md` § Docs root relocation.
+>
+> **The shipped scripts honour the write root.** `scripts/lib/docs_root.py` (wrapped for bash by
+> `scripts/lib/docs-root.sh`) is the one resolver: the first `context_paths` entry as
+> `project.load` validates it, `docs` when there is no `project.json`, Python or helper, or when the
+> entry carries control characters or backslashes. `new-adr.sh` (and so `--dir` and the `03e`/`03h`
+> hooks), `index-lint.sh` with its `03g` hook, and `reuse-lint.sh` with its `03c` hook read the wiki,
+> the ADR directory and `development/` under it. `spec-lint` (`docs/specs/`), the sprint backlog
+> (`devteam backlog`, `docs/backlog/`) and `docs/reports/` still assume `docs/` — the next step for a
+> project whose write root is elsewhere.
