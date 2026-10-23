@@ -663,7 +663,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4 # not SHA-pinned: same as ci.yml; pin after verifying the SHA
+      - uses: actions/setup-node@v6 # not SHA-pinned: same as ci.yml; pin after verifying the SHA
         with:
           node-version-file: app/.nvmrc
 
@@ -720,7 +720,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4 # not SHA-pinned: same as ci.yml; pin after verifying the SHA
+      - uses: actions/setup-node@v6 # not SHA-pinned: same as ci.yml; pin after verifying the SHA
         with:
           node-version-file: app/.nvmrc
           cache: npm
@@ -812,7 +812,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4 # not SHA-pinned: same as ci.yml; pin after verifying the SHA
+      - uses: actions/setup-node@v6 # not SHA-pinned: same as ci.yml; pin after verifying the SHA
         with:
           node-version-file: app/.nvmrc
           cache: npm
