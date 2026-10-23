@@ -83,9 +83,8 @@ class LocalCredsCase(StoreTestCase):
 class TemplateTest(LocalCredsCase):
     def test_template_is_lean_and_free_form(self):
         template = cl.load_template()
-        self.assertEqual(set(template), {"work_feedback_active", "work_feedback_interval_minutes", "example"})
-        self.assertIs(template["work_feedback_active"], True)
-        self.assertEqual(template["work_feedback_interval_minutes"], 5)
+        # The work-feedback settings default when absent, so the template leaves them out.
+        self.assertEqual(set(template), {"example"})
         self.assertNotIn('"agents"', cl.TEMPLATE_FILE.read_text())
         production = template["example"]["production"]
         self.assertIs(production[cl.PRODUCTION_KEY], True)
@@ -97,6 +96,10 @@ class TemplateTest(LocalCredsCase):
             with self.subTest(keys=sorted(blank)):
                 self.assertTrue(cl.is_blank_template(json.dumps(blank, indent=4).encode()))
         self.assertFalse(cl.is_blank_template(json.dumps(SAMPLE | {"x": 1}).encode()))
+
+    def test_the_template_with_work_feedback_settings_still_counts_as_blank(self):
+        earlier = {"work_feedback_active": True, "work_feedback_interval_minutes": 5} | cl.load_template()
+        self.assertTrue(cl.is_blank_template(json.dumps(earlier).encode()))
 
     def test_blank_template_detection_ignores_formatting(self):
         self.assertTrue(cl.is_blank_template(self.blank_text().encode()))
