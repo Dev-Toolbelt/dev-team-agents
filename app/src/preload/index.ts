@@ -200,6 +200,7 @@ const bridge: DevteamBridge = {
       ops.map((entry) => ({
         op: entry.op,
         pointer: String(entry.pointer),
+        ...(entry.op === 'move' ? { from: String(entry.from) } : {}),
         ...('value' in entry ? { value: entry.value } : {}),
       })),
     ),

@@ -3,6 +3,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { credentialsOpsProblem } from '../src/cli/operations.js';
 import { boardSettingsProblem } from '../src/main/settings.js';
 import { CHANNELS, type DevteamBridge } from '../src/shared/api.js';
 
@@ -30,5 +31,24 @@ describe('preload bridge — setBoardSettings', () => {
     const payload = call[1];
     expect(payload).toEqual({ staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 48 });
     expect(boardSettingsProblem(payload)).toBeNull();
+  });
+});
+
+describe('preload bridge — credentialsLocalPatch', () => {
+  it('keeps `from` on a move, and main accepts the payload', async () => {
+    const hash = 'a'.repeat(64);
+    await exposed!.credentialsLocalPatch('p1' as never, hash, [
+      { op: 'move', from: '/example', pointer: '/api' },
+      { op: 'set', pointer: '/api/url', value: 'https://staging.test' },
+      { op: 'unset', pointer: '/api/username' },
+    ]);
+    const call = (invoke.mock.calls as unknown[][]).find((args) => args[0] === CHANNELS.credentialsLocalPatch)!;
+    const ops = call[3];
+    expect(ops).toEqual([
+      { op: 'move', from: '/example', pointer: '/api' },
+      { op: 'set', pointer: '/api/url', value: 'https://staging.test' },
+      { op: 'unset', pointer: '/api/username' },
+    ]);
+    expect(credentialsOpsProblem(ops)).toBeNull();
   });
 });
