@@ -179,21 +179,30 @@ def load(root):
     return validate(data, source=str(project_file(root)))
 
 
-def ensure(root, context_paths=None, project_id=None):
+def _with_write_root(paths, write_root):
+    """``paths`` with ``write_root`` first and the rest in their order."""
+    if not write_root:
+        return paths
+    return [write_root] + [item for item in paths if item != write_root]
+
+
+def ensure(root, context_paths=None, project_id=None, write_root=None):
     """Create ``project.json`` when absent; never regenerate an existing one.
 
     Returns ``(data, created)``. An existing identity is preserved, which is
     what makes ``devteam bind`` idempotent. ``project_id`` is the id to restore
     when the file is absent but the registry already knows this path; it is
-    ignored when the file exists.
+    ignored when the file exists. ``write_root``, when given, becomes the first
+    ``context_paths`` entry — the folder agents write to.
     """
     existing = load(root)
     if existing is not None:
-        if context_paths:
+        if context_paths or write_root:
             merged = list(existing.get("context_paths", DEFAULT_CONTEXT_PATHS))
-            for item in context_paths:
+            for item in context_paths or []:
                 if item not in merged:
                     merged.append(item)
+            merged = _with_write_root(merged, write_root)
             if merged != existing.get("context_paths"):
                 existing["context_paths"] = merged
                 validate(existing, source=str(project_file(root)))
@@ -212,7 +221,7 @@ def ensure(root, context_paths=None, project_id=None):
         "schema": SCHEMA,
         "project_id": project_id or str(uuid.uuid4()),
         "layout": born_layout,
-        "context_paths": list(context_paths or DEFAULT_CONTEXT_PATHS),
+        "context_paths": _with_write_root(list(context_paths or DEFAULT_CONTEXT_PATHS), write_root),
     }
     validate(data, source=str(project_file(root)))
     jsonio.write_json_atomic(

@@ -434,6 +434,25 @@ def _context_paths_added(project_root, found):
     return [] if project.PRE_ROOT_DOCS_DIR in current else [project.PRE_ROOT_DOCS_DIR]
 
 
+def _docs_write_root(project_root, added):
+    """``.claude/docs`` when it is being added and the current write root does not exist.
+
+    Appended after a missing ``docs/``, the pre-root docs would be a read-only extra while
+    agents write to a folder the project does not have. A symlinked ``.claude/docs`` is never
+    promoted: as the write root it would send agents' writes wherever the link points.
+    """
+    if project.PRE_ROOT_DOCS_DIR not in added:
+        return None
+    if (Path(project_root) / project.PRE_ROOT_DOCS_DIR).is_symlink():
+        return None
+    return None if (Path(project_root) / _current_write_root(project_root)).is_dir() else project.PRE_ROOT_DOCS_DIR
+
+
+def _current_write_root(project_root):
+    identity = project.load(project_root)
+    return ((identity or {}).get("context_paths") or project.DEFAULT_CONTEXT_PATHS)[0]
+
+
 def _git_tracked_many(project_root, relatives):
     """The subset of ``relatives`` (files or directories) git has in the index."""
     relatives = sorted(set(relatives))
@@ -550,8 +569,16 @@ def plan(root=None, provider_names=None, mode="auto", pin=None):
             "move the memory in {} to {} (kept, not quarantined; `devteam upgrade` then "
             "takes it into the store)".format(move["from"], move["to"])
         )
+    write_root = _docs_write_root(project_root, added)
     for path in added:
-        actions.append("add {} to context_paths (the docs stay where they are)".format(path))
+        if path == write_root:
+            actions.append(
+                "add {} to context_paths as the write root — there is no {} folder "
+                "(the docs stay where they are; /devteam:health-check can move them to "
+                "docs/ later)".format(path, _current_write_root(project_root))
+            )
+        else:
+            actions.append("add {} to context_paths (the docs stay where they are)".format(path))
     for rel, _group in vendored_paths(found):
         actions.append("move {} into the data-store quarantine".format(rel))
     if copies:
@@ -721,7 +748,12 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
         else None
     )
     identity, _created = project.ensure(
-        project_root, context_paths=context_paths, project_id=preview["restores_identity"]
+        project_root,
+        context_paths=context_paths,
+        project_id=preview["restores_identity"],
+        # Recomputed rather than carried in the preview (whose --json shape is fixed): the
+        # memory moves above never touch docs/, .claude/docs or a context path.
+        write_root=_docs_write_root(project_root, preview["context_paths_added"]),
     )
     project_id = identity["project_id"]
     if (
