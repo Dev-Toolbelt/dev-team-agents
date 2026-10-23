@@ -778,7 +778,8 @@ def _apply_move(doc, source, target, op):
 
     Renaming a key whose value ``show`` hides is only possible here: the app never holds
     that value. Refuses a missing source, an existing destination (it would overwrite a
-    value the caller may not be able to see), and a move into the value's own subtree.
+    value the caller may not be able to see), and a move into the value's own subtree. A value
+    hidden by its key stays hidden where it lands.
     """
     if not source or not target:
         raise UsageError("a move takes a key, not the whole document")
@@ -790,8 +791,53 @@ def _apply_move(doc, source, target, op):
             "{!r} already exists".format(op["pointer"]),
             hint="Remove it first, or move to another name.",
         )
+    hidden = _hidden_by_key(doc, source, value)
+    keep_hidden = hidden and not _hidden_by_name(target[-1], value)
+    if hidden and target[-1] in (SECRETS_KEY, PRODUCTION_KEY):
+        raise UsageError("{!r}: a hidden value cannot become a reserved key".format(op["pointer"]))
     _apply_unset(doc, source, op["from"])
     _apply_set(doc, target, value, op["pointer"])
+    if keep_hidden:
+        _mark_moved(doc, target, op["pointer"])
+
+
+def _hidden_by_name(key, value):
+    return not isinstance(value, (dict, list)) and _secret_ish(key)
+
+
+def _hidden_by_key(doc, tokens, value):
+    """Whether ``show`` hides ``value`` at ``tokens`` because of a key on its path, not the value itself.
+
+    A mark anywhere above hides the whole subtree, so every object on the way is checked.
+    """
+    node = doc
+    for token in tokens:
+        if isinstance(node, dict):
+            marked = _marked(node)
+            if marked is not None and token in marked:
+                return True
+            node = node.get(token)
+        elif isinstance(node, list):
+            node = node[int(token)]
+    parent_is_object = isinstance(_lookup(doc, tokens[:-1], ""), dict)
+    return parent_is_object and _hidden_by_name(tokens[-1], value)
+
+
+def _mark_moved(doc, target, pointer):
+    """Mark the moved key in its new ``$secrets``, so a move never makes ``show`` reveal it."""
+    parent = _lookup(doc, target[:-1], pointer)
+    if not isinstance(parent, dict):
+        raise UsageError("{!r}: a hidden value cannot move into a list".format(pointer))
+    if SECRETS_KEY in parent and _marked(parent) is None:
+        raise UsageError(
+            "{!r}: the destination's {} list is malformed".format(pointer, SECRETS_KEY),
+            hint="Fix that list first, then move the value.",
+        )
+    names = set(parent.get(SECRETS_KEY, []))
+    names.add(target[-1])
+    if _marked({SECRETS_KEY: sorted(names)}) is None:
+        raise UsageError("{!r}: that name cannot be marked as a secret".format(pointer))
+    parent[SECRETS_KEY] = sorted(names)
 
 
 def _validate_ops(ops):

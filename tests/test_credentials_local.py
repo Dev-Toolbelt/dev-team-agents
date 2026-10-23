@@ -453,6 +453,53 @@ class PatchTest(LocalCredsCase):
         self.assertEqual(state["data"]["jira"]["token"], MARKED)
         self.assertNotIn(PLANTED, json.dumps(state))
 
+    def test_move_keeps_a_hidden_value_hidden_under_a_plain_name(self):
+        self.put(self.target, json.dumps({"app": {"password": PLANTED, "token": PLANTED, "$secrets": ["token"]}}))
+        state = cl.apply_patch(
+            self.root,
+            [
+                {"op": "move", "from": "/app/password", "pointer": "/app/note"},
+                {"op": "move", "from": "/app/token", "pointer": "/other"},
+            ],
+            cl.show(self.root)["hash"],
+        )
+        self.assertNotIn(PLANTED, json.dumps(state))
+        self.assertEqual(self.on_disk()["app"]["$secrets"], ["note", "token"])
+        self.assertEqual(self.on_disk()["$secrets"], ["other"])
+
+    def test_move_keeps_hidden_what_a_mark_higher_up_hides(self):
+        self.put(
+            self.target,
+            json.dumps({"app": {"creds": {"user": PLANTED}}, "codes": [PLANTED], "$secrets": ["app", "codes"]}),
+        )
+        state = cl.apply_patch(
+            self.root,
+            [
+                {"op": "move", "from": "/app/creds/user", "pointer": "/plain"},
+                {"op": "move", "from": "/codes/0", "pointer": "/first"},
+            ],
+            cl.show(self.root)["hash"],
+        )
+        self.assertNotIn(PLANTED, json.dumps(state))
+        self.assertEqual(self.on_disk()["$secrets"], ["app", "codes", "first", "plain"])
+
+    def test_move_of_a_plain_value_marks_nothing(self):
+        self.put(self.target, json.dumps({"app": {"url": "u"}}))
+        cl.apply_patch(self.root, [{"op": "move", "from": "/app/url", "pointer": "/app/home"}], cl.show(self.root)["hash"])
+        self.assertEqual(self.on_disk(), {"app": {"home": "u"}})
+
+    def test_move_refuses_to_expose_a_hidden_value(self):
+        self.put(
+            self.target,
+            json.dumps({"app": {"password": PLANTED}, "list": [], "bad": {"$secrets": "x"}}),
+        )
+        before = self.target.read_bytes()
+        fresh = cl.show(self.root)["hash"]
+        for pointer in ("/list/-", "/bad/note", "/app/" + "n" * 300, "/app/$secrets", "/app/$production"):
+            with self.subTest(pointer=pointer[:20]), self.assertRaises(UsageError):
+                cl.apply_patch(self.root, [{"op": "move", "from": "/app/password", "pointer": pointer}], fresh)
+        self.assertEqual(self.target.read_bytes(), before)
+
     def test_move_refuses_a_missing_source_an_existing_target_and_its_own_subtree(self):
         before = self.target.read_bytes()
         for op in (
