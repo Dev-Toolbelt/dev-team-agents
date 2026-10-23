@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Enforces docs/development/reuse-guidelines.md against the working diff.
+# Enforces <docs>/development/reuse-guidelines.md against the working diff — <docs> is
+# the docs write root, context_paths[0] (lib/docs-root.sh; `docs` by default).
 # No-op (exit 0) when the registry does not exist — absence means no rule
 # registered, not a failure. See skills/shared/reuse-guidelines/SKILL.md.
 #
@@ -31,7 +32,13 @@ for arg in "$@"; do
 done
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-REGISTRY="$REPO_ROOT/docs/development/reuse-guidelines.md"
+DOCS_ROOT="docs"
+# shellcheck source=scripts/lib/docs-root.sh
+DOCS_ROOT_SH="$(dirname "${BASH_SOURCE[0]}")/lib/docs-root.sh"
+if [ -f "$DOCS_ROOT_SH" ] && . "$DOCS_ROOT_SH"; then
+    DOCS_ROOT="$(devteam_docs_root "$REPO_ROOT")"
+fi
+REGISTRY="$REPO_ROOT/$DOCS_ROOT/development/reuse-guidelines.md"
 [ -f "$REGISTRY" ] || exit 0
 cd "$REPO_ROOT"
 

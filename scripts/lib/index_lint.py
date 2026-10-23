@@ -5,10 +5,12 @@ Usage: python3 index_lint.py <repo-root>
 Covers the two indexes agents grep instead of opening documents, plus the lifecycle line of plan
 documents:
 
-- docs/wiki/README.md — skills/shared/docs-sync/references/wiki-format.md
+- <docs>/wiki/README.md — skills/shared/docs-sync/references/wiki-format.md
 - <adr-dir>/README.md — skills/shared/adr/SKILL.md § ADR Index; the ADR directory is resolved the
-  way scripts/new-adr.sh resolves it (docs/development/adrs/, else docs/adr/)
-- docs/development/plan-*.md — skills/shared/docs-sync/SKILL.md § Document Lifecycle
+  way scripts/new-adr.sh resolves it (<docs>/development/adrs/, else <docs>/adr/)
+- <docs>/development/plan-*.md — skills/shared/docs-sync/SKILL.md § Document Lifecycle
+
+<docs> is the project's docs write root, the first `context_paths` entry (docs_root.py).
 
 Prints one line per finding (`[index-lint] ERROR|WARN <path>: <message>`) and exits 1 when any
 ERROR was found, 0 otherwise. Only an index row pointing at a file that does not exist is an
@@ -21,6 +23,10 @@ backlog would teach people to ignore the hook.
 import os
 import re
 import sys
+
+# -I leaves this file's directory off sys.path; it is the shipped lib dir, docs_root.py beside it.
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import docs_root  # noqa: E402
 
 MIN_TERMS = 4
 ADR_NAME_RE = re.compile(r"^(?:(?:adr|ADR)-)?[0-9]+-.*\.md$")
@@ -125,8 +131,8 @@ def index_rows(text):
     return rows
 
 
-def check_wiki(root, report):
-    wiki = os.path.join(root, "docs", "wiki")
+def check_wiki(root, report, docs="docs"):
+    wiki = os.path.join(root, docs, "wiki")
     if not inside(root, wiki):
         return
     index_path = os.path.join(wiki, "README.md")
@@ -136,7 +142,7 @@ def check_wiki(root, report):
     rows = index_rows(index)
     for entry, cells in sorted(rows.items()):
         if not plain_entry(entry):
-            report.add("WARN", index_path, "row {} is not a path inside docs/wiki/".format(safe(entry)))
+            report.add("WARN", index_path, "row {} is not a path inside {}/wiki/".format(safe(entry), docs))
             continue
         if not exists_exactly(wiki, entry):
             report.add("ERROR", index_path, "row {} points at a file that does not exist".format(safe(entry)))
@@ -160,15 +166,15 @@ def check_wiki(root, report):
             elif term_count(tags.group(1)) < MIN_TERMS:
                 report.add("WARN", path, "**Tags:** has fewer than {} terms".format(MIN_TERMS))
             if entry not in rows:
-                report.add("WARN", path, "no row in docs/wiki/README.md — the keyword lookup never finds it")
+                report.add("WARN", path, "no row in {}/wiki/README.md — the keyword lookup never finds it".format(docs))
             elif tags and rows[entry] and normalize(rows[entry][0]) != normalize(tags.group(1)):
                 report.add("WARN", path, "index Keywords differ from the entry's **Tags:**")
 
 
-def adr_dir(root):
+def adr_dir(root, docs="docs"):
     """The directory scripts/new-adr.sh resolves: the first that holds ADRs, else the
     first that exists."""
-    found = [os.path.join(root, *c) for c in (("docs", "development", "adrs"), ("docs", "adr"))]
+    found = [os.path.join(root, docs, *c) for c in (("development", "adrs"), ("adr",))]
     found = [path for path in found if inside(root, path)]
     for path in found:
         if any(ADR_NAME_RE.match(name) for name in os.listdir(path)):
@@ -176,8 +182,8 @@ def adr_dir(root):
     return found[0] if found else None
 
 
-def check_adrs(root, report):
-    directory = adr_dir(root)
+def check_adrs(root, report, docs="docs"):
+    directory = adr_dir(root, docs)
     if directory is None:
         return
     adrs = sorted(n for n in os.listdir(directory) if ADR_NAME_RE.match(n) and regular(os.path.join(directory, n)))
@@ -205,8 +211,8 @@ def check_adrs(root, report):
             report.add("WARN", os.path.join(directory, name), "no row in the ADR index")
 
 
-def check_plans(root, report):
-    directory = os.path.join(root, "docs", "development")
+def check_plans(root, report, docs="docs"):
+    directory = os.path.join(root, docs, "development")
     if not inside(root, directory):
         return
     for name in sorted(os.listdir(directory)):
@@ -227,9 +233,10 @@ def main(argv):
         return 2
     root = os.path.abspath(argv[1])
     report = Report(root)
-    check_wiki(root, report)
-    check_adrs(root, report)
-    check_plans(root, report)
+    docs = docs_root.write_root(root)
+    check_wiki(root, report, docs)
+    check_adrs(root, report, docs)
+    check_plans(root, report, docs)
     for line in report.lines:
         print(line)
     return 1 if report.errors else 0

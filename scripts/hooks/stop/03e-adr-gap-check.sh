@@ -39,7 +39,21 @@ fi
 # session that had just added one — a false positive aimed at the person who did the
 # right thing. `scripts/new-adr.sh` (see `adr_files` and the ADR_DIR resolution) owns
 # the scheme list and the two directories; keep this in step with it.
-if printf '%s\n' "$DEVTEAM_TOUCHED_PATHS" | grep -qE '(^|/)docs/(development/adrs|adr)/((adr|ADR)-)?[0-9]+[^/]*\.md$'; then
+# The directory comes from new-adr.sh --dir, which follows the project's docs write
+# root (context_paths[0]). Only when it cannot answer are the two default locations
+# under docs/ accepted — a stale docs/ ADR in a project that writes elsewhere is not one.
+ADR_NAME='((adr|ADR)-)?[0-9]+[^/]*\.md$'
+ADR_DIR=""
+NEW_ADR="$(dirname "${BASH_SOURCE[0]}")/../../new-adr.sh"
+[ -f "$NEW_ADR" ] && ADR_DIR="$(cd "$REPO_ROOT" && bash "$NEW_ADR" --dir 2>/dev/null || true)"
+DOCS_ROOT_SH="$(dirname "${BASH_SOURCE[0]}")/../../lib/docs-root.sh"
+# shellcheck source=scripts/lib/docs-root.sh
+if [ -n "$ADR_DIR" ] && [ -f "$DOCS_ROOT_SH" ] && . "$DOCS_ROOT_SH"; then
+    ADR_PATTERN="^$(devteam_regex_escape "$ADR_DIR")/$ADR_NAME"
+else
+    ADR_PATTERN="(^|/)docs/(development/adrs|adr)/$ADR_NAME"
+fi
+if printf '%s\n' "$DEVTEAM_TOUCHED_PATHS" | grep -qE "$ADR_PATTERN"; then
     exit 0
 fi
 
@@ -86,7 +100,7 @@ if [ "$NEW_DEP" = 1 ] || [ "$NEW_MIGRATION" = 1 ] || [ "$NEW_PROVIDER_CONFIG" = 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  This session touched a signal that often warrants an ADR
  (new dependency, schema migration, or provider config)
- but added no new ADR file (docs/development/adrs/ or docs/adr/).
+ but added no new ADR file (in the directory `new-adr.sh --dir` prints).
 
  This is a heuristic, not a rule — false positives are
  expected. If this decision is hard to reverse, affects

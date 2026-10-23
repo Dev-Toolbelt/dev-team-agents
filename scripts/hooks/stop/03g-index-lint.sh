@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Stop sub-script: runs scripts/index-lint.sh when the session touched the wiki,
-# the ADR directory or docs/development/ — see scripts/lib/index_lint.py and
+# the ADR directory or development/ under the docs write root (context_paths[0],
+# scripts/lib/docs_root.py; `docs` by default) — see scripts/lib/index_lint.py and
 # skills/shared/docs-sync/references/wiki-format.md.
 #
 # An ERROR exits 2 on every Stop until it is fixed: Claude Code and Codex continue
@@ -13,7 +14,13 @@ set -euo pipefail
 [ "${DEVTEAM_NO_CHANGES:-0}" = "1" ] && exit 0
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-[ -d "$REPO_ROOT/docs" ] || exit 0
+# shellcheck source=scripts/lib/docs-root.sh
+DOCS_ROOT_SH="$(dirname "${BASH_SOURCE[0]}")/../../lib/docs-root.sh"
+[ -f "$DOCS_ROOT_SH" ] || exit 0
+. "$DOCS_ROOT_SH"
+DOCS_ROOT="$(devteam_docs_root "$REPO_ROOT")"
+[ -d "$REPO_ROOT/$DOCS_ROOT" ] || exit 0
+DOCS_ROOT_RE="$(devteam_regex_escape "$DOCS_ROOT")"
 
 LIB_DIR="$(dirname "${BASH_SOURCE[0]}")/../lib"
 if [ "${DEVTEAM_TOUCHED_COMPUTED:-0}" != "1" ]; then
@@ -21,7 +28,7 @@ if [ "${DEVTEAM_TOUCHED_COMPUTED:-0}" != "1" ]; then
     . "$LIB_DIR/touched-paths.sh"
     DEVTEAM_TOUCHED_PATHS="$(devteam_compute_touched_paths || true)"
 fi
-grep -qE '(^|/)docs/(wiki|adr|development)/' <<<"${DEVTEAM_TOUCHED_PATHS:-}" || exit 0
+grep -qE "(^|/)docs/(wiki|adr|development)/|^$DOCS_ROOT_RE/(wiki|adr|development)/" <<<"${DEVTEAM_TOUCHED_PATHS:-}" || exit 0
 
 # Only the lint shipped beside this hook — never a project's own copy
 # (lib/shipped-lint.sh).

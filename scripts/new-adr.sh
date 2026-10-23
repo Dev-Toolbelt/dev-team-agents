@@ -11,21 +11,39 @@ set -euo pipefail
 TITLE="$(printf '%s' "${1:-}" | tr -d '\000-\037')"
 
 # The ADR directory is resolved here and nowhere else — skills/shared/adr/SKILL.md
-# § File Location points every reader at `--dir`. docs/development/adrs/ is the
-# default; a project that already keeps its ADRs in docs/adr/ is followed rather
-# than forked into a second series, which is how numbers collided before.
+# § File Location points every reader at `--dir`. It lives under the project's docs
+# write root, the first `context_paths` entry (lib/docs_root.py; `docs` when there is
+# no project.json, no Python or no helper beside this script). <root>/development/adrs/
+# is the default; a project that already keeps its ADRs in <root>/adr/ is followed
+# rather than forked into a second series, which is how numbers collided before.
 # A symlinked directory is never followed: a cloned repository could otherwise
 # send the new ADR and its index row anywhere on disk. index_lint.py:adr_dir()
 # applies the same rule, so the writer and the checker agree on the directory.
+DOCS_ROOT="docs"
+# shellcheck source=scripts/lib/docs-root.sh
+DOCS_ROOT_SH="$(dirname "${BASH_SOURCE[0]}")/lib/docs-root.sh"
+if [ -f "$DOCS_ROOT_SH" ] && . "$DOCS_ROOT_SH"; then
+    DOCS_ROOT="$(devteam_docs_root "$PWD")"
+fi
 real_dir() { [ -d "$1" ] && [ ! -L "$1" ]; }
-for d in docs docs/development docs/development/adrs docs/adr; do
+SYMLINK_CHECK=""
+IFS='/' read -r -a DOCS_PARTS <<<"$DOCS_ROOT"
+for part in "${DOCS_PARTS[@]}"; do
+    [ -n "$part" ] || continue
+    SYMLINK_CHECK="${SYMLINK_CHECK:+$SYMLINK_CHECK/}$part"
+    if [ -L "$SYMLINK_CHECK" ]; then
+        echo "Error: $SYMLINK_CHECK is a symlink — refusing to read or write ADRs through it." >&2
+        exit 1
+    fi
+done
+for d in "$DOCS_ROOT/development" "$DOCS_ROOT/development/adrs" "$DOCS_ROOT/adr"; do
     if [ -L "$d" ]; then
         echo "Error: $d is a symlink — refusing to read or write ADRs through it." >&2
         exit 1
     fi
 done
 # The directory that already holds ADRs wins; an empty one does not, or an empty
-# docs/development/adrs/ would fork a populated docs/adr/ into a second series.
+# <root>/development/adrs/ would fork a populated <root>/adr/ into a second series.
 has_adrs() {
     local f
     real_dir "$1" || return 1
@@ -34,14 +52,14 @@ has_adrs() {
     done
     return 1
 }
-if has_adrs "docs/development/adrs"; then
-    ADR_DIR="docs/development/adrs"
-elif has_adrs "docs/adr"; then
-    ADR_DIR="docs/adr"
-elif real_dir "docs/development/adrs" || ! real_dir "docs/adr"; then
-    ADR_DIR="docs/development/adrs"
+if has_adrs "$DOCS_ROOT/development/adrs"; then
+    ADR_DIR="$DOCS_ROOT/development/adrs"
+elif has_adrs "$DOCS_ROOT/adr"; then
+    ADR_DIR="$DOCS_ROOT/adr"
+elif real_dir "$DOCS_ROOT/development/adrs" || ! real_dir "$DOCS_ROOT/adr"; then
+    ADR_DIR="$DOCS_ROOT/development/adrs"
 else
-    ADR_DIR="docs/adr"
+    ADR_DIR="$DOCS_ROOT/adr"
 fi
 INDEX="$ADR_DIR/README.md"
 

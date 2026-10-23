@@ -2,19 +2,25 @@
 # Checks the retrieval indexes (wiki, ADRs) and plan lifecycle lines — see
 # scripts/lib/index_lint.py for the rule homes it checks.
 # Exit 1 on any ERROR, 0 otherwise (WARN lines included). No-op (exit 0) when
-# docs/ does not exist, no Python 3.9+ is available, or the lint itself fails.
+# the docs write root (context_paths[0], lib/docs_root.py) does not exist, no Python 3.9+
+# is available, or the lint itself fails.
 set -euo pipefail
 
 QUIET=0
 [ "${1:-}" = "--quiet" ] && QUIET=1
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-[ -d "$REPO_ROOT/docs" ] || exit 0
 
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" && pwd)"
 # shellcheck source=scripts/lib/python.sh
 . "$LIB_DIR/python.sh" 2>/dev/null || true
 command -v python3 >/dev/null 2>&1 || exit 0
+DOCS_ROOT="docs"
+# shellcheck source=scripts/lib/docs-root.sh
+if [ -f "$LIB_DIR/docs-root.sh" ] && . "$LIB_DIR/docs-root.sh"; then
+    DOCS_ROOT="$(devteam_docs_root "$REPO_ROOT")"
+fi
+[ -d "$REPO_ROOT/$DOCS_ROOT" ] || exit 0
 
 STATUS=0
 # -I: no PYTHONPATH, user site-packages or working-directory imports.
