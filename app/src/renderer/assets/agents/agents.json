@@ -1,0 +1,362 @@
+{
+  "product-analyst": {
+    "label": {
+      "en": "Product Analyst",
+      "pt-BR": "Analista de Produto"
+    },
+    "description": {
+      "en": "Turns a request into closed requirements",
+      "pt-BR": "Transforma um pedido em requisitos fechados"
+    },
+    "category": "planning",
+    "tier": "reasoning",
+    "model": "opus",
+    "hue": 262,
+    "colors": {
+      "light": "#935af6",
+      "base": "#7f24db",
+      "dark": "#5b1782"
+    },
+    "icon": "product-analyst.svg"
+  },
+  "software-architect": {
+    "label": {
+      "en": "Software Architect",
+      "pt-BR": "Arquiteto de Software"
+    },
+    "description": {
+      "en": "System design, trade-offs and ADRs",
+      "pt-BR": "Design do sistema, trade-offs e ADRs"
+    },
+    "category": "planning",
+    "tier": "reasoning",
+    "model": "opus",
+    "hue": 240,
+    "colors": {
+      "light": "#5a5af6",
+      "base": "#3c24db",
+      "dark": "#341782"
+    },
+    "icon": "software-architect.svg"
+  },
+  "database-specialist": {
+    "label": {
+      "en": "Database Specialist",
+      "pt-BR": "Especialista em Banco"
+    },
+    "description": {
+      "en": "Schemas, migrations and query tuning",
+      "pt-BR": "Schemas, migrations e tuning de queries"
+    },
+    "category": "planning",
+    "tier": "backend-exec",
+    "model": "sonnet",
+    "hue": 284,
+    "colors": {
+      "light": "#cd5af6",
+      "base": "#c324db",
+      "dark": "#821782"
+    },
+    "icon": "database-specialist.svg"
+  },
+  "backend-developer": {
+    "label": {
+      "en": "Backend Developer",
+      "pt-BR": "Dev Backend"
+    },
+    "description": {
+      "en": "APIs, services and business logic",
+      "pt-BR": "APIs, serviços e regras de negócio"
+    },
+    "category": "implementation",
+    "tier": "backend-exec",
+    "model": "sonnet",
+    "hue": 205,
+    "colors": {
+      "light": "#5ab5f6",
+      "base": "#2476db",
+      "dark": "#173982"
+    },
+    "icon": "backend-developer.svg"
+  },
+  "frontend-developer": {
+    "label": {
+      "en": "Frontend Developer",
+      "pt-BR": "Dev Frontend"
+    },
+    "description": {
+      "en": "Screens, components and UI flows",
+      "pt-BR": "Telas, componentes e fluxos de UI"
+    },
+    "category": "implementation",
+    "tier": "frontend",
+    "model": "sonnet",
+    "hue": 186,
+    "colors": {
+      "light": "#5ae7f6",
+      "base": "#24b0db",
+      "dark": "#175b82"
+    },
+    "icon": "frontend-developer.svg"
+  },
+  "mobile-developer": {
+    "label": {
+      "en": "Mobile Developer",
+      "pt-BR": "Dev Mobile"
+    },
+    "description": {
+      "en": "iOS, Android and cross-platform apps",
+      "pt-BR": "iOS, Android e apps multiplataforma"
+    },
+    "category": "implementation",
+    "tier": "backend-exec",
+    "model": "sonnet",
+    "hue": 222,
+    "colors": {
+      "light": "#5a89f6",
+      "base": "#2442db",
+      "dark": "#171b82"
+    },
+    "icon": "mobile-developer.svg"
+  },
+  "ui-ux-designer": {
+    "label": {
+      "en": "UI/UX Designer",
+      "pt-BR": "Designer UI/UX"
+    },
+    "description": {
+      "en": "Design system and UX flows",
+      "pt-BR": "Design system e fluxos de UX"
+    },
+    "category": "implementation",
+    "tier": "frontend",
+    "model": "sonnet",
+    "hue": 304,
+    "colors": {
+      "light": "#f65aec",
+      "base": "#db24b7",
+      "dark": "#82175e"
+    },
+    "icon": "ui-ux-designer.svg"
+  },
+  "seo-specialist": {
+    "label": {
+      "en": "SEO Specialist",
+      "pt-BR": "Especialista SEO"
+    },
+    "description": {
+      "en": "Search, Web Vitals and AI answers",
+      "pt-BR": "Busca, Web Vitals e respostas de IA"
+    },
+    "category": "implementation",
+    "tier": "frontend",
+    "model": "sonnet",
+    "hue": 80,
+    "colors": {
+      "light": "#c2f65a",
+      "base": "#86db24",
+      "dark": "#428217"
+    },
+    "icon": "seo-specialist.svg"
+  },
+  "devops-specialist": {
+    "label": {
+      "en": "DevOps Specialist",
+      "pt-BR": "Especialista DevOps"
+    },
+    "description": {
+      "en": "CI/CD, Docker and infrastructure",
+      "pt-BR": "CI/CD, Docker e infraestrutura"
+    },
+    "category": "implementation",
+    "tier": "backend-exec",
+    "model": "sonnet",
+    "hue": 168,
+    "colors": {
+      "light": "#5af6d7",
+      "base": "#24dbcf",
+      "dark": "#177b82"
+    },
+    "icon": "devops-specialist.svg"
+  },
+  "code-reviewer": {
+    "label": {
+      "en": "Code Reviewer",
+      "pt-BR": "Revisor de Código"
+    },
+    "description": {
+      "en": "Routes the review, one final verdict",
+      "pt-BR": "Roteia a revisão, um veredito final"
+    },
+    "category": "quality",
+    "tier": "backend-exec",
+    "model": "sonnet",
+    "hue": 340,
+    "colors": {
+      "light": "#f65a8e",
+      "base": "#db2448",
+      "dark": "#82171e"
+    },
+    "icon": "code-reviewer.svg"
+  },
+  "backend-reviewer": {
+    "label": {
+      "en": "Backend Reviewer",
+      "pt-BR": "Revisor Backend"
+    },
+    "description": {
+      "en": "Contracts, queries, auth, concurrency",
+      "pt-BR": "Contratos, queries, auth, concorrência"
+    },
+    "category": "quality",
+    "tier": "backend-exec",
+    "model": "sonnet",
+    "hue": 322,
+    "colors": {
+      "light": "#f65abd",
+      "base": "#db2480",
+      "dark": "#82173e"
+    },
+    "icon": "backend-reviewer.svg"
+  },
+  "frontend-reviewer": {
+    "label": {
+      "en": "Frontend Reviewer",
+      "pt-BR": "Revisor Frontend"
+    },
+    "description": {
+      "en": "Components, a11y, state, bundle size",
+      "pt-BR": "Componentes, a11y, estado, bundle"
+    },
+    "category": "quality",
+    "tier": "frontend",
+    "model": "sonnet",
+    "hue": 22,
+    "colors": {
+      "light": "#f6935a",
+      "base": "#db8024",
+      "dark": "#825b17"
+    },
+    "icon": "frontend-reviewer.svg"
+  },
+  "qa-specialist": {
+    "label": {
+      "en": "QA Specialist",
+      "pt-BR": "Especialista QA"
+    },
+    "description": {
+      "en": "Behavior against acceptance criteria",
+      "pt-BR": "Comportamento vs. critérios de aceite"
+    },
+    "category": "quality",
+    "tier": "backend-exec",
+    "model": "sonnet",
+    "hue": 40,
+    "colors": {
+      "light": "#f6c25a",
+      "base": "#dbb724",
+      "dark": "#827b17"
+    },
+    "icon": "qa-specialist.svg"
+  },
+  "security-specialist": {
+    "label": {
+      "en": "Security Specialist",
+      "pt-BR": "Especialista Segurança"
+    },
+    "description": {
+      "en": "OWASP, secrets, LGPD/GDPR audits",
+      "pt-BR": "OWASP, segredos, auditoria LGPD/GDPR"
+    },
+    "category": "quality",
+    "tier": "reasoning",
+    "model": "opus",
+    "hue": 0,
+    "colors": {
+      "light": "#f65a5a",
+      "base": "#db3c24",
+      "dark": "#823417"
+    },
+    "icon": "security-specialist.svg"
+  },
+  "backend-test-specialist": {
+    "label": {
+      "en": "Backend Tester",
+      "pt-BR": "Tester Backend"
+    },
+    "description": {
+      "en": "Unit, integration and E2E tests",
+      "pt-BR": "Testes unitários, integração e E2E"
+    },
+    "category": "quality",
+    "tier": "backend-exec",
+    "model": "sonnet",
+    "hue": 145,
+    "colors": {
+      "light": "#5af69b",
+      "base": "#24db89",
+      "dark": "#178260"
+    },
+    "icon": "backend-test-specialist.svg"
+  },
+  "frontend-test-specialist": {
+    "label": {
+      "en": "Frontend Tester",
+      "pt-BR": "Tester Frontend"
+    },
+    "description": {
+      "en": "Component and browser flow tests",
+      "pt-BR": "Testes de componente e fluxos no browser"
+    },
+    "category": "quality",
+    "tier": "frontend",
+    "model": "sonnet",
+    "hue": 122,
+    "colors": {
+      "light": "#5af65f",
+      "base": "#24db42",
+      "dark": "#178237"
+    },
+    "icon": "frontend-test-specialist.svg"
+  },
+  "technical-writer": {
+    "label": {
+      "en": "Technical Writer",
+      "pt-BR": "Redator Técnico"
+    },
+    "description": {
+      "en": "Docs, changelogs and runbooks",
+      "pt-BR": "Docs, changelogs e runbooks"
+    },
+    "category": "enablement",
+    "tier": "repetitive",
+    "model": "haiku",
+    "hue": 58,
+    "colors": {
+      "light": "#f6f15a",
+      "base": "#c9db24",
+      "dark": "#698217"
+    },
+    "icon": "technical-writer.svg"
+  },
+  "setup-assistant": {
+    "label": {
+      "en": "Setup Assistant",
+      "pt-BR": "Assistente de Setup"
+    },
+    "description": {
+      "en": "Onboards the project, keeps it healthy",
+      "pt-BR": "Integra o projeto e mantém saudável"
+    },
+    "category": "enablement",
+    "tier": "reasoning",
+    "model": "opus",
+    "hue": 100,
+    "colors": {
+      "light": "#8ef65a",
+      "base": "#48db24",
+      "dark": "#1e8217"
+    },
+    "icon": "setup-assistant.svg"
+  }
+}
