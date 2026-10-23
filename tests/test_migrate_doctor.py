@@ -271,7 +271,8 @@ class PreRootMigrationTest(StoreTestCase):
         self.assertEqual(project.layout(root), project.LAYOUT_MEMORY_IN_PROJECT)
         # Docs left in place, and visible to agents.
         self.assertTrue((root / ".claude" / "docs" / "project.md").is_file())
-        self.assertIn(".claude/docs", project.context_paths(root))
+        # docs/ exists, so it stays the write root and the pre-root docs are an extra.
+        self.assertEqual(project.context_paths(root), ["docs", ".claude/docs"])
         # The pre-root hook entry was rewritten in place, and the user's keys kept.
         settings = json.loads((root / ".claude" / "settings.json").read_text(encoding="utf-8"))
         stops = [h["command"] for e in settings["hooks"]["Stop"] for h in e["hooks"]]
@@ -304,6 +305,43 @@ class PreRootMigrationTest(StoreTestCase):
         self.assertEqual(result["project_id"], stale_id)
         self.assertTrue(result["adopted_identity"])
         self.assertEqual(project.layout(root), project.LAYOUT_MEMORY_IN_PROJECT)
+
+    def test_pre_root_docs_become_the_write_root_when_docs_is_absent(self):
+        root = self._pre_root_project()
+        (root / "docs").rmdir()
+        preview = migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertTrue(any("as the write root" in a for a in preview["actions"]), preview["actions"])
+        result = migrate.apply(root, provider_names=["claude"], mode="link")
+        self.assertEqual(project.context_paths(root), [".claude/docs", "docs"])
+        self.assertEqual(result["context_paths_added"], [".claude/docs"])
+
+    def test_an_adopted_identity_is_reordered_when_docs_is_absent(self):
+        root = self._pre_root_project(stale_identity=True)
+        (root / "docs").rmdir()
+        migrate.apply(root, provider_names=["claude"], mode="link")
+        self.assertEqual(project.context_paths(root), [".claude/docs", "docs"])
+
+    def test_an_adopted_custom_write_root_that_is_missing_is_named_and_displaced(self):
+        root = self._pre_root_project(stale_identity=True)
+        project.ensure(root, write_root="handbook")
+        preview = migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertTrue(any("there is no handbook folder" in a for a in preview["actions"]), preview["actions"])
+        migrate.apply(root, provider_names=["claude"], mode="link")
+        self.assertEqual(project.context_paths(root)[0], ".claude/docs")
+
+    def test_a_symlinked_pre_root_docs_is_never_made_the_write_root(self):
+        root = self._pre_root_project()
+        (root / "docs").rmdir()
+        outside = self.tmp / "outside-docs"
+        (root / ".claude" / "docs").rename(outside)
+        os.symlink(str(outside), str(root / ".claude" / "docs"))
+        preview = migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertFalse(any("as the write root" in a for a in preview["actions"]), preview["actions"])
+
+    def test_pre_root_docs_stay_an_extra_when_docs_exists(self):
+        root = self._pre_root_project()
+        preview = migrate.plan(root, provider_names=["claude"], mode="link")
+        self.assertFalse(any("as the write root" in a for a in preview["actions"]), preview["actions"])
 
     def test_two_memory_directories_are_refused_before_anything_moves(self):
         root = self._pre_root_project()

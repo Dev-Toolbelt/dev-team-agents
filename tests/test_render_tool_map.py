@@ -23,11 +23,13 @@ LIB = render_provider.load_lib(REPO_ROOT / "scripts" / "lib")
 CLAUDE_ONLY = ("AskUserQuestion", "ScheduleWakeup", "TaskList", "TaskGet", "TaskOutput",
                "SendMessage", "TodoWrite", "WebFetch")
 
+# The scripts build these under the docs write root (scripts/lib/docs-root.sh), whose
+# default is `docs` — so each needle is the default root plus the path below it.
 SCRIPT_DOC_PATHS = {
-    "scripts/new-adr.sh": "docs/development/adrs",
-    "scripts/reuse-lint.sh": "docs/development/reuse-guidelines.md",
-    "scripts/spec-lint.sh": "docs/specs",
-    "scripts/hooks/stop/03e-adr-gap-check.sh": "docs/development/adrs/",
+    "scripts/new-adr.sh": ('DOCS_ROOT="docs"', "$DOCS_ROOT/development/adrs"),
+    "scripts/reuse-lint.sh": ('DOCS_ROOT="docs"', "$DOCS_ROOT/development/reuse-guidelines.md"),
+    "scripts/spec-lint.sh": ("docs/specs",),
+    "scripts/hooks/stop/03e-adr-gap-check.sh": ("docs/(development/adrs|adr)/",),
 }
 
 
@@ -73,8 +75,10 @@ class RenderToolMapTest(unittest.TestCase):
             rewrites = LIB["tool_map"]["providers"][provider].get("path_rewrites", {})
             with self.subTest(provider=provider):
                 self.assertNotIn("docs/development/", rewrites)
-        for script, needle in SCRIPT_DOC_PATHS.items():
-            self.assertIn(needle, (REPO_ROOT / script).read_text(encoding="utf-8"), script)
+        for script, needles in SCRIPT_DOC_PATHS.items():
+            text = (REPO_ROOT / script).read_text(encoding="utf-8")
+            for needle in needles:
+                self.assertIn(needle, text, script)
         for provider in providers.ALL_PROVIDERS:
             if provider == "claude":
                 continue

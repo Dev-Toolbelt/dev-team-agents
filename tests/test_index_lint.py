@@ -5,6 +5,7 @@ repositories and a scratch state directory — never the developer's own. See
 skills/shared/docs-sync/references/wiki-format.md and skills/shared/adr/SKILL.md § ADR Index.
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -28,10 +29,20 @@ WIKI_INDEX = "# Wiki\n\n## Index\n\n| Entry | Keywords | Read it when |\n|---|--
 ADR_INDEX = "# Architecture Decision Records\n\n## Index\n\n| ADR | Status | Keywords | Read it when |\n|---|---|---|---|\n{rows}"
 
 
+PROJECT_ID = "8f14e45f-ea0c-4c2b-9c1f-2b1f9a7d3e10"
+
+
 class _DocsRepo(StoreTestCase):
     def setUp(self):
         super().setUp()
         self.repo = make_git_project(self.tmp / "app")
+
+    def use_write_root(self, *context_paths):
+        """Record context_paths in project.json and leave only the first one on disk."""
+        self.write(".dev-team-agents/project.json", json.dumps(
+            {"schema": 1, "project_id": PROJECT_ID, "context_paths": list(context_paths)}))
+        (self.repo / "docs").rmdir()
+        (self.repo / context_paths[0]).mkdir(parents=True, exist_ok=True)
 
     def write(self, rel, text):
         path = self.repo / rel
@@ -57,6 +68,23 @@ class IndexLintTest(_DocsRepo):
 
     def test_a_repository_without_indexes_is_silent(self):
         self.assertEqual(self.lint(), (0, ""))
+
+    def test_the_indexes_under_the_context_paths_write_root_are_checked(self):
+        self.use_write_root(".claude/docs", "docs")
+        self.write(".claude/docs/wiki/README.md", WIKI_INDEX.format(rows="| `gone.md` | a, b, c, d | Never |\n"))
+        self.write(".claude/docs/development/adrs/0001-use-x.md", "# Use X\n")
+        code, out = self.lint()
+        self.assertEqual(code, 1, out)
+        self.assertIn(".claude/docs/wiki/README.md", out)
+        self.assertIn(".claude/docs/development/adrs", out)
+
+    def test_an_escaping_write_root_falls_back_to_docs(self):
+        self.write(".dev-team-agents/project.json", json.dumps(
+            {"schema": 1, "project_id": PROJECT_ID, "context_paths": ["../outside"]}))
+        self.write("docs/wiki/README.md", WIKI_INDEX.format(rows="| `gone.md` | a, b, c, d | Never |\n"))
+        code, out = self.lint()
+        self.assertEqual(code, 1, out)
+        self.assertIn("docs/wiki/README.md", out)
 
     def test_a_consistent_wiki_passes_silently(self):
         self.wiki()
@@ -189,6 +217,14 @@ class IndexLintHookTest(_DocsRepo):
     def test_every_provider_has_a_decided_case(self):
         self.assertEqual(set(SURFACES_WARNING), set(providers.ALL_PROVIDERS))
 
+    def test_a_touched_path_under_a_custom_write_root_runs_the_lint(self):
+        self.use_write_root("handbook", "docs")
+        self.write("handbook/wiki/README.md", WIKI_INDEX.format(rows="| `gone.md` | a, b, c, d | Never |\n"))
+        code, err = self.run_hook(touched="handbook/wiki/README.md")
+        self.assertEqual(code, 2, err)
+        self.assertIn("handbook/wiki/README.md", err)
+        self.assertEqual(self.run_hook(touched="src/app.py")[0], 0)
+
     def test_who_sees_the_warning_matches_each_provider_s_stop_wiring(self):
         plugin = (REPO_ROOT / "opencode" / "plugin" / "dev-team-agents.ts").read_text(encoding="utf-8")
         for provider, surfaces in SURFACES_WARNING.items():
@@ -231,6 +267,38 @@ class NewAdrTest(_DocsRepo):
         (bound / "templates").mkdir()
         shutil.copy(str(NEW_ADR), str(bound / "scripts" / "new-adr.sh"))
         shutil.copy(str(REPO_ROOT / "templates" / "adr-template.md"), str(bound / "templates" / "adr-template.md"))
+
+    def ship_lib(self):
+        """The resolver new-adr.sh sources beside it — absent, it falls back to docs/."""
+        lib = self.repo / ".dev-team-agents" / "scripts" / "lib"
+        lib.mkdir()
+        for name in ("docs-root.sh", "docs_root.py"):
+            shutil.copy(str(REPO_ROOT / "scripts" / "lib" / name), str(lib / name))
+        shutil.copytree(str(REPO_ROOT / "scripts" / "lib" / "devteam"), str(lib / "devteam"),
+                        ignore=shutil.ignore_patterns("__pycache__"))
+
+    def test_the_adr_directory_follows_the_context_paths_write_root(self):
+        self.ship_lib()
+        self.use_write_root(".claude/docs", "docs")
+        self.assertEqual(self.new_adr("--dir").strip(), ".claude/docs/development/adrs")
+        self.new_adr("Use Redis")
+        self.assertTrue((self.repo / ".claude/docs/development/adrs/0001-use-redis.md").is_file())
+        self.assertFalse((self.repo / "docs").exists())
+
+    def test_without_the_resolver_the_adr_directory_stays_under_docs(self):
+        self.use_write_root(".claude/docs", "docs")
+        self.assertEqual(self.new_adr("--dir").strip(), "docs/development/adrs")
+
+    def test_a_symlink_on_the_way_to_the_write_root_is_refused(self):
+        self.ship_lib()
+        self.use_write_root(".claude/docs", "docs")
+        outside = self.tmp / "outside"
+        (self.repo / ".claude/docs").rename(outside)
+        os.symlink(str(outside), str(self.repo / ".claude/docs"))
+        result = subprocess.run(["bash", ".dev-team-agents/scripts/new-adr.sh", "Use X"],
+                                cwd=str(self.repo), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(list(outside.iterdir()), [])
 
     def new_adr(self, *args):
         result = subprocess.run(

@@ -132,6 +132,37 @@ class ProjectIdentityTest(StoreTestCase):
         merged, _ = project.ensure(root, context_paths=["rfcs", "docs"])
         self.assertEqual(merged["context_paths"], ["docs", "rfcs"])
 
+    def test_write_root_goes_first_on_a_new_file(self):
+        root = self.new_project()
+        data, _ = project.ensure(root, context_paths=["docs", ".claude/docs"], write_root=".claude/docs")
+        self.assertEqual(data["context_paths"], [".claude/docs", "docs"])
+
+    def test_write_root_alone_reorders_an_existing_file_and_inserts_a_new_entry(self):
+        root = self.new_project()
+        project.ensure(root, context_paths=["docs", "rfcs"])
+        data, _ = project.ensure(root, write_root="rfcs")
+        self.assertEqual(data["context_paths"], ["rfcs", "docs"])
+        data, _ = project.ensure(root, write_root="handbook")
+        self.assertEqual(data["context_paths"], ["handbook", "rfcs", "docs"])
+        self.assertEqual(project.context_paths(root), ["handbook", "rfcs", "docs"])
+
+    def test_ensure_does_not_rewrite_the_file_when_nothing_changes(self):
+        root = self.new_project()
+        project.ensure(root, context_paths=["docs", "rfcs"], write_root="docs")
+        path = project.project_file(root)
+        before = (path.read_bytes(), path.stat().st_mtime_ns)
+        project.ensure(root)
+        project.ensure(root, write_root="docs")
+        self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), before)
+
+    def test_an_escaping_write_root_is_rejected(self):
+        root = self.new_project()
+        project.ensure(root)
+        for bad in ("../outside", "/etc"):
+            with self.assertRaises(EnvError, msg=bad):
+                project.ensure(root, write_root=bad)
+        self.assertEqual(project.context_paths(root), ["docs"])
+
     def test_rejects_absolute_and_escaping_context_paths(self):
         pid = "8f14e45f-ea0c-4c2b-9c1f-2b1f9a7d3e10"
         for bad in (["/etc"], ["../outside"], [""], []):

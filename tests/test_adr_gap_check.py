@@ -93,9 +93,25 @@ class AdrGapCheckTest(StoreTestCase):
         # new-adr.sh resolves docs/adr/ when a project keeps its series there, so a
         # session that added `docs/adr/ADR-NNNN-*.md` did add an ADR.
         self.add_dependency("left-pad")
-        for adr in ("docs/development/adrs/0001-use-x.md", "docs/adr/ADR-0042-use-x.md"):
-            with self.subTest(adr=adr):
-                self.assertEqual(self.run_hook(touched="package.json\n" + adr), (0, ""))
+        self.assertEqual(self.run_hook(touched="package.json\ndocs/development/adrs/0001-use-x.md"), (0, ""))
+        (self.repo / "docs" / "adr").mkdir()
+        (self.repo / "docs" / "adr" / "ADR-0041-old.md").write_text("# Old\n", encoding="utf-8")
+        self.assertEqual(self.run_hook(touched="package.json\ndocs/adr/ADR-0042-use-x.md"), (0, ""))
+
+    def test_an_adr_outside_the_resolved_directory_does_not_silence_it(self):
+        self.add_dependency("left-pad")
+        self.assertEqual(self.run_hook(touched="package.json\ndocs/adr/ADR-0042-use-x.md")[0], 2)
+
+    def test_a_new_adr_under_the_context_paths_write_root_silences_it(self):
+        (self.repo / ".dev-team-agents").mkdir()
+        (self.repo / ".dev-team-agents" / "project.json").write_text(
+            '{"schema": 1, "project_id": "8f14e45f-ea0c-4c2b-9c1f-2b1f9a7d3e10", "context_paths": ["handbook", "docs"]}',
+            encoding="utf-8")
+        (self.repo / "handbook" / "development" / "adrs").mkdir(parents=True)
+        self.add_dependency("left-pad")
+        self.assertEqual(self.run_hook(touched="package.json\nhandbook/development/adrs/0001-use-x.md"), (0, ""))
+        # A look-alike path elsewhere is not the ADR directory.
+        self.assertEqual(self.run_hook(touched="package.json\nsrc/handbook/development/adrs/0001-use-x.md")[0], 2)
 
     def test_no_signal_no_warning(self):
         self.assertEqual(self.run_hook(), (0, ""))

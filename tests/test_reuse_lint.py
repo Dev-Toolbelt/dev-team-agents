@@ -69,6 +69,17 @@ class ReuseLintTest(StoreTestCase):
         self.write("src/a.ts", "new Modal(\n")
         self.assertEqual(self.lint(), (0, ""))
 
+    def test_the_registry_under_the_context_paths_write_root_is_used(self):
+        self.write(".dev-team-agents/project.json",
+                   '{"schema": 1, "project_id": "8f14e45f-ea0c-4c2b-9c1f-2b1f9a7d3e10", "context_paths": [".claude/docs"]}')
+        self.write(".claude/docs/development/reuse-guidelines.md",
+                   "| name | type | rule | detection | canonical_ref |\n|---|---|---|---|---|\n"
+                   "| toast | code-pattern | Use toast | `react-hot-toast` | src/Modal.tsx |\n")
+        self.write("src/a.ts", "import 'react-hot-toast'\n")
+        code, out = self.lint()
+        self.assertEqual(code, 1, out)
+        self.assertIn("toast", out)
+
     def test_old_five_column_registry_still_works(self):
         (self.repo / "docs" / "development" / "reuse-guidelines.md").write_text(
             "| name | type | rule | detection | canonical_ref |\n|---|---|---|---|---|\n"
