@@ -7,22 +7,21 @@ You are running the **`/devteam:health-check`** command. Load `skills/shared/set
 
 ---
 
-## Step 0 — Detect provider
+## Step 0 — Detect providers
 
-Run each detection command; the first one that succeeds determines the active provider:
+Detect **every** provider installed in the project — its primary config file, not merely its directory (a `.claude/` holding only `docs/` or `settings.local.json` is not a Claude install). A project can carry more than one, and each one installed is checked:
 
 ```bash
-# Claude: .claude/settings.json is the primary Claude Code config file
-[ -f .claude/settings.json ] && echo "claude" && exit 0
-# opencode: opencode.json(c) is the primary config
-ls .opencode/opencode.json .opencode/opencode.jsonc 2>/dev/null | head -1 | xargs -I{} echo "opencode:{}" && exit 0
-# Codex: .codex/hooks.json is the primary hook config
-[ -f .codex/hooks.json ] && echo "codex" && exit 0
-# Fallback — neither provider detected
-echo "unknown"
+PROVIDERS=""
+[ -f .claude/settings.json ] && PROVIDERS="$PROVIDERS claude"
+for f in .opencode/opencode.json .opencode/opencode.jsonc opencode.json opencode.jsonc; do
+  [ -f "$f" ] && { PROVIDERS="$PROVIDERS opencode"; break; }
+done
+[ -f .codex/hooks.json ] && PROVIDERS="$PROVIDERS codex"
+echo "PROVIDERS:${PROVIDERS:- unknown}"
 ```
 
-Store the result as `<provider>`. If `<provider>` is `unknown`, output:
+Store the list as `<providers>`. The provider running this command is not "the active one" — a provider in the list is in scope even when another is driving the check. If the list is `unknown`, output exactly:
 
 ```
 Health check scope limited: no known provider config found
@@ -52,7 +51,7 @@ Run the 13 health check categories from `setup-health-check/references/checks-li
 12. Python Prerequisite
 13. Productivity & Token-Efficiency Tools
 
-For **Category 4**, adapt the check to the detected provider:
+For **Category 4**, run the check once for **each** provider in `<providers>`:
 
 - **claude**: check `.claude/settings.json` as documented in `checks-list.md` — hook dispatchers, `includeCoAuthoredBy`, no stale direct hook paths
 - **opencode**: check `.opencode/opencode.json` — the `devteam:*` command entries are present under the `command` key, the plugin is at `.opencode/plugins/dev-team-agents.ts`. **Also verify agent model/variant mapping**: each `.opencode/agents/*.md` file must have `model:` and `variant:` in its frontmatter matching the tier-based resolution from `.dev-team-agents/scripts/lib/tiers.json`. If any agent is missing these fields, re-render by running `bash .dev-team-agents/scripts/install-opencode.sh` as auto-fix.
@@ -64,10 +63,10 @@ For **Category 4**, adapt the check to the detected provider:
 
 For each category result:
 - `✅ OK` — no action
-- `⚠️ WARN` — apply fix silently (additive changes only)
+- `⚠️ WARN` — apply fix silently (additive changes only), except a finding the Resolution Rule marks *asked*
 - `🔧 FIX` — show diff for `settings.json` changes and ask confirmation; apply all others silently
 
-Follow the fix patterns from `setup-health-check/references/fix-patterns.md`.
+Follow the fix patterns from `setup-health-check/references/fix-patterns.md`, and close every finding under the skill's § Resolution Rule — fixed, asked, or handed over, never left as a remark.
 
 ---
 
@@ -78,8 +77,8 @@ Present the results using the output-format standard (no box-drawing, no decorat
 ```
 ## Health Check — dev-team-agents
 
-### Provider
-[claude / opencode / codex]
+### Providers
+[every provider in <providers>]
 
 ### Results
 | Category | Status |

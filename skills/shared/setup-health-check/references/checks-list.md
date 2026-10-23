@@ -28,6 +28,43 @@ case "$STATE_DIR" in "$ROOT"/*) echo "IN_STORE: no" ;; *) echo "IN_STORE: yes" ;
 On a project that is not bound, the three paths resolve to `.dev-team-agents/user-data/` and
 `IN_STORE` is `no`; every category below runs exactly as written.
 
+Then resolve the **docs root** — the write root of `context_paths` (`skills/shared/project-context/SKILL.md` § Context Loading Order). Category 11 and the reuse checks read `$DOCS_ROOT` wherever a body says `docs/`:
+
+```bash
+DOCS_OUT="$(python3 - "$ROOT" <<'DOCS'
+import json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+try:
+    data = json.loads((root / ".dev-team-agents/project.json").read_text())
+    paths = data.get("context_paths") if isinstance(data, dict) else None
+except (OSError, ValueError):
+    paths = None
+first = (paths or ["docs"])[0]
+# Same constraint project.validate() enforces: a relative path inside the project
+write_root = first if isinstance(first, str) and first and not Path(first).is_absolute() and ".." not in Path(first).parts else "docs"
+docs_root = write_root
+# Only the pre-root location is a relocation candidate. Any other context_paths entry is a
+# read-only extra folder by design and is never offered a move.
+if not (root / write_root).is_dir() and (root / ".claude/docs").is_dir():
+    docs_root = ".claude/docs"
+print("WRITE_ROOT:", write_root)
+print("DOCS_ROOT:", docs_root)
+if docs_root != write_root:
+    print("DOCS_ROOT_MISMATCH:", write_root)
+DOCS
+)"
+echo "$DOCS_OUT"
+WRITE_ROOT="$(printf '%s\n' "$DOCS_OUT" | sed -n 's/^WRITE_ROOT: //p')"
+DOCS_ROOT="$(printf '%s\n' "$DOCS_OUT" | sed -n 's/^DOCS_ROOT: //p')"
+```
+
+`DOCS_ROOT_MISMATCH` is a Category 11 finding: the write root is missing while the docs sit in
+`.claude/docs/` — where a pre-root install kept them and `devteam migrate` left them — so agents
+would write new ADRs, wiki entries and specs to a folder the project does not use. A missing write
+root with no `.claude/docs/` beside it is not a mismatch: it is the plain `WIKI: MISSING` /
+`ADRS: MISSING` of Category 11.
+
 ### When `BOUND: yes`
 
 **This table overrides the category bodies below.** Where a body names a literal
@@ -425,14 +462,32 @@ If enabled, also check that every `config.targetPaths` / `config.manifestPaths` 
 and that `graphify-out/graph.json` parses (`jq empty graphify-out/graph.json`).
 
 **Generation actually works.** File presence does not prove the pipeline runs — earlier refresh
-scripts shipped with gates that silently no-op'd and exited `0`. Run it for real:
+scripts shipped with gates that silently no-op'd and exited `0`. Whether to rebuild follows from `status`:
+
+| `status` | Action |
+|----------|--------|
+| Last build recorded, at `HEAD`, and `graph.json` parses | Current — no rebuild; the recorded build is the proof |
+| No last build recorded, `HEAD` moved since it, or `graph.json` missing/invalid | Rebuild — **mandatory**, never skipped for its duration |
 
 ```bash
+stat -c %Y graphify-out/graph.json 2>/dev/null || stat -f %m graphify-out/graph.json 2>/dev/null   # GNU first: GNU `-f` succeeds with filesystem data
 devteam plugin run graphify rebuild --json   # forces a build; ok:false carries log_tail
 ```
 
-Compare `graphify-out/graph.json`'s mtime before and after: an unchanged mtime with `ok: true` is a
-silent no-op.
+A rebuild can take up to 30 minutes, so start it **in the background** when this category runs,
+carry on with Category 6 onwards, and collect its result before the summary. Use the provider's
+background command mode; where there is none, detach it and poll the plugin status instead:
+
+```bash
+mkdir -p graphify-out
+nohup devteam plugin run graphify rebuild --json > graphify-out/.health-check-rebuild.log 2>&1 &
+# later, before the summary
+devteam plugin show graphify --json        # status: last build commit and time
+```
+
+Compare the mtime before and after: an unchanged mtime with `ok: true` is a
+silent no-op. A build still running at the summary is reported as `running`, with
+`devteam plugin show graphify --json` to follow it — never as `OK`, never as "not verified".
 
 | Check | Auto-fix |
 |-------|----------|
@@ -619,31 +674,48 @@ devteam doctor
 | Legacy copies (`user-data/`, store) | WARN if `devteam doctor` reports a conflict | `devteam doctor` moves a legacy copy to the root without changing its content and quarantines blank or duplicate copies. Two different non-blank copies are left untouched — tell the user to merge them by hand. |
 | `.gitignore` entry for `.dev-team-agents/credentials.local.json` | OK if present | The managed `.gitignore` block includes this entry on both layouts — `devteam sync` fixes a missing line. |
 
+### Every other `devteam doctor` finding
+
+`devteam doctor` reports a provider's checks only when that provider is bound in the project, so
+**none of its WARNs is out of scope** — not even for a provider other than the one running the
+health check. Close each under `SKILL.md` § Resolution Rule:
+
+| `permissions` finding | Resolution |
+|-----------------------|------------|
+| Claude ask rules missing, opencode rules overridden, `.codex/rules/…` missing or out of date | Fixed — `devteam sync`, then `devteam doctor` again to confirm |
+| Codex does not trust this project | Handed over — open the project in Codex and accept the trust prompt |
+| Codex Default mode rejects the interactive chooser | Handed over — `fix-patterns.md` § Codex Default mode chooser flag; never edit `~/.codex/config.toml` |
+
+Any other finding carries a `hint`: apply it when it names a `devteam` command, otherwise hand it over as written.
+
 ## Category 11 — Memory Artifacts
 
 These files accumulate knowledge that exists nowhere else (`skills/shared/project-context/SKILL.md` § Memory Layers). Every fix here is an in-place adaptation. **Nothing in this category may create, overwrite, or delete an entry** — the check reports and patches structure, never content.
 
+`DOCS_ROOT` comes from § Before Category 1; every `docs/` path in this category means `$DOCS_ROOT/`.
+
 ```bash
 # Presence
 [ -f .dev-team-agents/user-data/session-summary.md ] && echo "SESSION: OK" || echo "SESSION: MISSING"
-[ -d docs/wiki ] && echo "WIKI: OK" || echo "WIKI: MISSING"
-[ -d docs/development/adrs ] && echo "ADRS: OK" || echo "ADRS: MISSING"
+[ -d "$DOCS_ROOT/wiki" ] && echo "WIKI: OK" || echo "WIKI: MISSING"
+{ [ -d "$DOCS_ROOT/development/adrs" ] || [ -d "$DOCS_ROOT/adr" ]; } && echo "ADRS: OK" || echo "ADRS: MISSING"
 
 # Wiki index format: does README.md carry a retrieval index, or only the legacy domain-count table?
-if [ -f docs/wiki/README.md ]; then
-  grep -q "^## Index" docs/wiki/README.md && echo "WIKI_INDEX: OK" || echo "WIKI_INDEX: LEGACY_FORMAT"
+if [ -f "$DOCS_ROOT/wiki/README.md" ]; then
+  grep -q "^## Index" "$DOCS_ROOT/wiki/README.md" && echo "WIKI_INDEX: OK" || echo "WIKI_INDEX: LEGACY_FORMAT"
   # entries on disk vs rows in the index
-  echo "WIKI_FILES: $(find docs/wiki -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l | tr -d ' ')"
-  echo "WIKI_ROWS: $(grep -c '^| `' docs/wiki/README.md 2>/dev/null || echo 0)"
+  echo "WIKI_FILES: $(find "$DOCS_ROOT/wiki" -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l | tr -d ' ')"
+  echo "WIKI_ROWS: $(grep -c '^| `' "$DOCS_ROOT/wiki/README.md" 2>/dev/null || echo 0)"
 fi
 ```
 
 | Check | Status | Auto-fix |
 |-------|--------|----------|
+| `DOCS_ROOT_MISMATCH` | Asked | `AskUserQuestion`, each description saying what changes: **Move to `docs/`** (recommended — moves the files, rewrites `.claude/docs/` links in the project's Markdown and instruction files, drops the entry from `context_paths`), **Keep `.claude/docs` as the write root** (reorders `context_paths` only; the ADR script, the index lint and the reuse lint follow it, but specs and the sprint backlog — `spec-lint`, `devteam backlog` — still read `docs/`, and docs already pointing at `docs/` keep doing so), **Not now**. Apply `fix-patterns.md` § Docs root relocation in the same run, then set `DOCS_ROOT="$WRITE_ROOT"` (Move) and run the presence block above again before the wiki rows below |
 | `session-summary.md` missing | WARN | Create empty — never regenerate one that exists |
 | `docs/wiki/` missing | WARN | `mkdir -p docs/wiki` + index-format `README.md` (see `skills/shared/docs-sync/references/wiki-format.md`) |
-| `WIKI_INDEX: LEGACY_FORMAT` | Outdated | **Adapt in place**: insert the `## Index` section above the existing `## Domains` table. Keep every domain row — the `Covers` text is authored content. Never rewrite the file |
-| `WIKI_ROWS` < `WIKI_FILES` | Outdated | Entries exist that the index cannot retrieve. Append one row per unindexed file, reading its `Tags` and callout. Report the count fixed |
+| `WIKI_INDEX: LEGACY_FORMAT` | Fixed, no question | **Adapt in place** (`fix-patterns.md` § Legacy wiki index): insert the `## Index` section above the `## Domains` table, or append it when there is none. Keep every existing line — the `Covers` text is authored content. Never rewrite the file. An empty wiki is adapted too: the index is where its first entry's row goes |
+| `WIKI_ROWS` < `WIKI_FILES` | Fixed, no question | Entries exist that the index cannot retrieve. Append one row per unindexed file, reading its `Tags` and callout. Report the count fixed |
 | `WIKI_ROWS` > `WIKI_FILES` | WARN only | A row points at a file that is gone. **Report the row; do not remove it** — a missing entry is a restore candidate, and the row is the only surviving record of what it held |
 | ADR numbering has gaps | WARN only | Report. Never renumber: ADR ids are referenced from commits, wiki entries, and other ADRs |
 

@@ -24,7 +24,25 @@ Run a structured audit of the dev-team-agents installation in a project. Checks 
    - FIX items that touch `settings.json`: show diff, ask confirmation
    - FIX items that touch `.gitignore` (legacy migration): ask confirmation
    - All other FIX items: apply without asking
-5. Write today's date (`YYYY-MM-DD`) to the `last_health_check` key of `state.json` in the resolved state directory — the snippet is Step 4 of `commands/health-check.md`. In a bound project that directory is not `.dev-team-agents/user-data/` (see `references/checks-list.md` § Before Category 1), and writing there leaves `session-start.sh` warning forever. Never write the legacy `.last-health-check` file: Category 3 classifies it as a marker to migrate into `state.json`. `session-start.sh` reads that key to warn when a project has gone `docs_stale_after_days` (default `30`) without a health check — see `CLAUDE-md/notifications.md`. This step runs even when all categories pass.
+5. Close every finding under the Resolution Rule below — nothing leaves the run as an open remark
+6. Write today's date (`YYYY-MM-DD`) to the `last_health_check` key of `state.json` in the resolved state directory — the snippet is Step 4 of `commands/health-check.md`. In a bound project that directory is not `.dev-team-agents/user-data/` (see `references/checks-list.md` § Before Category 1), and writing there leaves `session-start.sh` warning forever. Never write the legacy `.last-health-check` file: Category 3 classifies it as a marker to migrate into `state.json`. `session-start.sh` reads that key to warn when a project has gone `docs_stale_after_days` (default `30`) without a health check — see `CLAUDE-md/notifications.md`. This step runs even when all categories pass.
+
+## Resolution Rule
+
+**This is the canonical statement. `references/checks-list.md` and `references/fix-patterns.md` delegate to it.**
+
+> Every finding ends in exactly one of three states: **fixed**, **asked**, or **handed over**.
+
+| State | When | How |
+|-------|------|-----|
+| Fixed | A fix pattern exists and the No-Destruction Rule permits it | Apply it, report it under *Actions taken* |
+| Asked | The fix needs consent — a structure move, a rewrite of references, a fix beyond the patterns | `AskUserQuestion` with the recommended fix first and a `Not now` option; apply the answer in the same run |
+| Handed over | Only the user can act — a binary to install, a trust prompt, a file the framework never writes (`~/.codex/config.toml`) | *Recommendations* row with the exact command or step |
+
+- A plain-text "the decision is yours", "not migrated", "not verified" or "left for you" is not a state — it is an unfinished finding.
+- **A finding is never dismissed as not applying.** `devteam doctor` reports a provider only when it is bound in the project, so its findings for that provider apply even when another provider is running the check.
+- A slow fix is still a fix: run it in the background, keep checking the other categories, and report its outcome in the summary — `running` with the command to follow it when it has not finished, never `OK`.
+- `Not now` is a valid answer; report the finding as open with the fix the user declined.
 
 ## No-Destruction Rule
 
@@ -79,13 +97,13 @@ Report every quarantined path in the audit output. Nothing empties this director
 | 2 | Scripts & Executability | All hook dispatchers and sub-scripts are executable |
 | 3 | User Data | `.dev-team-agents/user-data/` directory and `.installed-version` (directory checks skipped once `devteam upgrade` has moved state to the store) |
 | 4 | settings.json | Hook dispatcher entries, `includeCoAuthoredBy: false` |
-| 5 | Graphify | Skip if not enabled; validate config/paths, hook wiring, output integrity, and that a real refresh run actually rebuilds the output (not just that files exist) |
+| 5 | Graphify | Skip if not enabled; validate config/paths, hook wiring, output integrity; a missing or stale build is rebuilt in the background, never skipped |
 | 6 | CLAUDE.md / AGENTS.md | `## dev-team-agents` section present in each installed provider's file; no stale v1 planning-routing; no pre-v3 verbose routing |
 | 7 | .gitignore | Directory-pattern entries, legacy per-file migration |
 | 8 | User Preferences | `preferences.json` exists, schema complete |
 | 9 | Notifier | `stop/04-notifier.sh` and `lib/notify.sh` present and executable; state files. Notices reach the user through the desktop app (ADR-0017) |
 | 10 | Credentials | `credentials.local.json` present/absent, no legacy copies, gitignored (via `devteam doctor`) |
-| 11 | Memory Artifacts | `session-summary.md`, `docs/wiki/` index format and coverage, ADRs — adapted in place, never regenerated; detection-only check for undocumented conventions, pointing to `/devteam:sync-rules`; rule registry validity (`reuse-lint.sh --validate`) and standards-document staleness — WARN only |
+| 11 | Memory Artifacts | Docs root resolved from `context_paths` (relocation offered when it is not the write root), `session-summary.md`, `<docs-root>/wiki/` index format and coverage, ADRs — adapted in place, never regenerated; detection-only check for undocumented conventions, pointing to `/devteam:sync-rules`; rule registry validity (`reuse-lint.sh --validate`) and standards-document staleness — WARN only |
 | 12 | Python Prerequisite | `python3` on PATH — WARN only, with OS-specific install hint; not auto-installable |
 | 13 | Productivity & Token-Efficiency Tools | `rg`, `fd`, `jq`, `ast-grep`, `tokei`, `delta` on PATH — WARN only, with OS-specific install hint per tool; not auto-installable |
 

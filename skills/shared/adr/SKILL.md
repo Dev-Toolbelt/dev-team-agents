@@ -17,7 +17,7 @@ docs/development/adrs/
   0003-authentication-strategy.md
 ```
 
-**The ADR directory is whatever `bash .dev-team-agents/scripts/new-adr.sh --dir` prints**: `docs/development/adrs/` when it exists, otherwise an existing `docs/adr/`, otherwise `docs/development/adrs/` (created with the first ADR). A directory whose ADRs are named `ADR-NNNN-slug.md` keeps that scheme. Every mention of `docs/development/adrs/` in any skill, agent or command means that resolved directory. A symlinked ADR directory is refused, never followed.
+**The ADR directory is whatever `bash .dev-team-agents/scripts/new-adr.sh --dir` prints**, under the project's docs write root — the first `context_paths` entry, `docs` by default (`skills/shared/project-context/SKILL.md` § Context Loading Order): `<root>/development/adrs/` when it exists, otherwise an existing `<root>/adr/`, otherwise `<root>/development/adrs/` (created with the first ADR). A directory whose ADRs are named `ADR-NNNN-slug.md` keeps that scheme. Every mention of `docs/development/adrs/` in any skill, agent or command means that resolved directory. A symlinked ADR directory is refused, never followed.
 
 ## MADR Format
 

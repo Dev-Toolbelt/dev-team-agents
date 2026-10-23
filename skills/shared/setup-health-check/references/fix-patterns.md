@@ -450,6 +450,151 @@ mv .dev-team-agents/user-data/.auto-update "$QUARANTINE/"
 
 The flag carries no content — its existence *was* the value, and that value is now in `preferences.json`. It is still moved rather than deleted, because the No-Destruction Rule has no "this one is safe" exception: a rule with a judgment call in it gets the judgment wrong eventually, and quarantining a zero-byte marker costs nothing.
 
+## Docs root relocation
+
+Triggered by `DOCS_ROOT_MISMATCH` (Category 11), only after the user answered the `AskUserQuestion`.
+`DOCS_ROOT` (`.claude/docs`) and `WRITE_ROOT` (the first `context_paths` entry, `docs` by default)
+come from `checks-list.md` § Before Category 1 — never set them by hand. Everything here is a move
+or an in-place rewrite; the No-Destruction Rule holds.
+
+### Move to `docs/`
+
+```bash
+QUARANTINE=".dev-team-agents/user-data/legacy/$(date +%Y-%m-%d)/docs-relocation"
+python3 - "$DOCS_ROOT" "$WRITE_ROOT" "$QUARANTINE" <<'MOVE'
+import filecmp, os, shutil, sys
+from pathlib import Path
+src, dst, quarantine = (Path(a) for a in sys.argv[1:4])
+if not sys.argv[2].strip() or dst.resolve() == src.resolve() or dst.resolve() == Path.cwd().resolve():
+    sys.exit("WRITE_ROOT is unset or invalid; nothing moved")
+if os.path.lexists(dst) and not dst.is_dir():
+    sys.exit("{} exists and is not a directory; nothing moved".format(dst))
+def free(path):
+    n = 1
+    while os.path.lexists(path):
+        path = path.with_name("{}.{}".format(path.name, n)); n += 1
+    return path
+moved, conflicts = 0, []
+for f in sorted(p for p in src.rglob("*") if p.is_file() or p.is_symlink()):
+    rel = f.relative_to(src)
+    target = dst / rel
+    if not os.path.lexists(target):
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(f), str(target)); moved += 1
+        continue
+    # Both exist: the copy already in docs/ keeps its path; the other goes to quarantine
+    same = f.is_file() and target.is_file() and filecmp.cmp(f, target, shallow=False)
+    parked = free(quarantine / rel)
+    parked.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(f), str(parked))
+    if not same:
+        conflicts.append(str(rel))
+for d in sorted((p for p in src.rglob("*") if p.is_dir()), key=lambda p: -len(p.parts)) + [src]:
+    try:
+        d.rmdir()                         # empty only — never a recursive removal
+    except OSError:
+        pass
+print("MOVED:", moved)
+for c in conflicts:
+    print("CONFLICT:", c)
+MOVE
+```
+
+Each `CONFLICT` is a file that existed in both folders with different content: the `docs/` copy
+stays, the other is in the quarantine. Report each one for the user to merge by hand.
+
+Then rewrite the links. Only Markdown in the project (moved docs included — they are untracked
+until committed, hence `--untracked`) and the instruction files are rewritten; ADRs and changelogs
+are historical records (`skills/shared/docs-sync/SKILL.md` § Document Lifecycle) and are listed
+instead, as is any other file that mentions the old path:
+
+```bash
+python3 - "$DOCS_ROOT" "$WRITE_ROOT" <<'REFS'
+import re, subprocess, sys
+from pathlib import Path
+old, new = sys.argv[1].rstrip("/") + "/", sys.argv[2].rstrip("/") + "/"
+pattern = re.compile(r"(?<![\w.~/-])" + re.escape(old))
+out = subprocess.run(["git", "grep", "-lIFz", "--untracked", "--", old], capture_output=True).stdout
+names = {n.decode("utf-8", "surrogateescape") for n in out.split(b"\0") if n}
+names |= {f for f in ("CLAUDE.md", "AGENTS.md") if Path(f).is_file()}
+for name in sorted(names):
+    path = Path(name)
+    if path.is_symlink() or not path.is_file() or name.startswith(".dev-team-agents/"):
+        continue
+    historical = "/adrs/" in name or "/adr/" in name or path.name.upper().startswith("CHANGELOG")
+    if path.suffix.lower() != ".md" or historical:
+        print("LEFT:", name); continue
+    try:
+        raw = path.read_bytes(); text = raw.decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        print("LEFT:", name); continue
+    updated = pattern.sub(new, text)
+    if updated != text:
+        path.write_bytes(updated.encode("utf-8"))     # bytes in, bytes out: line endings kept
+        print("REWROTE:", name)
+REFS
+```
+
+List every `REWROTE` path under *Actions taken* and every `LEFT` path under *Recommendations*
+(handed over: the user decides whether a record or a source file should change).
+
+Finally, in a bound project (`.dev-team-agents/project.json` exists), drop `DOCS_ROOT` from
+`context_paths` through the CLI's own module, which validates the file and writes it atomically
+with its committed mode:
+
+```bash
+LIB=".dev-team-agents/scripts/lib"; [ -d "$LIB/devteam" ] || LIB="scripts/lib"
+python3 - "$LIB" "$DOCS_ROOT" "$WRITE_ROOT" <<'CTX'
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from devteam import jsonio, project
+root = Path.cwd()
+data = project.load(root)
+if data is None:
+    sys.exit(0)                           # not bound: nothing records context_paths
+drop = sys.argv[2].rstrip("/")
+paths = [p for p in data.get("context_paths", project.DEFAULT_CONTEXT_PATHS) if p.rstrip("/") != drop]
+data["context_paths"] = paths or [sys.argv[3]]
+project.validate(data)
+jsonio.write_json_atomic(project.project_file(root), data, mode=jsonio.PROJECT_FILE_MODE, dir_mode=None)
+CTX
+```
+
+Tell the user the move, the rewritten files and `project.json` are uncommitted changes — git shows
+the docs as renames once both sides are staged.
+
+### Keep `.claude/docs` as the write root
+
+Bound project: the same `CTX` snippet, with the list built as
+`[drop] + [p for p in paths if p.rstrip("/") != drop]` — `.claude/docs` first, everything else kept
+in order. Nothing moves. `new-adr.sh`, the index lint and the reuse lint resolve the write root
+from `context_paths` and follow the new order; `spec-lint` and `devteam backlog` still read
+`docs/specs/` and `docs/backlog/` — tell the user so before they choose.
+
+Not bound (no `project.json`): there is nowhere to record the choice, so this option is
+*handed over* — recommend `devteam migrate`, which records `.claude/docs` as the first `context_paths`
+entry when there is no `docs/` folder — the Keep outcome — and running the health check again afterwards.
+
+## Legacy wiki index
+
+Triggered by `WIKI_INDEX: LEGACY_FORMAT` (Category 11). Adapt `$DOCS_ROOT/wiki/README.md` in place
+with Edit — never Write the whole file:
+
+- **The file has a `## Domains` table** — insert the block below directly above that heading.
+- **It has none** (an empty or hand-written stub) — append the block at the end.
+
+```markdown
+## Index
+
+| Entry | Keywords | Read it when |
+|-------|----------|--------------|
+```
+
+Every line already in the file stays. Then, for each entry file on disk, append its row
+(`WIKI_ROWS` < `WIKI_FILES`) following `skills/shared/docs-sync/references/wiki-format.md`. An empty
+wiki ends with the header and no rows — that is the correct, current format.
+
 ## Backfill for `docs/development/reuse-guidelines.md`
 
 Triggered by the Reuse Guidelines Backfill check (Category 11). After the user confirms a proposed row for a sentence found in `code-standards.md`, `design-system.md`, or a wiki entry:
