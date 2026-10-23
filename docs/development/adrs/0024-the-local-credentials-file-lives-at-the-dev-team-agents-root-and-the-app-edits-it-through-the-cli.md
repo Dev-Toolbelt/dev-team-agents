@@ -129,7 +129,10 @@ credential guard hook already treats the basename as a secret at any path.
 - `move` relocates a value inside the file — a rename, or nesting it under another group — so a
   hidden value can be reorganised without the app ever holding it. It refuses a missing source, an
   existing destination (it would overwrite a value the caller may not see) and a move into the
-  value's own subtree.
+  value's own subtree. A value hidden by a key on its path (a mark on it or on any object above
+  it, or a secret-looking name) stays hidden: the new name is added to the destination's
+  `$secrets` unless it looks secret itself, and the move is refused when that cannot be done (a
+  list, a malformed `$secrets`, a name too long to mark, a reserved key as the new name).
 - `patch` preserves every key it does not touch, including keys unknown to the template, and writes
   two-space-indented JSON with a trailing newline, mode `0600`, atomically.
 
@@ -138,8 +141,8 @@ credential guard hook already treats the basename as a secret at any path.
 ### 6. The file is free-form, with two reserved keys
 
 The user names, nests and removes groups and fields freely; the template is only a starter
-`example` beside the two `work_feedback_*` settings, with no category, environment or agent
-mapping. Two keys are reserved in any object:
+`example`, with no category, environment or agent mapping; the two `work_feedback_*` settings
+default when absent, so the template leaves them out. Two keys are reserved in any object:
 
 | Key | Value | Meaning |
 |-----|-------|---------|
