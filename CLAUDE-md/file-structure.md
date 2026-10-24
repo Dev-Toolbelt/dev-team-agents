@@ -20,7 +20,7 @@ dev-team-agents/
 │   ├── testing/
 │   └── ui-libraries/ ← UI component library reference skills
 ├── commands/        ← devteam slash commands (installed to .claude/commands/devteam/, invoked as /devteam:<name>)
-├── templates/       ← document templates: adr-template.md, plan-template.md, runbook-template.md
+├── templates/       ← document templates: adr, plan, runbook, spec, contract, and the gated-layout docs (prd, glossary, nfr, trd, data-model, threat-model, design-flow, evals, process)
 ├── CLAUDE-md/       ← companion sections of this file (preferences, notifications, user-data,
 │                      versioning, hooks, commands, cli, file-structure)
 ├── plugins/         ← optional per-project integrations; see plugins/README.md and ADR-0019
@@ -41,6 +41,7 @@ dev-team-agents/
 │   ├── orphan-skill-scan.sh       ← repairs broken skill paths; never deletes
 │   ├── orphan-template-scan.sh    ← template references must RESOLVE, not just be mentioned
 │   ├── plugin-lint.sh             ← validates plugin manifests against schema; runs in CI
+│   ├── canonical-facts.py         ← fails on claims known to be wrong (facts in canonical-facts.json); runs in CI
 │   ├── gen-cpanel-uapi-reference.sh ← regenerates the cPanel skill's generated UAPI
 │   │                                reference from the official OpenAPI spec (`--check` = drift)
 │   └── archive-index.sh · check-fingerprint-uniqueness.sh ← report-index rotation and
@@ -55,7 +56,7 @@ dev-team-agents/
 │   ├── render-provider.sh         ← renders the canonical source into a provider-specific tree
 │   ├── check-codex-compat.sh      ← lints rendered Codex output for forbidden terms
 │   ├── migrate-to-root.sh         ← migrates .claude/dev-team-agents/ → .dev-team-agents/
-│   ├── fix-symlinks.sh · check-updates.sh (on-demand v2 update check) · new-adr.sh
+│   ├── fix-symlinks.sh · check-updates.sh (on-demand v2 update check) · new-adr.sh · doc-path.sh (docs layout map lookup) · docs-migrate.py (opt-in docs layout migration)
 │   ├── graphify-refresh.sh (deprecated wrapper) · validate-commit-msg.sh · reuse-lint.sh · spec-lint.sh · index-lint.sh · design-token-lint.sh
 │   ├── lib/         ← render-engine data, shared install logic, and the v3 CLI package
 │   │   ├── devteam/ ← v3 CLI implementation: paths · lock · jsonio · project · registry ·
@@ -72,6 +73,7 @@ dev-team-agents/
 │   │   ├── telemetry-guard.sh     ← single fail-closed definition of _telemetry_enabled
 │   │   ├── python.sh              ← resolves `python3` to a working Python 3.9+ (Windows Git Bash: python / py -3)
 │   │   ├── docs_root.py · docs-root.sh ← single resolver of the docs write root (context_paths[0])
+│   │   ├── doc-layouts.json ← docs layout map: one owning doc per fact category, per layout (ADR-0045)
 │   │   ├── provider-ownership.sh  ← which paths the opencode/Codex installers may write (ADR-0022)
 │   │   └── ensure-claude-framework.sh
 │   ├── helpers/     ← SHIPS and runs in user projects — telemetry-send.sh (called by install.sh, update.sh)
