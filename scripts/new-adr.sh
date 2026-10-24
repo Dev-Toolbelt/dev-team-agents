@@ -16,6 +16,9 @@ TITLE="$(printf '%s' "${1:-}" | tr -d '\000-\037')"
 # no project.json, no Python or no helper beside this script). <root>/development/adrs/
 # is the default; a project that already keeps its ADRs in <root>/adr/ is followed
 # rather than forked into a second series, which is how numbers collided before.
+# In the gated docs layout (project.json `docs_layout`, the `adr` key of
+# lib/doc-layouts.json) a project with no ADRs yet starts <root>/adr/ instead, and
+# names its files ADR-NNNN-slug.md.
 # A symlinked directory is never followed: a cloned repository could otherwise
 # send the new ADR and its index row anywhere on disk. index_lint.py:adr_dir()
 # applies the same rule, so the writer and the checker agree on the directory.
@@ -26,6 +29,7 @@ if [ -f "$DOCS_ROOT_SH" ] && . "$DOCS_ROOT_SH"; then
     DOCS_ROOT="$(devteam_docs_root "$PWD")"
 fi
 real_dir() { [ -d "$1" ] && [ ! -L "$1" ]; }
+NEW_SERIES_PREFIX=""
 SYMLINK_CHECK=""
 IFS='/' read -r -a DOCS_PARTS <<<"$DOCS_ROOT"
 for part in "${DOCS_PARTS[@]}"; do
@@ -52,10 +56,23 @@ has_adrs() {
     done
     return 1
 }
+# Asked only when neither directory holds ADRs (the elif below), and Python only when
+# project.json mentions "gated" at all — the same pre-filter as the read-only docs guard.
+is_gated_layout() {
+    local text=""
+    [ -f "$PWD/.dev-team-agents/project.json" ] || return 1
+    IFS= read -r -d '' text < "$PWD/.dev-team-agents/project.json" || true
+    case "$text" in *gated*) ;; *) return 1 ;; esac
+    command -v devteam_docs_layout >/dev/null 2>&1 || return 1
+    [ "$(devteam_docs_layout "$PWD")" = "gated" ]
+}
 if has_adrs "$DOCS_ROOT/development/adrs"; then
     ADR_DIR="$DOCS_ROOT/development/adrs"
 elif has_adrs "$DOCS_ROOT/adr"; then
     ADR_DIR="$DOCS_ROOT/adr"
+elif is_gated_layout; then
+    ADR_DIR="$DOCS_ROOT/adr"
+    NEW_SERIES_PREFIX="ADR-"
 elif real_dir "$DOCS_ROOT/development/adrs" || ! real_dir "$DOCS_ROOT/adr"; then
     ADR_DIR="$DOCS_ROOT/development/adrs"
 else
@@ -148,10 +165,11 @@ if [ -z "$SLUG" ]; then
     exit 1
 fi
 
-# Continue the scheme the directory already uses; a new directory gets the default.
+# Continue the scheme the directory already uses; a new series gets the layout's
+# default (`ADR-` in the gated layout, none in the development layout).
 # A loop, not `| grep -q`: under pipefail an early-exiting grep can SIGPIPE the
 # producer and report "no match" for a directory that has one.
-PREFIX=""
+PREFIX="$NEW_SERIES_PREFIX"
 while IFS= read -r f; do
     case "$(basename "$f")" in ADR-*) PREFIX="ADR-" ;; esac
 done < <(adr_files)

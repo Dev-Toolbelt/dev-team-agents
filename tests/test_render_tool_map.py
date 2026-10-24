@@ -27,7 +27,8 @@ CLAUDE_ONLY = ("AskUserQuestion", "ScheduleWakeup", "TaskList", "TaskGet", "Task
 # default is `docs` — so each needle is the default root plus the path below it.
 SCRIPT_DOC_PATHS = {
     "scripts/new-adr.sh": ('DOCS_ROOT="docs"', "$DOCS_ROOT/development/adrs"),
-    "scripts/reuse-lint.sh": ('DOCS_ROOT="docs"', "$DOCS_ROOT/development/reuse-guidelines.md"),
+    "scripts/reuse-lint.sh": ('REGISTRY_REL="docs/development/reuse-guidelines.md"',
+                              'devteam_doc_path "$REPO_ROOT" reuse-guidelines'),
     "scripts/spec-lint.sh": ("docs/specs",),
     "scripts/hooks/stop/03e-adr-gap-check.sh": ("docs/(development/adrs|adr)/",),
 }

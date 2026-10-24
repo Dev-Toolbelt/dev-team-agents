@@ -17,7 +17,7 @@ docs/development/adrs/
   0003-authentication-strategy.md
 ```
 
-**The ADR directory is whatever `bash .dev-team-agents/scripts/new-adr.sh --dir` prints**, under the project's docs write root — the first `context_paths` entry, `docs` by default (`skills/shared/project-context/SKILL.md` § Context Loading Order): `<root>/development/adrs/` when it exists, otherwise an existing `<root>/adr/`, otherwise `<root>/development/adrs/` (created with the first ADR). A directory whose ADRs are named `ADR-NNNN-slug.md` keeps that scheme. Every mention of `docs/development/adrs/` in any skill, agent or command means that resolved directory. A symlinked ADR directory is refused, never followed.
+**The ADR directory is whatever `bash .dev-team-agents/scripts/new-adr.sh --dir` prints**, under the project's docs write root — the first `context_paths` entry, `docs` by default (`skills/shared/project-context/SKILL.md` § Context Loading Order). The default follows the project's doc layout (the `adr` key in `scripts/lib/doc-layouts.json`, `skills/shared/doc-flow/SKILL.md` § Doc Layout): in the **gated** layout it is `<root>/adr/` with files named `ADR-NNNN-slug.md`; in the **development** layout (the default) it is `<root>/development/adrs/` when it exists, otherwise an existing `<root>/adr/`, otherwise `<root>/development/adrs/` (created with the first ADR). A directory whose ADRs are named `ADR-NNNN-slug.md` keeps that scheme. Every mention of `docs/development/adrs/` in any skill, agent or command means that resolved directory. A symlinked ADR directory is refused, never followed.
 
 ## MADR Format
 
@@ -85,7 +85,7 @@ Use the script to auto-number and scaffold the file — it also prints existing 
 bash .dev-team-agents/scripts/new-adr.sh "title of the decision"
 ```
 
-This creates `<adr-dir>/NNNN-title-slug.md` — four digits, no prefix, or `ADR-NNNN-title-slug.md` in a directory that already uses that scheme — with the MADR template pre-filled, and appends its row to the ADR index. Fill in the generated file and its index row, and change the status from `Proposed` to `Accepted` in both.
+This creates `<adr-dir>/NNNN-title-slug.md` — four digits, no prefix, or `ADR-NNNN-title-slug.md` in the gated layout or in a directory that already uses that scheme — with the MADR template pre-filled, and appends its row to the ADR index. Fill in the generated file and its index row, and change the status from `Proposed` to `Accepted` in both.
 
 ## ADR Index
 

@@ -1,0 +1,227 @@
+{
+  "$schema": "internal://doc-layouts.json",
+  "_comment": "Canonical docs layout map (ADR-0045). Each key is one fact category with exactly one owning document per layout. Paths are relative to the project's docs write root (the first context_paths entry, scripts/lib/docs_root.py). A null path means the layout has no such document. Read through scripts/lib/docs_root.py (doc_path) or scripts/doc-path.sh — never hardcode a path that this map owns. .dev-team-agents/templates/process-template.md mirrors the gated column and a test fails on drift.",
+  "_layout_key": "project.json `docs_layout`. Absent means `development`, so every project bound before this key existed keeps its layout unchanged. `/devteam:setup` writes `gated` for a new project only.",
+  "default_layout": "development",
+  "new_project_layout": "gated",
+  "layouts": ["development", "gated"],
+  "docs": {
+    "source": {
+      "owns": "Raw inputs — meetings, brainstorms, scope docs, dated, never edited",
+      "owner": "product-analyst",
+      "development": null,
+      "gated": "source/",
+      "readonly": true
+    },
+    "prd": {
+      "owns": "Product rules with stable IDs PRD-<section>-R<n>, each citing its source",
+      "owner": "product-analyst",
+      "development": null,
+      "gated": "prd.md",
+      "readonly": false
+    },
+    "glossary": {
+      "owns": "Domain terms — term, user-language word, definition, code/table/endpoint name",
+      "owner": "product-analyst",
+      "development": null,
+      "gated": "glossary.md",
+      "readonly": false
+    },
+    "nfr": {
+      "owns": "Non-functional requirements NFR-<nn> — target, how measured, status",
+      "owner": "product-analyst",
+      "development": null,
+      "gated": "nfr.md",
+      "readonly": false
+    },
+    "trd": {
+      "owns": "Index of the technical documents — links only, no rule-level detail",
+      "owner": "software-architect",
+      "development": null,
+      "gated": "trd.md",
+      "readonly": false
+    },
+    "architecture": {
+      "owns": "System design, layers, module map, integration patterns",
+      "owner": "software-architect",
+      "development": "development/architecture.md",
+      "gated": "architecture.md",
+      "readonly": false
+    },
+    "tech-stack": {
+      "owns": "Chosen technologies with rationale and rejected alternatives",
+      "owner": "software-architect",
+      "development": "development/tech-stack.md",
+      "gated": "tech-stack.md",
+      "readonly": false
+    },
+    "code-standards": {
+      "owns": "Patterns, naming, linting rules specific to this project",
+      "owner": "software-architect",
+      "development": "development/code-standards.md",
+      "gated": "code-standards.md",
+      "readonly": false
+    },
+    "reuse-guidelines": {
+      "owns": "Mandatory reuse and standardization rules (ADR-0036)",
+      "owner": "software-architect",
+      "development": "development/reuse-guidelines.md",
+      "gated": "reuse-guidelines.md",
+      "readonly": false
+    },
+    "data-model": {
+      "owns": "Schema — Data Model Specification: logical overview, ER diagram per area, data dictionary, PII tags",
+      "owner": "software-architect",
+      "development": "development/database.md",
+      "gated": "data-model.md",
+      "readonly": false
+    },
+    "api-contracts": {
+      "owns": "Endpoints — API style, versioning, auth model, envelopes, every endpoint",
+      "owner": "software-architect",
+      "development": "development/api-contracts.md",
+      "gated": "api-contracts.md",
+      "readonly": false
+    },
+    "threat-model": {
+      "owns": "Threats per trust boundary and the personal-data map",
+      "owner": "software-architect",
+      "development": null,
+      "gated": "security/threat-model.md",
+      "readonly": false
+    },
+    "adr": {
+      "owns": "Architecture decision records — directory resolved by new-adr.sh --dir",
+      "owner": "software-architect",
+      "development": "development/adrs/",
+      "gated": "adr/",
+      "readonly": false
+    },
+    "conformance-report": {
+      "owns": "Quality Gate conformance findings",
+      "owner": "software-architect",
+      "development": "development/conformance-report.md",
+      "gated": "conformance-report.md",
+      "readonly": false
+    },
+    "design-tokens": {
+      "owns": "Canonical visual values — W3C Design Tokens",
+      "owner": "ui-ux-designer",
+      "development": null,
+      "gated": "design/tokens.json",
+      "readonly": false
+    },
+    "design-system": {
+      "owns": "Usage rules referencing token names, component inventory",
+      "owner": "ui-ux-designer",
+      "development": "design/design-system.md",
+      "gated": "design/design-system.md",
+      "readonly": false
+    },
+    "design-prototypes": {
+      "owns": "Raw design-tool exports, one dated folder per feature import, never edited",
+      "owner": "ui-ux-designer",
+      "development": null,
+      "gated": "design/prototypes/",
+      "readonly": true
+    },
+    "design-screens": {
+      "owns": "Approved state screenshots <feature>/<screen>--<state>.png",
+      "owner": "ui-ux-designer",
+      "development": null,
+      "gated": "design/screens/",
+      "readonly": false
+    },
+    "design-flows": {
+      "owns": "Per-feature screen flows — route, states, elements, navigation",
+      "owner": "ui-ux-designer",
+      "development": null,
+      "gated": "design/flows/",
+      "readonly": false
+    },
+    "specs": {
+      "owns": "Feature specs (Given/When/Then, S<n> IDs) and <feature>-contract.md",
+      "owner": "product-analyst",
+      "development": "specs/",
+      "gated": "specs/",
+      "readonly": false
+    },
+    "evals": {
+      "owns": "LLM eval cases, metrics and pass thresholds per AI task",
+      "owner": "software-architect",
+      "development": null,
+      "gated": "ai/evals.md",
+      "readonly": false
+    },
+    "testing": {
+      "owns": "Testing strategy — levels, tooling, fixtures, what runs where",
+      "owner": "software-architect",
+      "development": "tests/testing-strategy.md",
+      "gated": "testing.md",
+      "readonly": false
+    },
+    "process": {
+      "owns": "The flow, its gates, the Definition of Ready and the owner table",
+      "owner": "software-architect",
+      "development": null,
+      "gated": "process.md",
+      "readonly": false
+    },
+    "backlog-index": {
+      "owns": "The single sprint index (gated: also global DoD and DoR)",
+      "owner": "product-analyst",
+      "development": "backlog/sprints/sprints.md",
+      "gated": "backlog.md",
+      "readonly": false
+    },
+    "backlog-readme": {
+      "owns": "Backlog tracker and sprint file list",
+      "owner": "product-analyst",
+      "development": "backlog/README.md",
+      "gated": null,
+      "readonly": false
+    },
+    "dod": {
+      "owns": "Definition of Done shared by every scope",
+      "owner": "product-analyst",
+      "development": "backlog/dod.md",
+      "gated": "backlog.md",
+      "readonly": false
+    },
+    "overview": {
+      "owns": "Per-scope overview-<scope-slug>.md (gated: deliveries and links only)",
+      "owner": "product-analyst",
+      "development": "backlog/",
+      "gated": "backlog/",
+      "readonly": false
+    },
+    "sprints": {
+      "owns": "Sprint files <scope-slug>-sprint-<n>.md",
+      "owner": "product-analyst",
+      "development": "backlog/sprints/",
+      "gated": "backlog/sprints/",
+      "readonly": false
+    },
+    "project": {
+      "owns": "Synthesized project overview",
+      "owner": "setup-assistant",
+      "development": "project.md",
+      "gated": "project.md",
+      "readonly": false
+    },
+    "wiki": {
+      "owns": "Non-obvious domain knowledge, retrieval index at wiki/README.md",
+      "owner": "technical-writer",
+      "development": "wiki/",
+      "gated": "wiki/",
+      "readonly": false
+    },
+    "infrastructure": {
+      "owns": "Environments, deploy and infrastructure",
+      "owner": "devops-specialist",
+      "development": "devops/infrastructure.md",
+      "gated": "devops/infrastructure.md",
+      "readonly": false
+    }
+  }
+}

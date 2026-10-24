@@ -17,6 +17,7 @@ restored on a second machine usable.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -69,6 +70,14 @@ MEMORY_DIR_POINTER = "memory-dir"
 #: Forward slashes on every platform: Git Bash reads it back, and so does Python.
 CORE_DIR_POINTER = "core-dir"
 LEGACY_MEMORY_DIR = "user-data"
+#: The docs layout a project without a ``docs_layout`` key keeps (ADR-0045): every
+#: project bound before the key existed reads exactly the paths it always did.
+DEFAULT_DOCS_LAYOUT = "development"
+#: ``scripts/lib/doc-layouts.json`` is the canonical list. This tuple is used only
+#: where that file is not shipped (the Homebrew payload stages ``devteam/*.py``
+#: alone); tests/test_doc_layouts.py fails when the two disagree.
+_FALLBACK_DOCS_LAYOUTS = ("development", "gated")
+_DOC_LAYOUTS_FILE = Path(__file__).resolve().parent.parent / "doc-layouts.json"
 
 # `fullmatch`, not `$`: `$` also matches before a trailing newline, so a
 # project_id carrying one passed validation and then became a directory name
@@ -107,6 +116,18 @@ def resolve_root(start=None):
         if top:
             return Path(top).resolve()
     return base
+
+
+def docs_layouts():
+    """The layout names ``docs_layout`` may hold, read from ``doc-layouts.json``."""
+    try:
+        with open(_DOC_LAYOUTS_FILE, encoding="utf-8") as handle:
+            names = json.load(handle).get("layouts")
+    except (OSError, ValueError, AttributeError):
+        return _FALLBACK_DOCS_LAYOUTS
+    if isinstance(names, list) and names and all(isinstance(n, str) for n in names):
+        return tuple(names)
+    return _FALLBACK_DOCS_LAYOUTS
 
 
 def validate(data, source="project.json"):
@@ -167,6 +188,14 @@ def validate(data, source="project.json"):
         if ".." in candidate.parts:
             raise EnvError(
                 "{}: context path '{}' must stay inside the project".format(source, item)
+            )
+
+    if "docs_layout" in data:
+        known = docs_layouts()
+        value = data["docs_layout"]
+        if not isinstance(value, str) or value not in known:
+            raise EnvError(
+                "{}: 'docs_layout' must be one of {}".format(source, ", ".join(known))
             )
     return data
 
@@ -253,6 +282,14 @@ def context_paths(root):
     if data is None:
         return list(DEFAULT_CONTEXT_PATHS)
     return list(data.get("context_paths", DEFAULT_CONTEXT_PATHS))
+
+
+def docs_layout(root):
+    """The project's docs layout — ``development`` when the key or the file is absent."""
+    data = load(root)
+    if data is None:
+        return DEFAULT_DOCS_LAYOUT
+    return data.get("docs_layout", DEFAULT_DOCS_LAYOUT)
 
 
 def layout(root):

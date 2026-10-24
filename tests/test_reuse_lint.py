@@ -80,6 +80,36 @@ class ReuseLintTest(StoreTestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("toast", out)
 
+    def gated_registry(self):
+        self.write(".dev-team-agents/project.json",
+                   '{"schema": 1, "project_id": "8f14e45f-ea0c-4c2b-9c1f-2b1f9a7d3e10", "context_paths": ["docs"], '
+                   '"docs_layout": "gated"}')
+        self.write("docs/reuse-guidelines.md", HEADER + self.MODAL + "\n")
+
+    def test_the_gated_layout_reads_the_registry_its_map_names(self):
+        self.gated_registry()
+        self.write("src/a.ts", "new Modal(\n")
+        code, out = self.lint()
+        self.assertEqual(code, 1, out)
+        self.assertIn("modal", out)
+
+    def test_the_gated_layout_ignores_the_development_registry(self):
+        self.write(".dev-team-agents/project.json",
+                   '{"schema": 1, "project_id": "8f14e45f-ea0c-4c2b-9c1f-2b1f9a7d3e10", "context_paths": ["docs"], '
+                   '"docs_layout": "gated"}')
+        self.write("docs/development/reuse-guidelines.md", HEADER + self.MODAL + "\n")
+        self.write("src/a.ts", "new Modal(\n")
+        self.assertEqual(self.lint(), (0, ""))
+
+    def test_the_hook_names_the_gated_registry(self):
+        self.gated_registry()
+        self.git("add", "-A")
+        self.git("commit", "-qm", "registry")
+        self.write("src/a.ts", "new Modal(\n")
+        code, err = self.hook()
+        self.assertEqual(code, 2, err)
+        self.assertIn("registered in docs/reuse-guidelines.md", err)
+
     def test_old_five_column_registry_still_works(self):
         (self.repo / "docs" / "development" / "reuse-guidelines.md").write_text(
             "| name | type | rule | detection | canonical_ref |\n|---|---|---|---|---|\n"

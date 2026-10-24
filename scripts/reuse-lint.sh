@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Enforces <docs>/development/reuse-guidelines.md against the working diff — <docs> is
-# the docs write root, context_paths[0] (lib/docs-root.sh; `docs` by default).
+# Enforces the reuse registry against the working diff — the docs layout map's
+# `reuse-guidelines` key under the docs write root (lib/docs-root.sh;
+# docs/development/reuse-guidelines.md by default).
 # No-op (exit 0) when the registry does not exist — absence means no rule
 # registered, not a failure. See skills/shared/reuse-guidelines/SKILL.md.
 #
@@ -32,13 +33,17 @@ for arg in "$@"; do
 done
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-DOCS_ROOT="docs"
+# The registry is the docs layout map's `reuse-guidelines` key (lib/docs-root.sh):
+# <docs>/development/reuse-guidelines.md in the development layout, <docs>/reuse-guidelines.md
+# in the gated one. Empty means the layout has no registry.
+REGISTRY_REL="docs/development/reuse-guidelines.md"
 # shellcheck source=scripts/lib/docs-root.sh
 DOCS_ROOT_SH="$(dirname "${BASH_SOURCE[0]}")/lib/docs-root.sh"
 if [ -f "$DOCS_ROOT_SH" ] && . "$DOCS_ROOT_SH"; then
-    DOCS_ROOT="$(devteam_docs_root "$REPO_ROOT")"
+    REGISTRY_REL="$(devteam_doc_path "$REPO_ROOT" reuse-guidelines)" || exit 0
 fi
-REGISTRY="$REPO_ROOT/$DOCS_ROOT/development/reuse-guidelines.md"
+[ -n "$REGISTRY_REL" ] || exit 0
+REGISTRY="$REPO_ROOT/$REGISTRY_REL"
 [ -f "$REGISTRY" ] || exit 0
 cd "$REPO_ROOT"
 

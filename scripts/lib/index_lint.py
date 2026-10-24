@@ -171,14 +171,17 @@ def check_wiki(root, report, docs="docs"):
                 report.add("WARN", path, "index Keywords differ from the entry's **Tags:**")
 
 
-def adr_dir(root, docs="docs"):
-    """The directory scripts/new-adr.sh resolves: the first that holds ADRs, else the
-    first that exists."""
-    found = [os.path.join(root, docs, *c) for c in (("development", "adrs"), ("adr",))]
-    found = [path for path in found if inside(root, path)]
+def adr_dir(root, docs="docs", layout=None):
+    """The directory scripts/new-adr.sh resolves: the first that holds ADRs; else, in
+    the gated layout, <docs>/adr (the map's `adr` key) when it exists, and in the
+    development layout the first that exists."""
+    candidates = [os.path.join(root, docs, *c) for c in (("development", "adrs"), ("adr",))]
+    found = [path for path in candidates if inside(root, path)]
     for path in found:
         if any(ADR_NAME_RE.match(name) for name in os.listdir(path)):
             return path
+    if (layout or docs_root.layout(root)) == "gated":
+        return candidates[1] if candidates[1] in found else None
     return found[0] if found else None
 
 

@@ -272,10 +272,67 @@ class NewAdrTest(_DocsRepo):
         """The resolver new-adr.sh sources beside it — absent, it falls back to docs/."""
         lib = self.repo / ".dev-team-agents" / "scripts" / "lib"
         lib.mkdir()
-        for name in ("docs-root.sh", "docs_root.py"):
+        for name in ("docs-root.sh", "docs_root.py", "doc-layouts.json"):
             shutil.copy(str(REPO_ROOT / "scripts" / "lib" / name), str(lib / name))
         shutil.copytree(str(REPO_ROOT / "scripts" / "lib" / "devteam"), str(lib / "devteam"),
                         ignore=shutil.ignore_patterns("__pycache__"))
+
+    def use_docs_layout(self, value):
+        self.write(".dev-team-agents/project.json", json.dumps(
+            {"schema": 1, "project_id": PROJECT_ID, "context_paths": ["docs"], "docs_layout": value}))
+
+    def test_a_gated_project_starts_its_series_in_docs_adr_with_the_adr_prefix(self):
+        self.ship_lib()
+        self.use_docs_layout("gated")
+        self.assertEqual(self.new_adr("--dir").strip(), "docs/adr")
+        self.new_adr("Use Postgres")
+        self.new_adr("Use Redis")
+        self.assertTrue((self.repo / "docs/adr/ADR-0001-use-postgres.md").is_file())
+        self.assertTrue((self.repo / "docs/adr/ADR-0002-use-redis.md").is_file())
+        self.assertFalse((self.repo / "docs/development").exists())
+
+    def test_a_gated_project_with_a_development_series_keeps_it(self):
+        self.ship_lib()
+        self.use_docs_layout("gated")
+        self.write("docs/development/adrs/0003-old.md", "# Old\n")
+        self.assertEqual(self.new_adr("--dir").strip(), "docs/development/adrs")
+        self.new_adr("Use Redis")
+        self.assertTrue((self.repo / "docs/development/adrs/0004-use-redis.md").is_file())
+
+    def test_the_development_layout_is_unchanged_with_the_resolver_shipped(self):
+        self.ship_lib()
+        self.use_docs_layout("development")
+        self.assertEqual(self.new_adr("--dir").strip(), "docs/development/adrs")
+        self.new_adr("Use Postgres")
+        self.assertTrue((self.repo / "docs/development/adrs/0001-use-postgres.md").is_file())
+
+    def test_the_writer_and_the_checker_agree_on_the_directory(self):
+        import index_lint
+
+        states = {
+            "empty": (),
+            "empty-development": ("docs/development/adrs/.keep",),
+            "empty-adr": ("docs/adr/.keep",),
+            "both-empty": ("docs/development/adrs/.keep", "docs/adr/.keep"),
+            "development-series": ("docs/development/adrs/0001-a.md",),
+            "adr-series": ("docs/adr/ADR-0001-a.md",),
+        }
+        self.ship_lib()
+        for layout in ("development", "gated"):
+            for label, files in states.items():
+                with self.subTest(layout=layout, state=label):
+                    for sub in ("docs/development", "docs/adr"):
+                        shutil.rmtree(str(self.repo / sub), ignore_errors=True)
+                    for rel in files:
+                        self.write(rel, "# A\n")
+                    self.use_docs_layout(layout)
+                    written = self.new_adr("--dir").strip()
+                    checked = index_lint.adr_dir(str(self.repo), "docs")
+                    if checked is None:
+                        # The checker has nothing to read until the writer creates the directory.
+                        self.assertFalse((self.repo / written).exists())
+                    else:
+                        self.assertEqual(os.path.relpath(checked, str(self.repo)), written)
 
     def test_the_adr_directory_follows_the_context_paths_write_root(self):
         self.ship_lib()
