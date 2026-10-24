@@ -7,6 +7,8 @@ description: Backlog — epics, sprints, tasks, DoD, dependencies, estimates.
 
 ## Document Structure
 
+The structure below is the `development` layout. In the `gated` layout (`bash .dev-team-agents/scripts/doc-path.sh --layout`) it is replaced where § Gated Layout says so — everything that section does not name stays as written here.
+
 Generate under `docs/backlog/`:
 
 - `overview-<scope-slug>.md` — business requirements document, one per planned scope (the planning deliverable). `<scope-slug>` is the scope name in kebab-case, 2–4 words (`checkout-coupons`). Re-planning the same scope updates its file; a second planned scope gets its own file; it never overwrites or merges into another scope's overview.
@@ -205,6 +207,81 @@ When generating sprint files, use this table to assign agents to tasks. Multiple
 | Full-stack feature | `backend-developer` + `frontend-developer` | `database-specialist` (if schema) · `ui-ux-designer` (if UI) |
 
 At the top of each sprint file, list all agents that will be active in that sprint under the `**Agents**:` field.
+
+## Gated Layout
+
+Applies only when the layout is `gated` (`skills/shared/doc-flow/SKILL.md` § Doc Layout); the
+`development` layout above is unchanged. Sprint file names and the task block format stay as above,
+so the `devteam backlog` CLI reads both layouts the same way.
+
+```
+docs/
+├── backlog.md                      ← the `backlog-index` doc: global DoD + DoR + sprint index
+└── backlog/
+    ├── overview-<scope-slug>.md    ← deliveries + links only
+    ├── epics-<scope-slug>.md
+    └── sprints/
+        └── <scope-slug>-sprint-<n>.md
+```
+
+| Development file | Gated layout |
+|---|---|
+| `backlog/README.md` | Not written — `docs/backlog.md` is the single index |
+| `backlog/sprints/sprints.md` | Not written — its table is the `## Sprints` section of `docs/backlog.md` |
+| `backlog/dod.md` | Not written — the global DoD is the `## Definition of Done` section of `docs/backlog.md` |
+| `overview-<scope-slug>.md` | Reduced to deliveries + links: the rules live in `docs/prd.md`, `docs/glossary.md`, `docs/nfr.md` |
+| Sprint file (no DoD section) | Adds `## Definition of Done`: a link to `docs/backlog.md` plus only this sprint's additions |
+
+### `docs/backlog.md`
+```markdown
+# Backlog
+
+## Tracker
+[Local markdown, or the issue tracker setup-assistant configured]
+
+## Definition of Done
+[The `dod.md` checklist above, plus the items of doc-flow § Definition of Done Additions]
+
+## Definition of Ready
+A task enters a wave only when every item of `skills/shared/doc-flow/SKILL.md` § Definition of
+Ready holds — the list lives there, never copied here.
+
+### Project additions
+- [Project-specific readiness items, or "none"]
+
+## Sprints
+| Scope | Sprint | Theme | Goal (one line) | Status |
+|-------|--------|-------|-----------------|--------|
+| [scope-slug] | [sprint-1](backlog/sprints/[scope-slug]-sprint-1.md) | [Theme] | [What it delivers] | Planned |
+```
+
+Status values and the keep-it-current rule are those of the `sprints.md` index above.
+
+### `overview-<scope-slug>.md` (gated)
+```markdown
+# Scope: [Name]
+
+## Deliveries
+| Delivery | PRD rules | Specs |
+|----------|-----------|-------|
+| [What the user gets] | [PRD-<section>-R<n>, …] | [`docs/specs/<feature>.md`, …] |
+
+## Links
+- PRD: `docs/prd.md` · Glossary: `docs/glossary.md` · NFR: `docs/nfr.md`
+```
+
+### Sprint file additions (gated)
+
+Below the header fields, a `## Definition of Done` section holds `See [docs/backlog.md](../../backlog.md#definition-of-done)`
+followed by this sprint's own additions, or none. Each task block adds two fields after `**Covers**:`:
+
+```markdown
+**Flow**: [`docs/design/flows/<feature>.md`, or "none — <reason>"]
+**ADRs**: [ADR paths this task must follow, or "none"]
+```
+
+Every task cites spec, contract (when the gate fired), flow and ADRs — a path or `none` each, never
+blank — and must pass doc-flow § Definition of Ready before its wave starts.
 
 ## Time Estimation Guidelines
 

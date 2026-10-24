@@ -59,6 +59,10 @@ INACTIVE_AGENTS: [none|comma-separated agent names]
 All generated documents are in English unless a document says otherwise.
 ```
 
+## Gated Layout
+
+A new system in the `gated` docs layout follows `skills/shared/doc-flow/SKILL.md` § Stages through the devteam `plan` command — the planning trigger above already routes it there; nothing is added to the routing block.
+
 ## Test Gate
 
 `TESTS_REQUIRED` is the only key commands branch on, and the one most often read wrong. Resolve it this way, everywhere it is read:

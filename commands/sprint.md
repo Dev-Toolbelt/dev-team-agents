@@ -5,7 +5,7 @@ argument-hint: [<scope-slug> <n> | path to a sprint file]
 
 Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 
-Load `skills/architecture/orchestration/SKILL.md` (Spawn Integrity, spawn prompt contract, consolidated summary) and `skills/shared/spec-gate/SKILL.md` (scope lock, test-first derivation, Spec Sync Gate). The sprint file format — waves, task fields, `sprints.md` index — is defined in `skills/shared/backlog-template/SKILL.md`.
+Load `skills/architecture/orchestration/SKILL.md` (Spawn Integrity, spawn prompt contract, consolidated summary) and `skills/shared/spec-gate/SKILL.md` (scope lock, test-first derivation, Spec Sync Gate). The sprint file format — waves, task fields, the sprint index — is defined in `skills/shared/backlog-template/SKILL.md`. The sprint index is the `backlog-index` doc: resolve its path with `bash .dev-team-agents/scripts/doc-path.sh backlog-index`; every "index" below means that file.
 
 **Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
@@ -18,9 +18,9 @@ Every Task spawn prompt below MUST end with, verbatim: "Before your last paragra
 ## Step 1 — Pick the sprint
 
 - `<scope-slug> <n>` → `docs/backlog/sprints/<scope-slug>-sprint-<n>.md`; `<scope-slug>` must match `^[a-z0-9]+(-[a-z0-9]+)*$` and `<n>` be a positive integer. A path → resolve it; it must sit inside the repository's `docs/backlog/sprints/`. Anything else: refuse and stop.
-- Empty → read `docs/backlog/sprints/sprints.md` and take the sprints whose status is not `Done`. One candidate → use it; several → ask which (one option per sprint: scope, number, goal); none → say there is no pending sprint and suggest `/devteam:plan`. Stop.
+- Empty → read the index and take the sprints whose status is not `Done`. One candidate → use it; several → ask which (one option per sprint: scope, number, goal); none → say there is no pending sprint and suggest `/devteam:plan`. Stop.
 
-When the integration worktree of Step 3 already exists, read the sprint file and `sprints.md` from it — that is where a running sprint keeps its status.
+When the integration worktree of Step 3 already exists, read the sprint file and the index from it — that is where a running sprint keeps its status.
 
 ## Step 2 — Pre-flight
 
@@ -50,7 +50,7 @@ Then ask the strategy — it replaces the orchestration Execution Strategy Gate,
 | **One branch, tasks in sequence** (Recommended when `worktree_active` is `false`) | Same order, no parallelism, every task in the integration worktree |
 | **Other** | The user describes the approach |
 
-**Integration worktree.** Resolve the base branch per `skills/shared/worktree/SKILL.md` (never hardcoded) and create the worktree `<worktree_path>/sprint/<scope-slug>-<n>` on a new branch `sprint/<scope-slug>-<n>` with that skill's setup flow. It is where merges run, where the one-branch strategy works, and where the sprint file and `sprints.md` status are edited and committed. Reuse it on a resumed sprint only when `git merge-base --is-ancestor <base> sprint/<scope-slug>-<n>` holds, and list its commits ahead of base in the status report before the first wave.
+**Integration worktree.** Resolve the base branch per `skills/shared/worktree/SKILL.md` (never hardcoded) and create the worktree `<worktree_path>/sprint/<scope-slug>-<n>` on a new branch `sprint/<scope-slug>-<n>` with that skill's setup flow. It is where merges run, where the one-branch strategy works, and where the sprint file and the index status are edited and committed. Reuse it on a resumed sprint only when `git merge-base --is-ancestor <base> sprint/<scope-slug>-<n>` holds, and list its commits ahead of base in the status report before the first wave.
 
 **Claims** (machine-local, expiring — ADR-0044). Claim every unfinished task before the first wave: `devteam backlog claim <sprint> <TASK-…> --path <integration worktree> --json`. Keep the returned `owner` for the whole run and pass `--owner <owner>` on every later `claim` and `release`; never reuse an owner this run did not receive. Exit 4 **with** `details.claims` means another orchestrator holds a live claim (its `owner_hint` and expiry are there): ask **Take over the sprint** (re-run with `--take-over`) / **Stop**. A resumed run in a new session, or one whose owner was lost in a compaction, meets its own earlier claims this way too. Exit 4 without `details.claims` is a busy lock: retry once, then continue without claims. Exit 3 (unbound project, unreadable claims file) → continue without claims and say so; claims are advisory, the sprint file stays the status.
 
@@ -62,7 +62,7 @@ No `.worktree-session` file is written: every spawn prompt carries `WORKTREE_PAT
 
 For each wave, before spawning:
 
-1. Run `devteam backlog ready <sprint> --path <integration worktree> --json`. A task of the wave listed in `blocked` still has an open blocker (`blocked_by`): hold it back and say which. A task with an `external_note` has a prose dependency nothing can check — confirm it is met before spawning. Renew the claims (`devteam backlog claim … --owner <owner>`), then mark the wave's tasks `[~] In progress` in the sprint file, and the sprint `In progress` in `sprints.md` — both in the integration worktree, committed there.
+1. Run `devteam backlog ready <sprint> --path <integration worktree> --json`. A task of the wave listed in `blocked` still has an open blocker (`blocked_by`): hold it back and say which. A task with an `external_note` has a prose dependency nothing can check — confirm it is met before spawning. Renew the claims (`devteam backlog claim … --owner <owner>`), then mark the wave's tasks `[~] In progress` in the sprint file, and the sprint `In progress` in the index — both in the integration worktree, committed there.
 2. Worktree per task → one worktree per task from `sprint/<scope-slug>-<n>`, named from the task's `Worktree branch`, per the worktree skill's setup flow. A task resumed `[~] In progress` reuses its existing branch and worktree; a task whose branch is already in `git branch --merged sprint/<scope-slug>-<n>` is marked `[x] Done` instead of redone.
 
 Spawn every task of the wave **in parallel** (one branch: one at a time, in the integration worktree). Each prompt carries the task's description, its `Covers` scenario IDs (its own acceptance criteria only when `Spec` is none), the spec and contract paths, `WORKTREE_PATH=<path>`, `BRANCH=<branch>`, the worktree rule of orchestration § Autonomous Sprint Protocol step 3, and: "Implement only the scenarios in Covers (spec-gate § Scope Lock) and amend it per § Living Spec when reality diverges. Commit your work on BRANCH."
@@ -82,11 +82,12 @@ A task that is not merged keeps out of later waves every task depending on it, d
 
 ## Step 6 — Close
 
-1. Release every claim this run still holds (`devteam backlog release <sprint> --owner <owner>`), also when the sprint stops early. Each task marked Done ran the `implemented` check of spec-gate § Task Resolution. All tasks done → set the sprint `Done` in `sprints.md` (integration worktree). Otherwise leave it `In progress` and list what is left; running `/devteam:sprint` again resumes there.
+1. Release every claim this run still holds (`devteam backlog release <sprint> --owner <owner>`), also when the sprint stops early. Each task marked Done ran the `implemented` check of spec-gate § Task Resolution. All tasks done → set the sprint `Done` in the index (integration worktree). Otherwise leave it `In progress` and list what is left; running `/devteam:sprint` again resumes there.
 2. Consolidated summary per the orchestration skill — the Agents table filled from returned banners only.
 3. **Visual Check Gate** from the interaction-patterns skill when a task changed UI. The Review Next-Step Gate is skipped: every wave was already reviewed.
 4. Write the session summary entry (`<memory-dir>/session-summary.md`, `skills/shared/project-context/SKILL.md` § Memory Layers) and run the `skills/shared/feature-learn/SKILL.md` promotion pass.
-5. Hand off in one line: `/devteam:pr` for `sprint/<scope-slug>-<n>`; the integration worktree is torn down by the worktree skill's finalization when that branch is merged.
+5. **Nudge `/devteam:learn`** — a sprint close is a finalization signal (doc-flow § Stages, stage 7). From the integration worktree, run the canonical learn-nudge check in `commands/merge.md` § Step 4 with `sprint/<scope-slug>-<n>` as the working branch, so the learn commits land on it and reach the PR.
+6. Hand off in one line: `/devteam:pr` for `sprint/<scope-slug>-<n>`; the integration worktree is torn down by the worktree skill's finalization when that branch is merged.
 
 ---
 

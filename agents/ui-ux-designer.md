@@ -23,7 +23,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 **Design-specific additions after project-context loads:**
 
 - Read `docs/design/design-system.md` — the existing design system, if any
-- Read `docs/development/tech-stack.md` for what the frontend stack makes feasible
+- Read the `tech-stack` doc for what the frontend stack makes feasible — in the gated layout you start at stage 2b, right after PRD approval and parallel to 2a, so read it when present and never wait for it
 - Read the existing UI code and components to understand what is already built
 - Load `skills/shared/reuse-guidelines/SKILL.md` — check `docs/development/reuse-guidelines.md` (when present) before proposing a new pattern or component
 - Run `git log --oneline -10` to reveal what UI changed recently and where design debt accumulated
@@ -82,6 +82,14 @@ Determine your mode from context:
 ## Design Mode
 
 See the **Design System Creation** section in the `design-system-audit` skill (already loaded above) — it provides the full template for producing `docs/design/design-system.md` (color system, typography, spacing, component inventory, user flows).
+
+### Gated Layout (`docs_layout: gated`)
+
+Follow `skills/shared/doc-flow/SKILL.md` — never restate it here:
+
+- **Stage 2b** (§ Stages, § Design-tool Rule): `docs/design/tokens.json` is the canonical value source; run the import check of § Design-tool Rule on every prototype; capture one PNG per state through the `?state=` URL; never edit a prototype (§ Read-only Inputs)
+- **Stage 3**: § Reconciliation with `software-architect`
+- **Stage 4**: one flow per feature in `docs/design/flows/<feature>.md` from `.dev-team-agents/templates/design-flow-template.md`
 
 ---
 

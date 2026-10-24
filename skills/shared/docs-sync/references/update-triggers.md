@@ -4,27 +4,46 @@ When work is delivered, patch the corresponding doc section immediately. Use the
 
 ## Trigger Table
 
-| Work delivered | Doc to patch | Section |
+Every fact routes to exactly **one** owning doc (`skills/shared/doc-flow/SKILL.md` § Owner Rule). The
+"Doc to patch" column is a key from `scripts/lib/doc-layouts.json`; resolve its path with
+`bash .dev-team-agents/scripts/doc-path.sh <key>`. Rows marked *gated* apply only when that key
+resolves to a path (empty output = the layout has no such doc — skip the row).
+
+| Work delivered | Doc to patch (key) | Section |
 |---------------|-------------|---------|
-| New dep installed (language, framework, lib) | `tech-stack.md` | Tech Stack table |
-| New service or module created | `architecture.md` | Module Map |
-| New API endpoint or contract defined | `architecture.md` | API Contracts |
-| New code pattern established | `code-standards.md` | Patterns in Use |
-| New linter/formatter rule added | `code-standards.md` | Detected Config |
-| Sprint file created | `backlog/README.md` | Sprint Files |
-| New UI component added | `design/design-system.md` | Component Inventory |
-| New color or typography token | `design/design-system.md` | relevant section |
-| Task completed touching a directory | `project.md` | Active Areas |
-| Environment deployed for the first time, taken down, or its URL changed | `project.md` | Environments / status |
-| Sprint closed, or the project moved to a new phase (MVP shipped, maintenance) | `project.md` | Current phase |
-| Backlog or tracker moved to another location | `project.md` | Where work is tracked |
+| New dep installed (language, framework, lib) | `tech-stack` | Tech Stack table |
+| New service or module created | `architecture` | Module Map |
+| New API endpoint or contract defined | `api-contracts` — never `architecture` | Endpoints |
+| Schema migration applied | `data-model` — never `architecture` | Data Dictionary and the area's ER diagram |
+| New code pattern established | `code-standards` | Patterns in Use |
+| New linter/formatter rule added | `code-standards` | Detected Config |
+| Sprint file created | `backlog-readme` (development) · `backlog-index` (gated) | Sprint Files · sprint row |
+| New UI component added | `design-system` | Component Inventory |
+| New color or typography token | `design-system` (development) · `design-tokens` (gated) | relevant section · token entry |
+| Task completed touching a directory | `project` | Active Areas |
+| Environment deployed for the first time, taken down, or its URL changed | `project` | Environments / status |
+| Sprint closed, or the project moved to a new phase (MVP shipped, maintenance) | `project` | Current phase |
+| Backlog or tracker moved to another location | `project` | Where work is tracked |
 | Plan document implemented, abandoned, or replaced | the plan itself | `**Status:**` line — see `SKILL.md` § Document Lifecycle |
-| ADR created, superseded, or deprecated | ADR directory `README.md` | Index row — see `skills/shared/adr/SKILL.md` § ADR Index |
-| Schema migration applied | `architecture.md` | Module Map or API Contracts |
-| Architectural layer added or renamed | `architecture.md` | Layers |
-| Non-obvious domain behavior discovered | `wiki/<domain>/<topic>.md` | New or updated wiki entry |
-| User designates a specific component/class/helper, file location, or design rule as mandatory going forward | `docs/development/reuse-guidelines.md` | New registry row — see `skills/shared/reuse-guidelines/SKILL.md` |
-| User explicitly asks to standardize, note, or remember something (general convention, not a specific reusable component/path/rule) | `wiki/<domain>/<topic>.md` or `code-standards.md` | User-triggered wiki write |
+| ADR created, superseded, or deprecated | `adr` directory `README.md` | Index row — see `skills/shared/adr/SKILL.md` § ADR Index |
+| Architectural layer added or renamed | `architecture` | Layers |
+| Product rule added, changed, or retired *(gated)* | `prd` | Rule row `PRD-<section>-R<n>` with its source |
+| Domain term introduced or renamed *(gated)* | `glossary` | Term row |
+| Non-functional target set or its status changed *(gated)* | `nfr` | `NFR-<nn>` row |
+| Technical doc added, moved, or retired *(gated)* | `trd` | Index link |
+| New trust boundary, threat, or personal-data flow *(gated)* | `threat-model` | Boundary section / personal-data map |
+| Screen flow added or changed *(gated)* | `design-flows` | `<feature>.md` |
+| State screenshot approved *(gated)* | `design-screens` | `<feature>/<screen>--<state>.png` |
+| LLM task, eval case, metric, or threshold changed *(gated)* | `evals` | The AI task's section |
+| Test level, tooling, or fixture strategy changed | `testing` | relevant section |
+| Stage gate, Definition of Ready, or owner table changed *(gated)* | `process` | relevant section |
+| Sprint closed or global DoD/DoR changed *(gated)* | `backlog-index` | Sprint row · DoD · DoR |
+| Non-obvious domain behavior discovered | `wiki` → `wiki/<domain>/<topic>.md` | New or updated wiki entry |
+| User designates a specific component/class/helper, file location, or design rule as mandatory going forward | `reuse-guidelines` | New registry row — see `skills/shared/reuse-guidelines/SKILL.md` |
+| User explicitly asks to standardize, note, or remember something (general convention, not a specific reusable component/path/rule) | `wiki/<domain>/<topic>.md` or `code-standards` | User-triggered wiki write |
+
+An owner doc that changes after its stage gate was approved also gets an `## Amendment Log` row
+(`skills/shared/doc-flow/SKILL.md` § Amendment Log).
 
 ---
 
@@ -38,7 +57,7 @@ When work is delivered, patch the corresponding doc section immediately. Use the
 
 **Never:**
 - Write the entire file when only one section changed
-- Add a "Changelog" or "History" section to any doc
+- Add a "Changelog" or "History" section to any doc — the only exception is the `## Amendment Log` of an owner doc (`skills/shared/doc-flow/SKILL.md` § Amendment Log)
 - Copy content verbatim from one doc to another (link instead)
 - Create sections not defined in the schema without explicit user approval
 - Leave a section with only a heading and no content — omit the heading instead

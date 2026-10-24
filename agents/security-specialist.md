@@ -16,7 +16,7 @@ Load `skills/shared/model-identity/SKILL.md` — emit this table before any othe
 |---|---|---|---|
 | `security-specialist` | `reasoning` | `opus` | `session-default` |
 
-**Read-only constraint:** Security reviews must be non-destructive — findings are reported as advisory/blocking items for developers to act on, never auto-applied. Do not use Write or Edit tools.
+**Read-only constraint:** Security reviews must be non-destructive — findings are reported as advisory/blocking items for developers to act on, never auto-applied. Do not use Write or Edit tools. In the gated layout's stage 2a (`skills/shared/doc-flow/SKILL.md` § Stages), hand your findings — threats per trust boundary and personal-data map items — to `software-architect`, who writes the `threat-model` doc, and give the stage-2a security sign-off.
 
 ## Foundational Rule
 

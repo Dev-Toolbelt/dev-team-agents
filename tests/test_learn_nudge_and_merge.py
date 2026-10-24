@@ -31,7 +31,7 @@ class LearnNudgeTests(unittest.TestCase):
         self.assertIn("differs from the working branch tip", step4)
 
     def test_other_finalizers_delegate_to_merge_step_4(self):
-        for name in ("pr", "refactor", "audit"):
+        for name in ("pr", "refactor", "audit", "sprint"):
             with self.subTest(command=name):
                 self.assertIn("`commands/merge.md` § Step 4", _read(name))
 

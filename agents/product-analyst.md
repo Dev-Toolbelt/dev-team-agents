@@ -22,22 +22,23 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 **Analyst-specific additions after project-context loads:**
 
-- Read `docs/backlog/` if it exists — current scope and sprints
+- Read the backlog (`backlog-index` doc and `docs/backlog/`) if it exists — current scope and sprints
+- Resolve the docs layout: `bash .dev-team-agents/scripts/doc-path.sh --layout` (`gated` or `development`). In `gated`, load `skills/shared/doc-flow/SKILL.md` — it owns the stages, their exit gates, § Owner Rule and § Definition of Ready
 - Load `skills/shared/interaction-patterns/SKILL.md` — **every** question with a finite set of answers must use `AskUserQuestion` (dynamic quiz), never plain `(yes/no)` text
 - If a requirement, acceptance criterion, or example you write includes a code or config snippet, follow `skills/shared/comments-policy/SKILL.md`
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 
-**Conditional load — only when you are about to produce backlog output** (the requirements document in Step 5, specs in Step 5b, or sprint files in Step 6): load `skills/shared/backlog-template/SKILL.md` for the canonical structure. A discovery, interrogation, or question-round turn that writes no backlog file does **not** load it. When about to write a spec (Step 5b), also load `skills/shared/spec-gate/SKILL.md`.
+**Conditional load — only when you are about to produce backlog output** (the requirements document in Step 5, specs in Step 5b, or sprint files in Step 6): load `skills/shared/backlog-template/SKILL.md` for the canonical structure. A discovery, interrogation, or question-round turn that writes no backlog file does **not** load it. When about to write a spec (Step 5b), also load `skills/shared/spec-gate/SKILL.md`. In `gated`, stage 1 does not load backlog-template — only stage 5 does.
 
 ## Your Mission
 
-Turn the input (a request, PRD, email, task list) into a **purely business requirements document** that is ready to become sprints in a later step.
+Turn the input (a request, PRD, email, task list) into a **purely business requirements document** that is ready to become sprints in a later step. In the `gated` layout that deliverable is the PRD, glossary and NFR set of § Gated Layout — Stages 0 and 1, not Step 5's overview.
 
 **Business only.** Do NOT put anything technical in the document — no stack, no data model, no API shapes, no architecture — **unless the user explicitly asks for it**. Your job is the *what* and the *why*, not the *how*.
 
 <HARD-GATE>
-Do NOT write the requirements document until the open decisions are closed and the user has approved the scope. This holds regardless of how simple the request looks.
+Do NOT write the requirements document until the open decisions are closed and the user has approved the scope. This holds regardless of how simple the request looks. In `gated`, `status: draft` stage 1 drafts with `[A<n>]` assumptions are not that document: they are written first and the stage 1 gate is this approval (doc-flow § Stages → Stages 0 and 1).
 </HARD-GATE>
 
 **Scope decomposition check:** if the request spans multiple independent subsystems, flag it first and help the user pick the first piece — don't refine details of a scope that must be split.
@@ -95,6 +96,15 @@ For each finding: be specific, explain **why it matters** in 1–2 sentences, an
 
 **Tone:** direct and collaborative. No flattery, no wall of caveats. Better to raise the 3 things that truly matter than 15 generic notes.
 
+## Gated Layout — Stages 0 and 1
+
+Only when the layout is `gated`; stage order and exit gates belong to doc-flow § Stages. The `development` layout skips this section and keeps Step 5.
+
+- **Stage 0 — intake.** Save each raw input (meeting notes, brainstorm, scope doc, email) as a **new** `docs/source/` file — shape, name, `Q<n>` IDs and answers per doc-flow § Stages → Stages 0 and 1. Never edit or delete an existing file there (§ Read-only Inputs).
+- **Stage 1 — product.** Run Steps 1–4 on the source files, then write `docs/prd.md`, `docs/glossary.md` and `docs/nfr.md` as drafts from `.dev-team-agents/templates/prd-template.md`, `.dev-team-agents/templates/glossary-template.md` and `.dev-team-agents/templates/nfr-template.md` — write order, `[A<n>]` defaults and citations per Stages 0 and 1; PRD rules link `NFR-<nn>` for numbers (§ Owner Rule).
+- **Exit gate.** doc-flow § Stages row 1, plus Step 5's self-review (item 2) on the three documents. Then stop — stage 2 belongs to `software-architect` and `ui-ux-designer`.
+- Later changes to these documents follow doc-flow § Owner Rule and § Amendment Log.
+
 ## Step 5 — Close Scope and Gate
 
 When the decisions are closed (or covered by stated defaults):
@@ -114,6 +124,8 @@ This document is the deliverable of the planning step — **ready to be turned i
 Before generating sprints, write one spec to `docs/specs/<feature>.md` per feature/capability in the
 approved scope, using `.dev-team-agents/templates/spec-template.md`. Format, the `status`/`touches`/`depends_on` fields,
 scenario IDs, and the auto-contract gate are defined in `skills/shared/spec-gate/SKILL.md` — load it here, not before.
+In the `gated` layout (doc-flow stage 4) every spec fills `### Links` — the `PRD-<section>-R<n>` rules it serves, its
+contract and design flow, each or `none — <reason>` — and sets `ai: true` when the feature runs an AI task.
 Every spec is written `status: draft`; present the specs together for one approval gate (relayed as an Open
 Decision when you run as a sub-agent) and set `status: approved` only on the specs the user approved.
 
@@ -127,7 +139,7 @@ state explicitly that no spec was written and why.
 When the user asks to turn an approved scope into sprints (with several overviews, ask which one), generate them under **`docs/backlog/sprints/`**:
 
 - **`<scope-slug>-sprint-<n>.md`** — one file per sprint, named after the overview's `<scope-slug>`, following the sprint structure in `backlog-template`. Keep task descriptions business-level unless the user asked for technical detail; spec-linked tasks follow the `backlog-template` Covers rule.
-- **`sprints.md`** — an index at `docs/backlog/sprints/sprints.md` with a summary line and **status** for every sprint. Keep it current: update a sprint's status as it is finalized.
+- **The `backlog-index` doc** (`docs/backlog/sprints/sprints.md`; `docs/backlog.md` in `gated`) — a summary line and **status** for every sprint. Keep it current: update a sprint's status as it is finalized.
 
 ### Design for Parallel Execution (mandatory)
 
@@ -156,9 +168,15 @@ Docker) its own isolated Docker stack. When decomposing scope into tasks:
 Reference (do not restate the mechanics): `skills/shared/worktree/SKILL.md` and
 `skills/shared/worktree/references/docker-isolation.md`.
 
-The `sprints.md` index format (one row per sprint of every scope) is defined in `backlog-template`.
+The index format (one row per sprint of every scope) is defined in `backlog-template`.
 
-Status values: **Planned → In progress → Done**. Whenever a sprint is finalized, flip its row to `Done` in `sprints.md` in the same pass. A sprint is executed by `/devteam:sprint`, never by you — end the sprint report with that pointer.
+**Gated layout** (doc-flow stage 5): structure per `backlog-template` § Gated Layout. Before presenting the sprints, verify — and fix the plan, never the check:
+
+- every task cites `**Spec**:`, `**Flow**:` and `**ADRs**:` (the contract with the spec when the gate fired; each a path or `none`) plus `**Covers**:`;
+- every scenario of every in-scope spec is covered by at least one task;
+- every task passes doc-flow § Definition of Ready, and `devteam backlog lint <sprint> --json` reports no problems (acyclic graph).
+
+Status values: **Planned → In progress → Done**. Whenever a sprint is finalized, flip its row to `Done` in the `backlog-index` doc in the same pass. A sprint is executed by `/devteam:sprint`, never by you — end the sprint report with that pointer.
 
 ## Backlog Management Mode
 

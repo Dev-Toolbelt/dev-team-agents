@@ -95,6 +95,7 @@ class EmbeddedCaptureContractTests(unittest.TestCase):
             "git write-tree",
             "git check-ignore -q",
             "docs/development/",
+            "--writable` prints",
             "gitleaks protect --staged",
             "git restore --staged",
             "**Added by learn**",

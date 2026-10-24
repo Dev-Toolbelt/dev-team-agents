@@ -30,7 +30,7 @@ INVOCATIONS = {
 
 INLINE_DIRECTIVE = "with `--auto` inline, in this same turn"
 HAND_OFF = "hand off by telling the user to invoke"
-DELEGATORS = ("pr", "refactor", "audit")
+DELEGATORS = ("pr", "refactor", "audit", "sprint")
 
 
 def _render(provider, target):
