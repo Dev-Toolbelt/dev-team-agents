@@ -26,7 +26,10 @@ Structure from `templates/spec-template.md` (installed: `.dev-team-agents/templa
 
 - **Frontmatter**: `status:` (§ Spec Status), `touches: [backend, frontend, database, mobile]` (layers this feature affects —
   list only the ones that actually change), `depends_on: [<feature>, ...]` (other specs this one
-  needs, or `[]`)
+  needs, or `[]`), optional `ai: true|false` (true when the feature runs an AI task — in the `gated`
+  layout spec-lint then requires its evals)
+- **Links** (required): the PRD rules (`PRD-<section>-R<n>`), contract and design flow the spec traces
+  to — each a path/ID or `none — <reason>` (`skills/shared/doc-flow/SKILL.md` § Trace Chain)
 - **User Story**: as a [role], I want [capability], so that [outcome]
 - **Acceptance Criteria**: one or more `Given / When / Then` blocks, each headed
   `**Scenario S<n>: <name>**` — this is the only place "done" is defined; nothing outside it is in
@@ -48,6 +51,9 @@ touches.length > 1  OR  the spec introduces a new API/schema/integration point
 replaces that dependency. `software-architect` writes **only** the interface: request/response
 shapes, schema fields, error format, and the technical dependency order between specs. It does not
 touch the scope overview, does not restate the business rule, and does not make product decisions.
+Entries already in the `api-contracts` and `data-model` docs are cited by ID, never restated — only
+what the feature adds or changes is written out, and the owner doc is changed too (doc-flow § Owner
+Rule). A contract is complete only when its `### Open Points` holds zero points.
 
 **False** (single layer, no new integration surface) → skip the contract; the sprint task links the
 spec alone.
@@ -89,7 +95,7 @@ applies to them, not to the whole spec. A task whose `**Spec**:` is `none` keeps
 
 The implementation commands (`backend`, `frontend`, `fullstack`, `mobile`, `fix`) flip the task's
 `**Status**:` — `[~] In progress` when they spawn its agents, `[x] Done` at session close only when
-no BLOCKER is open (`fix`: after its review gate; a declined review leaves `[~]`) — and mirror the sprint's row in `docs/backlog/sprints/sprints.md` (`In progress`
+no BLOCKER is open (`fix`: after its review gate; a declined review leaves `[~]`) — and mirror the sprint's row in the `backlog-index` doc (`In progress`
 on the first task, `Done` on the last). `/devteam:sprint` sets `[x] Done` after the task's merge
 instead (its Step 5). `qa` and `tester` read the task and never flip it. Right after marking a task
 Done, the same command checks its spec against the `implemented` row of § Spec Status and sets
@@ -110,6 +116,11 @@ Every coding agent (`backend-developer`, `frontend-developer`, `mobile-developer
   otherwise flag it to the user in plain text. Do not assume and proceed.
 - If the spec and its contract disagree, the contract wins on interface shape; a business
   contradiction goes back to `product-analyst`, not a silent implementation choice.
+- **Gated layout only** (`bash .dev-team-agents/scripts/doc-path.sh --layout` prints `gated`): before
+  writing code, check the task against doc-flow § Definition of Ready — `bash
+  .dev-team-agents/scripts/spec-lint.sh` reports a failing task as `[NOT-READY]`. A Not Ready task is
+  refused: write no code, name the unmet items, and hand it back to the owner of each (doc-flow §
+  Owner Rule). The `development` layout has no Ready check.
 
 <HARD-GATE>
 A feature is never marked implemented or `done` while an open assumption remains. Every assumption
@@ -227,7 +238,8 @@ recurring silently in the next feature.
 
 Each `TASK-NNN` in a sprint file (`backlog-template` skill) carries a `**Spec**:` field pointing at
 `docs/specs/<feature>.md` (and `<feature>-contract.md` when it exists) and a `**Covers**:` field
-listing the scenario IDs it delivers. The task does not restate the criteria — the spec is their
+listing the scenario IDs it delivers — in the `gated` layout also `**Flow**:` and `**ADRs**:`
+(`backlog-template` § Gated Layout). The task does not restate the criteria — the spec is their
 only home. Task ordering across waves respects `depends_on` from the linked specs, not just
 file-level collisions.
 
@@ -244,5 +256,6 @@ and on demand. It is a no-op when `docs/specs/` does not exist.
 | An Amendment Log line with an empty or placeholder reason | |
 | A task's `**Spec**:` path missing, or a `**Covers**:` ID absent from that spec | |
 | A `<feature>-contract.md` with no `<feature>.md` beside it | |
+| | Gated layout: a task failing doc-flow § Definition of Ready (`[NOT-READY]`) — an open contract point, a missing link, an `ai: true` spec without evals. Not a Stop blocker, because planning has gaps by design; § Scope Lock refuses the task before any code |
 
 Fix what it reports in the spec or the task — never by deleting the scenario or the log line.

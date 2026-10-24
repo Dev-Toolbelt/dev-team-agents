@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stop sub-script: runs scripts/spec-lint.sh when the session touched the spec
-# layer (docs/specs/ or docs/backlog/sprints/) — see
+# layer (specs, sprints, the backlog index, screen flows and screens, evals) — see
 # skills/shared/spec-gate/SKILL.md § Mechanical Check.
 #
 # An ERROR exits 2 on every Stop until it is fixed: Claude Code and Codex continue
@@ -21,7 +21,22 @@ if [ "${DEVTEAM_TOUCHED_COMPUTED:-0}" != "1" ]; then
     . "$LIB_DIR/touched-paths.sh"
     DEVTEAM_TOUCHED_PATHS="$(devteam_compute_touched_paths || true)"
 fi
-grep -qE '(^|/)docs/(specs|backlog/sprints)/' <<<"${DEVTEAM_TOUCHED_PATHS:-}" || exit 0
+# The spec layer's docs, as paths below the docs root: the `specs`, `sprints`,
+# `backlog-index`, `design-flows`, `design-screens` and `evals` keys of
+# lib/doc-layouts.json in every layout. Kept static so a Stop forks nothing for it;
+# tests/test_doc_layouts.py fails when a map path for one of those keys stops matching.
+SPEC_LAYER_RE='(specs/|backlog/sprints/|backlog\.md$|design/(flows|screens)/|ai/evals\.md$)'
+TOUCHED="${DEVTEAM_TOUCHED_PATHS:-}"
+# Under `docs/` first: no lookup. Only a path that has the shape under some other
+# folder asks for the write root (context_paths[0], lib/docs-root.sh).
+if ! grep -qE "(^|/)docs/$SPEC_LAYER_RE" <<<"$TOUCHED"; then
+    grep -qE "(^|/)$SPEC_LAYER_RE" <<<"$TOUCHED" || exit 0
+    DOCS_ROOT_SH="$LIB_DIR/../../lib/docs-root.sh"
+    # shellcheck source=scripts/lib/docs-root.sh
+    [ -f "$DOCS_ROOT_SH" ] && . "$DOCS_ROOT_SH" 2>/dev/null || exit 0
+    WRITE_ROOT_RE="$(devteam_regex_escape "$(devteam_docs_root "$REPO_ROOT")")"
+    grep -qE "^$WRITE_ROOT_RE/$SPEC_LAYER_RE" <<<"$TOUCHED" || exit 0
+fi
 
 # Only the lint shipped beside this hook — never a project's own copy
 # (lib/shipped-lint.sh).

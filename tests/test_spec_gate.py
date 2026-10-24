@@ -5,6 +5,7 @@ scratch state directory — never the developer's own. See
 skills/shared/spec-gate/SKILL.md § Mechanical Check.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -232,6 +233,207 @@ class SpecLintTest(_SpecRepo):
         self.assertEqual(self.lint(), (0, ""))
 
 
+FLOW = """# Flow — Checkout
+
+## Screen: Pay
+
+### States
+| State | Trigger | Frame / PNG | Status |
+|---|---|---|---|
+| loading | submit | `docs/design/screens/checkout/pay--loading.png` | {status} |
+| error | refused | {error_png} | approved |
+"""
+
+CONTRACT = "# Contract — Checkout\n\n### Open Points\n{points}\n### Amendment Log\n"
+
+
+@requires_bash()
+class DefinitionOfReadyTest(_SpecRepo):
+    """skills/shared/doc-flow/SKILL.md § Definition of Ready — gated layout only."""
+
+    def lint(self):
+        result = subprocess.run(["bash", str(LINT)], cwd=str(self.repo), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return result.returncode, result.stdout.decode()
+
+    def layout(self, value):
+        self.write(".dev-team-agents/project.json", json.dumps(
+            {"schema": 1, "project_id": "8f14e45f-ea0c-4c2b-9c1f-2b1f9a7d3e10", "context_paths": ["docs"],
+             "docs_layout": value}))
+
+    def task(self, status="[ ] Pending"):
+        self.write("docs/backlog/sprints/pay-sprint-1.md",
+                   SPRINT.format(spec="checkout", covers="S1").replace("[ ] Pending", status))
+
+    def frontend_spec(self, ai=False):
+        text = spec().replace("touches: [backend]", "touches: [backend, frontend]")
+        if ai:
+            text = text.replace("touches:", "ai: true\ntouches:")
+        self.write("docs/specs/checkout.md", text)
+
+    def ready_design(self):
+        self.write("docs/design/flows/checkout.md", FLOW.format(
+            status="approved", error_png="`docs/design/screens/checkout/pay--error.png`"))
+        for state in ("loading", "error"):
+            self.write("docs/design/screens/checkout/pay--{}.png".format(state), "png")
+
+    def assert_not_ready(self, needle):
+        code, out = self.lint()
+        self.assertEqual(code, 0, out)
+        self.assertRegex(out, r"(?m)^\[NOT-READY\] TASK-001: .*" + needle)
+
+    def assert_ready(self):
+        code, out = self.lint()
+        self.assertNotIn("[NOT-READY]", out)
+        self.assertEqual(code, 0, out)
+
+    def test_the_development_layout_never_checks_readiness(self):
+        for layout in (None, "development"):
+            with self.subTest(layout=layout):
+                if layout:
+                    self.layout(layout)
+                self.frontend_spec(ai=True)
+                self.write("docs/specs/checkout-contract.md", CONTRACT.format(points="- which currency?\n"))
+                self.task()
+                self.assertEqual(self.lint(), (0, ""))
+
+    def test_an_open_point_in_the_contract_is_not_ready(self):
+        self.layout("gated")
+        self.write("docs/specs/checkout.md", spec())
+        self.write("docs/specs/checkout-contract.md", CONTRACT.format(points="- which currency?\n- none\n"))
+        self.task()
+        self.assert_not_ready("checkout-contract.md' has 2 open point")
+
+    def test_the_contract_template_as_shipped_has_no_open_points(self):
+        self.layout("gated")
+        self.write("docs/specs/checkout.md", spec())
+        self.write("docs/specs/checkout-contract.md",
+                   (REPO_ROOT / "templates" / "contract-template.md").read_text(encoding="utf-8"))
+        self.task()
+        self.assertNotIn("open point", self.lint()[1])
+
+    def test_no_bullets_or_a_single_none_is_ready(self):
+        self.layout("gated")
+        self.write("docs/specs/checkout.md", spec())
+        for points in ("", "- none\n", "- None.\n"):
+            with self.subTest(points=points):
+                self.write("docs/specs/checkout-contract.md", CONTRACT.format(points=points))
+                self.task()
+                self.assert_ready()
+
+    def test_an_indented_sub_bullet_is_not_another_open_point(self):
+        self.layout("gated")
+        self.write("docs/specs/checkout.md", spec())
+        self.write("docs/specs/checkout-contract.md", CONTRACT.format(points="- which currency?\n  - EUR or USD\n"))
+        self.task()
+        self.assert_not_ready("checkout-contract.md' has 1 open point")
+
+    def test_a_contract_outside_the_repository_is_never_read(self):
+        self.layout("gated")
+        outside = self.tmp / "x-contract.md"
+        outside.write_text(CONTRACT.format(points="- leaked\n"), encoding="utf-8")
+        self.write("docs/specs/checkout.md", spec())
+        depth = "../" * (len(self.repo.relative_to(self.tmp).parts) + 2)
+        self.write("docs/backlog/sprints/pay-sprint-1.md", SPRINT.format(spec="checkout", covers="S1").replace(
+            "`docs/specs/checkout.md`", "`docs/specs/checkout.md`, `docs/specs/{}x-contract.md`".format(depth)))
+        out = self.lint()[1]
+        self.assertNotIn("open point", out)
+        self.assertIn("x-contract.md', which does not exist", out)
+
+    def test_a_symlinked_specs_folder_is_not_followed_out(self):
+        self.layout("gated")
+        elsewhere = self.tmp / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "checkout-contract.md").write_text(CONTRACT.format(points="- leaked\n"), encoding="utf-8")
+        (elsewhere / "checkout.md").write_text(spec(), encoding="utf-8")
+        self.specs.rmdir()
+        os.symlink(str(elsewhere), str(self.specs))
+        self.task()
+        self.assertEqual(self.lint(), (0, ""))
+
+    def test_an_oversized_contract_is_not_read(self):
+        self.layout("gated")
+        self.write("docs/specs/checkout.md", spec())
+        self.write("docs/specs/checkout-contract.md",
+                   CONTRACT.format(points="- open\n") + "x" * (1024 * 1024 + 1))
+        self.task()
+        self.assertNotIn("open point", self.lint()[1])
+
+    def test_unclosed_comments_and_many_headings_stay_linear(self):
+        import spec_lint
+
+        text = "<!--\n" * 20000 + "### Open Points\n- a\n" + "## h\n" * 20000
+        self.assertEqual(spec_lint.open_points(text), ["a"])
+        self.assertEqual(spec_lint.strip_comments("a<!-- x -->b<!-- open"), "ab<!-- open")
+        self.assertEqual(spec_lint.open_points("### Open Points\n- a\n## next\n- b\n"), ["a"])
+
+    def test_a_done_task_is_not_checked(self):
+        self.layout("gated")
+        self.write("docs/specs/checkout.md", spec())
+        self.write("docs/specs/checkout-contract.md", CONTRACT.format(points="- open\n"))
+        self.task("[x] Done")
+        self.assert_ready()
+
+    def test_a_frontend_spec_without_a_flow_is_not_ready(self):
+        self.layout("gated")
+        self.frontend_spec()
+        self.task()
+        self.assert_not_ready("no screen flow 'docs/design/flows/checkout.md'")
+
+    def test_the_flow_template_as_shipped_is_not_ready(self):
+        self.layout("gated")
+        self.frontend_spec()
+        self.write("docs/design/flows/checkout.md",
+                   (REPO_ROOT / "templates" / "design-flow-template.md").read_text(encoding="utf-8"))
+        self.task()
+        self.assert_not_ready("state 'loading' of 'checkout' is not approved")
+
+    def test_a_draft_state_is_not_ready(self):
+        self.layout("gated")
+        self.frontend_spec()
+        self.ready_design()
+        self.write("docs/design/flows/checkout.md", FLOW.format(
+            status="draft", error_png="`docs/design/screens/checkout/pay--error.png`"))
+        self.task()
+        self.assert_not_ready("state 'loading' of 'checkout' is not approved")
+
+    def test_an_approved_state_without_its_png_is_not_ready(self):
+        self.layout("gated")
+        self.frontend_spec()
+        self.ready_design()
+        (self.repo / "docs/design/screens/checkout/pay--error.png").unlink()
+        self.task()
+        self.assert_not_ready("'docs/design/screens/checkout/pay--error.png' does not exist")
+
+    def test_a_png_outside_the_feature_folder_is_not_ready(self):
+        self.layout("gated")
+        self.frontend_spec()
+        self.ready_design()
+        for cell in ("`docs/design/screens/other/pay--error.png`", "`../../x.png`", "`docs/design/screens/checkout/a.jpg`"):
+            with self.subTest(cell=cell):
+                self.write("docs/design/flows/checkout.md", FLOW.format(status="approved", error_png=cell))
+                self.task()
+                self.assert_not_ready("names no PNG inside")
+
+    def test_a_flow_with_every_state_approved_and_present_is_ready(self):
+        self.layout("gated")
+        self.frontend_spec()
+        self.ready_design()
+        self.task()
+        self.assert_ready()
+        self.write("docs/design/flows/checkout.md", FLOW.format(status="approved", error_png="pay--error.png"))
+        self.assert_ready()
+
+    def test_an_ai_spec_needs_its_evals_section(self):
+        self.layout("gated")
+        self.write("docs/specs/checkout.md", spec().replace("touches:", "ai: true\ntouches:"))
+        self.task()
+        self.assert_not_ready("ai: true but the evals doc has no ## 'checkout' section")
+        self.write("docs/ai/evals.md", "# Evals\n\n## refund\n")
+        self.assert_not_ready("evals doc has no")
+        self.write("docs/ai/evals.md", "# Evals\n\n## checkout\n\n| case | metric |\n")
+        self.assert_ready()
+
+
 @requires_bash()
 class SpecLintHookTest(_SpecRepo):
     def run_hook(self, touched="docs/specs/checkout.md"):
@@ -276,6 +478,16 @@ class SpecLintHookTest(_SpecRepo):
                 self.assertEqual(code, 2)
                 self.assertIn("SPEC LAYER WARNINGS", err)
                 self.assertEqual(self.run_hook(), (0, ""))
+
+    def test_the_trigger_follows_the_docs_write_root(self):
+        self.write("docs/specs/checkout.md", spec(status="done"))
+        self.write(".dev-team-agents/project.json", json.dumps(
+            {"schema": 1, "project_id": "8f14e45f-ea0c-4c2b-9c1f-2b1f9a7d3e10", "context_paths": [".claude/docs"],
+             "docs_layout": "gated"}))
+        for touched in ("docs/backlog.md", ".claude/docs/design/flows/checkout.md", ".claude/docs/ai/evals.md"):
+            with self.subTest(touched=touched):
+                self.assertEqual(self.run_hook(touched=touched)[0], 2)
+        self.assertEqual(self.run_hook(touched="src/specs/app.test.js"), (0, ""))
 
     def test_a_session_that_did_not_touch_the_spec_layer_is_skipped(self):
         self.write("docs/specs/checkout.md", spec(status="done"))

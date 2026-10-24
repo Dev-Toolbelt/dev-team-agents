@@ -16,6 +16,7 @@ oldest released ones are dropped past ``MAX_CLAIMS`` — an open claim is never 
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
@@ -627,11 +628,39 @@ def release(root, sprint_ref, task_ids, owner, now=None):
 # ── prime ───────────────────────────────────────────────────────────────────
 
 
+def _gated_index(root):
+    """The gated layout's sprint index (ADR-0045), or ``None`` on any other layout.
+
+    It keeps the ``sprints.md`` table format; the path is the map's ``backlog-index`` entry
+    under the docs write root, and a path leading out of the checkout is not read.
+    """
+    try:
+        if project.docs_layout(root) != "gated":
+            return None
+        write_root = (project.context_paths(root) or ["docs"])[0]
+    except DevteamError:
+        return None
+    rel = "backlog.md"
+    try:
+        with open(project._DOC_LAYOUTS_FILE, encoding="utf-8") as handle:
+            rel = json.load(handle)["docs"]["backlog-index"]["gated"] or rel
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    path = Path(root) / write_root / rel
+    try:
+        path.resolve().relative_to(Path(root).resolve())
+    except (OSError, ValueError):
+        return None
+    return path
+
+
 def _index_in_progress(root):
     """Sprint stems the status index marks ``In progress``."""
     directory = _contained_sprints_dir(root)
-    text = _read(directory / INDEX_FILE) if directory is not None else None
-    text = text or ""
+    text = (_read(directory / INDEX_FILE) if directory is not None else None) or ""
+    gated = _gated_index(root)
+    if gated is not None:
+        text += "\n" + (_read(gated) or "")
     stems = set()
     for line in text.splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]

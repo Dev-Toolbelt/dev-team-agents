@@ -10,6 +10,28 @@ A file under docs/specs/ is a spec-gate spec when it has a frontmatter block or 
 A spec without a `status:` key predates the field: its own structural findings, missing
 `depends_on` targets included, are reported as WARN. A sprint task that links a missing spec, or
 cites a scenario ID its spec does not define, is an ERROR whatever the spec's age.
+
+In the gated docs layout only (project.json `docs_layout`, scripts/lib/doc-layouts.json), every
+sprint task whose Status is not Done is also checked against the Definition of Ready
+(skills/shared/doc-flow/SKILL.md § Definition of Ready). Each failure prints
+`[NOT-READY] TASK-NNN: <reason>`. It does not change the exit code: a gap is normal while a
+stage is still being planned, so the Stop hook reports it once per set like a WARN, and the
+execution gate (spec-gate § Scope Lock) refuses the task on the line itself:
+
+- Contract — `<feature>-contract.md` in the `specs` doc (linked from the task or beside its spec) has an
+  open point under its `### Open Points` heading (.dev-team-agents/templates/contract-template.md): every `- ` or
+  `* ` line at column 0 up to the next heading is one (an indented sub-bullet is not), except the
+  single bullet `- none`.
+
+Every path this check opens — a sprint task's reference or a map folder — must resolve inside the
+repository (no `..`, no symlinked parent leading out) and is read with a 1 MiB cap.
+- Design — a spec whose `touches` includes `frontend` needs the `design-flows` doc
+  `<feature>.md` (.dev-team-agents/templates/design-flow-template.md) with at least one `### States` table whose
+  header names `State`, `Frame / PNG` and `Status` columns; every row needs Status `approved`
+  and its `Frame / PNG` cell must name an existing `.png` inside the `design-screens` doc's
+  `<feature>/` folder (a bare file name is read relative to that folder).
+- Evals — a spec with `ai: true` in its frontmatter needs the `evals` doc to hold a
+  `## <feature>` heading.
 """
 
 import os
@@ -45,6 +67,9 @@ class Report:
         if level == "ERROR":
             self.errors += 1
 
+    def not_ready(self, task_id, reason):
+        self.lines.append("[NOT-READY] {}: {}".format(CONTROL_RE.sub("?", str(task_id))[:20], reason))
+
 
 def regular(path):
     """A regular file, not a symlink — a committed link could point outside the repository."""
@@ -52,12 +77,32 @@ def regular(path):
 
 
 def read(path):
-    """The file's text, or None when it cannot be read — one bad file never aborts the run."""
-    try:
-        with open(path, encoding="utf-8", errors="replace") as handle:
-            return handle.read()
-    except OSError:
-        return None
+    """The file's text, or None when it cannot be read — one bad file never aborts the run.
+
+    The sprint reader's guarded read (ADR-0044): no symlink, a regular file, at most
+    ``MAX_FILE_BYTES`` (1 MiB), so a crafted document cannot make the lint slow or huge.
+    """
+    from devteam import backlog
+
+    return backlog.read_text(path)
+
+
+def inside(root, path):
+    """Whether ``path`` resolves inside ``root`` — a `..` in a sprint reference or a
+    symlinked parent folder (docs/specs -> /elsewhere) must never lead the lint out."""
+    real_root = os.path.realpath(root)
+    return os.path.realpath(path).startswith(real_root + os.sep)
+
+
+def repo_file(root, rel):
+    """``root/rel`` normalised, or None when it leaves the repository."""
+    path = os.path.normpath(os.path.join(root, *rel.split("/")))
+    return path if inside(root, path) else None
+
+
+def contained(root, path):
+    """A regular file (not a symlink) that resolves inside ``root``."""
+    return bool(path) and regular(path) and inside(root, path)
 
 
 def split_frontmatter(text):
@@ -235,7 +280,7 @@ def check_tasks(report, root, specs):
         for task in backlog.parse(text)["tasks"]:
             linked = []
             for ref in task["spec_refs"]:
-                if not regular(os.path.join(root, ref)):
+                if not contained(root, repo_file(root, ref)):
                     report.add("ERROR", path, "{} links {}, which does not exist".format(safe(task["id"]), safe(ref)))
                 elif not ref.endswith("-contract.md"):
                     linked.append(spec_name(ref))
@@ -246,6 +291,172 @@ def check_tasks(report, root, specs):
                 if ident not in known:
                     report.add("ERROR", path, "{} covers {}, which {} does not define".format(
                         safe(task["id"]), ident, ", ".join(safe(n + ".md") for n in linked)))
+
+
+OPEN_POINTS_HEAD_RE = re.compile(r"^#{2,3}[ \t]+Open Points[ \t]*$", re.M | re.I)
+STATES_HEAD_RE = re.compile(r"^#{2,3}[ \t]+States[ \t]*$", re.M | re.I)
+ANY_HEAD_RE = re.compile(r"^#{1,6}[ \t]", re.M)
+# Column 0 only: an indented sub-bullet details its parent point, it is not another one.
+LIST_ITEM_RE = re.compile(r"^[-*][ \t]+(.*)$")
+PNG_COLUMN = "frame / png"
+
+
+def sections(text, heading_re):
+    """The text under every heading ``heading_re`` matches, each up to the next heading."""
+    found = []
+    for head in heading_re.finditer(text):
+        # Searched from an offset, never on a slice: a copy per heading was quadratic.
+        nxt = ANY_HEAD_RE.search(text, head.end())
+        found.append(text[head.end(): nxt.start() if nxt else len(text)])
+    return found
+
+
+def strip_comments(text):
+    """``text`` without its `<!-- … -->` comments, in one linear pass.
+
+    An unclosed `<!--` keeps the rest of the text, as the regex it replaces did, but
+    without rescanning to the end once per unclosed opener.
+    """
+    out, pos = [], 0
+    while True:
+        start = text.find("<!--", pos)
+        if start == -1:
+            break
+        end = text.find("-->", start + 4)
+        if end == -1:
+            break
+        out.append(text[pos:start])
+        pos = end + 3
+    out.append(text[pos:])
+    return "".join(out)
+
+
+def open_points(text):
+    """The items under a contract's `### Open Points` heading; the single `- none` is zero."""
+    body = sections(strip_comments(text), OPEN_POINTS_HEAD_RE)
+    items = [m.group(1).strip() for line in (body[0] if body else "").splitlines()
+             for m in [LIST_ITEM_RE.match(line)] if m]
+    if len(items) == 1 and items[0].rstrip(".").strip().lower() == "none":
+        return []
+    return items
+
+
+def state_rows(text):
+    """``(rows, error)`` — each row a ``(state, png, status)`` from every `### States` table."""
+    bodies = sections(strip_comments(text), STATES_HEAD_RE)
+    if not bodies:
+        return None, "has no ### States table"
+    rows = []
+    for body in bodies:
+        header = None
+        for line in body.splitlines():
+            line = line.strip()
+            if not line.startswith("|"):
+                if header is not None:
+                    break
+                continue
+            cells = [c.strip().strip("`").strip() for c in line.strip("|").split("|")]
+            if header is None:
+                header = [c.lower() for c in cells]
+                if not {"state", PNG_COLUMN, "status"} <= set(header):
+                    return None, "has a ### States table without State, Frame / PNG and Status columns"
+                continue
+            if all(re.fullmatch(r":?-+:?", c) for c in cells if c):
+                continue
+            cell = dict(zip(header, cells))
+            rows.append((cell.get("state", ""), cell.get(PNG_COLUMN, ""), cell.get("status", "")))
+    if not rows:
+        return None, "has no rows in its ### States table"
+    return rows, None
+
+
+def screen_png(root, screens, feature, cell):
+    """The PNG a `Frame / PNG` cell names, when it is a .png inside ``<screens>/<feature>/``."""
+    if not screens or not cell.lower().endswith(".png") or CONTROL_RE.search(cell):
+        return None
+    folder = os.path.join(screens, feature)
+    path = os.path.normpath(os.path.join(folder if "/" not in cell else root, cell))
+    if not path.startswith(os.path.normpath(folder) + os.sep):
+        return None
+    return path
+
+
+def layout_dir(root, key):
+    """The map's directory for ``key`` under the project's layout, absolute, or None."""
+    import docs_root
+
+    rel = docs_root.doc_path(root, key)
+    return os.path.join(root, *rel.strip("/").split("/")) if rel else None
+
+
+def contracts_for(root, task, linked):
+    """The task's contracts: the ones it links plus each linked spec's, in the `specs` doc."""
+    paths = [repo_file(root, ref) for ref in task["spec_refs"] if ref.endswith("-contract.md")]
+    specs_dir = layout_dir(root, "specs")
+    for name in linked if specs_dir else []:
+        beside = os.path.normpath(os.path.join(specs_dir, name + "-contract.md"))
+        if beside not in paths:
+            paths.append(beside)
+    return [p for p in paths if contained(root, p)]
+
+
+def ready_reasons(root, task, linked, specs):
+    reasons = []
+    for path in contracts_for(root, task, linked):
+        count = len(open_points(read(path) or ""))
+        if count:
+            reasons.append("contract {} has {} open point(s)".format(safe(os.path.relpath(path, root), 200), count))
+    flows, screens, evals = (layout_dir(root, k) for k in ("design-flows", "design-screens", "evals"))
+    for name in linked:
+        fields = (specs.get(name) or {}).get("fields") or {}
+        touches = fields.get("touches", [])
+        label = safe(name)
+        if isinstance(touches, list) and "frontend" in touches:
+            flow = os.path.join(flows, name + ".md") if flows else None
+            text = read(flow) if contained(root, flow) else None
+            if text is None:
+                reasons.append("spec {} touches frontend but has no screen flow {}".format(
+                    label, safe(os.path.relpath(flow, root), 200) if flow else "(no design-flows doc)"))
+            else:
+                rows, error = state_rows(text)
+                if error:
+                    reasons.append("screen flow of {} {}".format(label, error))
+                for state, cell, status in rows or []:
+                    png = screen_png(root, screens, name, cell)
+                    if status.lower() != "approved":
+                        reasons.append("state {} of {} is not approved".format(safe(state), label))
+                    elif png is None:
+                        reasons.append("state {} of {} names no PNG inside the design-screens {}/ folder".format(
+                            safe(state), label, label))
+                    elif not contained(root, png):
+                        reasons.append("state {} of {} is approved but {} does not exist".format(
+                            safe(state), label, safe(os.path.relpath(png, root), 200)))
+        if str(fields.get("ai", "")).lower() == "true":
+            text = read(evals) if contained(root, evals) else None
+            heading = re.compile(r"^##[ \t]+" + re.escape(name) + r"[ \t]*$", re.M)
+            if text is None or not heading.search(text):
+                reasons.append("spec {} is ai: true but the evals doc has no ## {} section".format(label, label))
+    return reasons
+
+
+def check_ready(report, root, specs):
+    """Definition of Ready for every open sprint task — gated layout only."""
+    import docs_root
+    from devteam import backlog
+
+    if docs_root.layout(root) != "gated":
+        return
+    for sprint in backlog.sprint_files(root):
+        text = backlog.read_text(sprint)
+        if text is None:
+            continue
+        for task in backlog.parse(text)["tasks"]:
+            if task["status"] == "done":
+                continue
+            linked = [spec_name(r) for r in task["spec_refs"]
+                      if not r.endswith("-contract.md") and contained(root, repo_file(root, r))]
+            for reason in ready_reasons(root, task, linked, specs):
+                report.not_ready(task["id"], reason)
 
 
 def tests_required(root):
@@ -293,7 +504,8 @@ def check_coverage(report, root, specs):
 def main(argv):
     root = os.path.abspath(argv[1] if len(argv) > 1 else ".")
     spec_dir = os.path.join(root, "docs", "specs")
-    if not os.path.isdir(spec_dir):
+    # A symlinked docs/specs (or parent) that leads out of the repository is not this one's spec layer.
+    if not os.path.isdir(spec_dir) or not inside(root, spec_dir):
         return 0
     report = Report(root)
     specs, contracts = load_specs(report, spec_dir)
@@ -302,6 +514,7 @@ def main(argv):
     check_dependencies(report, specs)
     check_contracts(report, specs, contracts)
     check_tasks(report, root, specs)
+    check_ready(report, root, specs)
     check_coverage(report, root, specs)
     for line in report.lines:
         print(line)

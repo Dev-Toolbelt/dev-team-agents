@@ -449,6 +449,21 @@ class PrimeTest(BoundCase):
         write_sprint(self.root, index=index)
         self.assertEqual(backlog._index_in_progress(self.root), {"auth-sprint-1", "sprint-3"})
 
+    def test_the_gated_layout_index_in_docs_backlog_md_is_read_too(self):
+        write_sprint(self.root, index=INDEX.replace("In progress", "Planned"))
+        identity = self.root / ".dev-team-agents" / "project.json"
+        data = json.loads(identity.read_text(encoding="utf-8"))
+        identity.write_text(json.dumps(dict(data, docs_layout="gated")), encoding="utf-8")
+        index = "## Sprints\n| Scope | Sprint | Theme | Goal | Status |\n|---|---|---|---|---|\n| auth | [sprint-1](backlog/sprints/auth-sprint-1.md) | Auth | x | In progress |\n"
+        (self.root / "docs" / "backlog.md").write_text(index, encoding="utf-8")
+        self.assertEqual(backlog._index_in_progress(self.root), {"auth-sprint-1"})
+
+    def test_the_development_layout_ignores_a_docs_backlog_md(self):
+        write_sprint(self.root, index=INDEX.replace("In progress", "Planned"))
+        index = "| Scope | Sprint | Theme | Goal | Status |\n|---|---|---|---|---|\n| auth | [sprint-1](backlog/sprints/auth-sprint-1.md) | Auth | x | In progress |\n"
+        (self.root / "docs" / "backlog.md").write_text(index, encoding="utf-8")
+        self.assertEqual(backlog._index_in_progress(self.root), set())
+
     def test_idle_is_silent(self):
         write_sprint(self.root, index=INDEX.replace("In progress", "Done"))
         self.assertIsNone(backlog.prime(self.root, now=T0))
