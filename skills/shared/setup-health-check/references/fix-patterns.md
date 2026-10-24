@@ -620,3 +620,35 @@ See `docs/development/reuse-guidelines.md` § <name> for the canonical rule.
 ```
 
 Keep the original heading in place even if the paragraph under it is now just the pointer — removing the heading changes anchors other docs or commits may reference. This is a content *move*, not a deletion: the rule still exists, now in one place instead of two.
+
+## Gated skeleton
+
+Triggered by `SKELETON_MISSING` (Category 14). Create the missing key exactly as `/devteam:setup` would — the seed, the `When` condition and the creation rules are `skills/shared/docs-templates/SKILL.md` § Gated Skeleton; this pattern adds nothing to them:
+
+```bash
+P="$(bash .dev-team-agents/scripts/doc-path.sh "$KEY")"
+case "$P" in
+  */) mkdir -p "$P" ;;                         # folder key — then write its seed inside, if absent
+  *)  mkdir -p "$(dirname "$P")"
+      [ -f ".dev-team-agents/templates/$KEY-template.md" ] \
+        && cp -n ".dev-team-agents/templates/$KEY-template.md" "$P" ;;   # inline seeds: write the skill's block, only when [ ! -e "$P" ]
+esac
+```
+
+Creates only: an existing path is never rewritten, even when it is still an unfilled template. Report each created path under *Actions taken*.
+
+## Read-only input edited
+
+Triggered by `RO_EDITED` / `RO_UNCOMMITTED` (Category 14). A file in a read-only folder (`skills/shared/doc-flow/SKILL.md` § Read-only Inputs) was changed, renamed or deleted after it was added. Ask with `AskUserQuestion`:
+
+| Option | What it does |
+|--------|--------------|
+| **Restore the original, keep the edit as a new file** (recommended) | Copy the current text to a new dated file beside it (`<name>--<YYYY-MM-DD>-revision.<ext>`), then write the version the file was **added** with back to its path: `git show "$(git log --diff-filter=A --format=%H -- "$F" \| tail -1)":"$F" > "$F"`. A deleted or renamed file is restored the same way; the renamed copy stays as it is. Nothing is lost — both versions exist afterwards. The edit-tool guard (`05-readonly-docs-guard.sh`) refuses this write by design, so it runs in Bash and only after this answer |
+| **Accept the change** | Leave the folder as it is; record the change in the owning working doc's `### Amendment Log` (cite the commit) so the trace chain names the version it read |
+| **Not now** | Report it as open with the restore command |
+
+Never revert with `git checkout`/`git restore` on its own — that discards the edited text.
+
+## Docs layout migration
+
+Offered, never run: Category 14 reports a `development` project with one INFO line, and the migration starts only when the user asks for it (or picks it from a `Docs layout` question they asked for). The procedure — preconditions, dry run, consent, moves, merge, link rewrite, recording `docs_layout` — is `skills/shared/doc-flow/references/migration.md`; follow it and add nothing here. It stops on a dirty tree and quarantines conflicts, so the No-Destruction Rule holds unchanged.

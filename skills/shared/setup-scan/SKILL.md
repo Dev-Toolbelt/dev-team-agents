@@ -71,7 +71,7 @@ find . -maxdepth 2 \( -name ".eslintrc*" -o -name ".prettierrc*" -o -name "phpcs
 |-------------------|-----------|
 | `ARCHITECTURE.md`, `docs/architecture*` | `architecture.md` → System Type, Layers, Module Map |
 | `CONTRIBUTING.md`, `docs/contributing*`, `docs/development*` | `code-standards.md` → Naming Conventions, Patterns |
-| `docs/api*`, `API.md`, `openapi.yaml`, `swagger.yaml` | `architecture.md` → API Contracts |
+| `docs/api*`, `API.md`, `openapi.yaml`, `swagger.yaml` | the `api-contracts` doc (`project-context` § Doc Layout) — never `architecture.md` |
 | `docs/stack*`, `docs/tech*`, `DEVELOPMENT.md`, `TECH*.md` | `tech-stack.md` → Tech Stack table, Dev Setup |
 | `.eslintrc*`, `.prettierrc*`, `phpcs.xml`, `pyproject.toml`, etc. | `code-standards.md` → Detected Config |
 | `CHANGELOG.md`, `docs/changelog*` | `project.md` → Active Areas |

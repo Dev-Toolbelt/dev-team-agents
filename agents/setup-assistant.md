@@ -96,7 +96,7 @@ Ask all relevant questions in a single message:
 
 **All types:** documentation standard · tests required · CI/CD platform
 
-**New projects only:** backlog location · UI needed (→ ui-ux-designer in Design Mode) · cloud provider
+**New projects only:** backlog location · UI needed (→ ui-ux-designer in Design Mode; record `HAS_UI`) · product uses LLMs (record `USES_LLM`) · cloud provider
 
 **Maintenance only:** issue tracker (see tracker MCP table in the loaded setup-scan skill)
 
@@ -113,7 +113,7 @@ Record as `GRAPHIFY: [enabled|disabled]`.
 
 ### Step 4 — Present Setup Plan
 
-Present a plan using `.dev-team-agents/templates/plan-template.md` before creating any file. Wait for approval.
+Present a plan using `.dev-team-agents/templates/plan-template.md` before creating any file — it names the docs layout Step 6 will use. Wait for approval.
 
 ---
 
@@ -133,18 +133,7 @@ If Graphify was enabled, append to CLAUDE.md (if absent): a `## Context Navigati
 
 ### Step 6 — Generate Project Docs
 
-Load `skills/shared/docs-templates/SKILL.md` for all document templates and the Source Synthesis Rule. Use real scan data; apply Source Synthesis Rule for discovered source files.
-
-Always create:
-- `docs/project.md`
-- `docs/development/tech-stack.md`, `architecture.md`, `code-standards.md`
-- `docs/backlog/README.md`
-- `docs/wiki/README.md` — the retrieval index, created with its `## Index` table header and no rows; agents append one row per entry (format: `skills/shared/docs-sync/references/wiki-format.md`). **Never overwrite an existing one**
-- `docs/design/design-system.md` (UI projects only)
-
-**Conditional docs:**
-- **DevOps** (`Dockerfile`, `docker-compose*.yml`, CI/CD configs, IaC files, `vercel.json`/`netlify.toml`/etc.) → `docs/devops/infrastructure.md`
-- **Tests** (`jest.config.*`, `vitest.config.*`, `playwright.config.*`, `pytest.ini`, `phpunit.xml`, test dirs) → `docs/tests/testing-strategy.md`
+Load `skills/shared/docs-templates/SKILL.md` for the templates and the Source Synthesis Rule; use real scan data. Its § Docs Layout on Setup decides layout and file list: a **new** project records `docs_layout: gated` in `.dev-team-agents/project.json` and gets § Gated Skeleton (the flow it starts: `skills/shared/doc-flow/SKILL.md`); an inherited or maintenance project keeps § Development Docs exactly. **Never overwrite an existing file** — `docs/wiki/README.md` included.
 
 ---
 
@@ -160,7 +149,7 @@ Remove legacy per-file entries under `.dev-team-agents/user-data/` if present (`
 
 Read the installed version (`bash -c 'source .dev-team-agents/scripts/lib/state.sh; state_get installed_version .dev-team-agents/user-data/state.json' 2>/dev/null || echo "unknown"`) and output a completion summary listing all configured files. Close with the entry point for the project type:
 
-- **New** → `"As the product-analyst, I have a requirements document: [paste or attach]"` (or run `/devteam:plan <goal>`)
+- **New** → `"As the product-analyst, I have a requirements document: [paste or attach]"` (or run `/devteam:plan <goal>`) — the gated flow starts at stage 0, raw inputs saved under the `source` folder
 - **Inherited** → `"As the software-architect, help me onboard this inherited codebase"` (or run `/devteam:architect`)
 - **Maintenance** → run the task-specific command (`/devteam:fix`, `/devteam:backend`, `/devteam:frontend`, `/devteam:fullstack`, …) or `/devteam:architect` for a maintenance change
 
@@ -195,9 +184,9 @@ otherwise run `bash .dev-team-agents/scripts/fix-symlinks.sh` and, on exit 3, pr
 > Override at the project level instead:
 > - **Agent behavior** → add rules to `CLAUDE.md` under `## Project Rules`
 > - **Agent override** → create `.agents/<agent-name>.md` (project files always win over base agents)
-> - **Conventions** → add to `docs/development/code-standards.md`
+> - **Conventions** → add to the `code-standards` doc (`docs/development/code-standards.md`; gated `docs/code-standards.md`)
 > - **DevOps context** → edit `docs/devops/infrastructure.md`
-> - **Test context** → edit `docs/tests/testing-strategy.md`
+> - **Test context** → edit the `testing` doc (`docs/tests/testing-strategy.md`; gated `docs/testing.md`)
 >
 > If the intent is to contribute a fix or improvement back to the dev-team-agents package itself, that must be done in the [dev-team-agents repository](https://github.com/Dev-Toolbelt/dev-team-agents) — not inside the installed copy.
 

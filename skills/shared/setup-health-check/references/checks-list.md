@@ -88,7 +88,7 @@ on every layout; a legacy `.dev-team-agents/user-data/graphify.json` is moved th
 | 10 Credentials | Run `devteam doctor` and report its `credentials_local` findings. Check `.dev-team-agents/credentials.local.json` only if it exists — never create it. A legacy copy in `user-data/` or in the store is relocated byte-for-byte by `devteam doctor` / `devteam sync`; a conflict between two non-blank copies is reported for the user to merge by hand |
 | 11 Memory Artifacts | Check `session-summary.md` in `MEMORY_DIR`; the missing-file fix creates it there |
 
-Categories 4, 6, 12 and 13 are unchanged.
+Categories 4, 6, 12, 13 and 14 are unchanged.
 
 ## Category 1 — Symlinks
 
@@ -789,3 +789,99 @@ done
 | Any tool in the list missing | WARN only | None — report the missing tool(s) and direct the user to `/devteam:install <tool>` (or `/devteam:install all`); never install automatically |
 
 Only warn when a tool is actually missing — do not repeat the hint on every run once it is present.
+
+## Category 14 — Docs Layout
+
+Reads the project's docs layout (`skills/shared/doc-flow/SKILL.md` § Doc Layout). Run from the project root; every path comes from the map through `doc-path.sh`, never typed here.
+
+```bash
+DP() { bash .dev-team-agents/scripts/doc-path.sh "$1" 2>/dev/null; }
+LAYOUT="$(bash .dev-team-agents/scripts/doc-path.sh --layout 2>/dev/null || echo development)"
+echo "DOCS_LAYOUT: $LAYOUT"
+```
+
+### When `DOCS_LAYOUT: development`
+
+Not a finding. Report `Docs layout — development` as OK and add **one** INFO line under *Recommendations*: the gated layout is available through the opt-in migration (`fix-patterns.md` § Docs layout migration). Do not ask, do not repeat it per document, never mark it WARN.
+
+### When `DOCS_LAYOUT: gated`
+
+```bash
+DP() { bash .dev-team-agents/scripts/doc-path.sh "$1" 2>/dev/null; }   # redefined: each block may run in its own shell
+SKEL=.dev-team-agents/skills/shared/docs-templates/SKILL.md
+T=.dev-team-agents/templates
+PROJECT_MD="$(DP project)"
+HAS_UI="$(sed -n 's/^HAS_UI: *//p' "$PROJECT_MD" 2>/dev/null | head -1)"
+USES_LLM="$(sed -n 's/^USES_LLM: *//p' "$PROJECT_MD" 2>/dev/null | head -1)"
+echo "HAS_UI: ${HAS_UI:-unknown}  USES_LLM: ${USES_LLM:-unknown}"
+
+# 1. Skeleton: one row per key in docs-templates § Gated Skeleton (Key | Seed | When)
+awk -F'|' '/^### Gated Skeleton/{f=1;next} /^#/{f=0} f && $2 ~ /`[a-z-]+`/ {k=$2; w=$4; gsub(/[` ]/,"",k); gsub(/ /,"",w); print k, w}' "$SKEL" |
+while read -r key when; do
+  case "$when" in ui) [ "$HAS_UI" = yes ] || continue ;; llm) [ "$USES_LLM" = yes ] || continue ;; esac
+  p="$(DP "$key")"; [ -n "$p" ] || continue
+  case "$p" in */) [ -d "$p" ] ;; *) [ -e "$p" ] ;; esac && echo "SKELETON_OK: $key" || echo "SKELETON_MISSING: $key $p"
+done
+
+# 2. Read-only inputs: an edited, renamed or deleted file is a violation (creating one is allowed)
+DP_RO="$(bash .dev-team-agents/scripts/doc-path.sh --readonly 2>/dev/null)"
+printf '%s\n' "$DP_RO" | sed '/^$/d' | while IFS= read -r ro; do
+  git log --diff-filter=MDR --name-only --format= -- "$ro" 2>/dev/null | sort -u | sed '/^$/d; s/^/RO_EDITED: /'
+  git status --porcelain -- "$ro" 2>/dev/null | grep -E '^(.M|M.|.D|D.|R.)' | sed 's/^/RO_UNCOMMITTED: /'
+done
+
+# 3. Gate artifacts per stage reached
+fill() {  # fill <key> → missing | unfilled | filled
+  p="$(DP "$1")"; [ -e "$p" ] || { echo missing; return; }
+  [ -f "$T/$1-template.md" ] && cmp -s "$p" "$T/$1-template.md" && { echo unfilled; return; }
+  grep -qE 'TODO: [a-z-]+ to ' "$p" 2>/dev/null && { echo unfilled; return; }
+  echo filled
+}
+SPECS="$(DP specs)"; FLOWS="$(DP design-flows)"; EVALS="$(DP evals)"; ADRS="$(DP adr)"
+N_SPECS=0
+for s in "$SPECS"*.md; do
+  [ -f "$s" ] || continue
+  case "$s" in *-contract.md|*/README.md) continue ;; esac
+  N_SPECS=$((N_SPECS + 1)); f="$(basename "$s" .md)"
+  FM="$(sed -n '/^---$/,/^---$/p' "$s")"
+  printf '%s\n' "$FM" | grep -qE '^touches:.*frontend' && [ ! -f "$FLOWS$f.md" ] && echo "GATE_FE_SPEC_NO_FLOW: $f"
+  printf '%s\n' "$FM" | grep -qE '^ai: *true' && ! grep -qsE "^## +$f( |$)" "$EVALS" && echo "GATE_AI_SPEC_NO_EVALS: $f"
+done
+echo "SPECS: $N_SPECS"
+if [ "$N_SPECS" -gt 0 ]; then
+  for key in prd glossary nfr architecture data-model api-contracts threat-model; do
+    st="$(fill "$key")"; [ "$st" = filled ] || echo "GATE_STAGE_GAP: $key $st"
+  done
+  [ "$(find "$ADRS" -maxdepth 1 -name '*.md' ! -name README.md 2>/dev/null | wc -l | tr -d ' ')" -gt 0 ] || echo "GATE_STAGE_GAP: adr none"
+  if [ "$HAS_UI" = yes ]; then
+    grep -qs '"\$value"' "$(DP design-tokens)" || echo "GATE_STAGE_GAP: design-tokens unfilled"
+  fi
+fi
+for fl in "$FLOWS"*.md; do
+  [ -f "$fl" ] || continue
+  grep -E '^\|[^|]+\|[^|]+\| *`[^`[]+\.png` *\|' "$fl" | while IFS='|' read -r _ st _ png status _; do
+    png="$(printf '%s' "$png" | tr -d '` ')"; status="$(printf '%s' "$status" | tr -d ' ')"; st="$(printf '%s' "$st" | tr -d ' ')"
+    [ -f "$png" ] || echo "GATE_STATE_NO_PNG: $(basename "$fl" .md) $st $png"
+    [ "$status" = approved ] || echo "GATE_STATE_NOT_APPROVED: $(basename "$fl" .md) $st"
+  done
+done
+# Stage 5 reached without stage 4
+SPRINTS="$(DP sprints)"
+if ls "$SPRINTS"*-sprint-*.md >/dev/null 2>&1 && [ "$N_SPECS" -eq 0 ]; then
+  echo "GATE_STAGE_GAP: specs none (sprint files exist)"
+fi
+```
+
+`unfilled` means the doc is still its verbatim template or keeps a skeleton `TODO: <owner> to` marker (`skills/shared/docs-templates/SKILL.md` § Gated Skeleton). A gate artifact is never written by the health check: its content is the owner agent's work, named by the key's `owner` in the map.
+
+| Check | Status | Action |
+|-------|--------|--------|
+| `SKELETON_MISSING` | Fixed, no question | Create it from its seed in § Gated Skeleton (`fix-patterns.md` § Gated skeleton) — creates only, never overwrites |
+| `SKELETON_MISSING: process` | Fixed, no question | Same fix; the `process` doc is what carries the flow for humans, so report it by name |
+| `HAS_UI` or `USES_LLM` `unknown` | Asked | `AskUserQuestion` (Yes / No) and add the line to `docs/project.md` under `## Type & Config`; then run the skeleton block again for the `ui` / `llm` rows |
+| `RO_EDITED` / `RO_UNCOMMITTED` | Asked | `fix-patterns.md` § Read-only input edited — never revert without consent |
+| `GATE_STAGE_GAP` | Handed over | *Recommendations* row per key: the owner from the map and its entry point (`software-architect` → `/devteam:architect`, `ui-ux-designer` → `/devteam:design`, `product-analyst` → `/devteam:plan`) |
+| `GATE_FE_SPEC_NO_FLOW` | Handed over | `ui-ux-designer` writes the `design-flows` file for the feature (`/devteam:design`); no frontend task on it is ready until then (doc-flow § Definition of Ready) |
+| `GATE_STATE_NO_PNG` / `GATE_STATE_NOT_APPROVED` | Handed over | `ui-ux-designer` exports the state and the user approves the PNG; list each feature, screen state and path |
+| `GATE_AI_SPEC_NO_EVALS` | Handed over | `software-architect` adds the feature's section to the `evals` doc (`/devteam:architect`) |
+| All pass | OK | `Docs layout — gated, skeleton complete, no gate gaps` |

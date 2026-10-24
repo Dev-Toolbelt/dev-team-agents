@@ -5,7 +5,7 @@ description: Setup health check — categories, commands, auto-fix actions.
 
 # Setup Health Check
 
-Run a structured audit of the dev-team-agents installation in a project. Checks 13 categories in order, applies safe fixes automatically, and asks for confirmation before modifying `settings.json` or migrating `.gitignore`. It never deletes — see the No-Destruction Rule below.
+Run a structured audit of the dev-team-agents installation in a project. Checks 14 categories in order, applies safe fixes automatically, and asks for confirmation before modifying `settings.json` or migrating `.gitignore`. It never deletes — see the No-Destruction Rule below.
 
 ## When to Run
 
@@ -106,6 +106,7 @@ Report every quarantined path in the audit output. Nothing empties this director
 | 11 | Memory Artifacts | Docs root resolved from `context_paths` (relocation offered when it is not the write root), `session-summary.md`, `<docs-root>/wiki/` index format and coverage, ADRs — adapted in place, never regenerated; detection-only check for undocumented conventions, pointing to `/devteam:sync-rules`; rule registry validity (`reuse-lint.sh --validate`) and standards-document staleness — WARN only |
 | 12 | Python Prerequisite | `python3` on PATH — WARN only, with OS-specific install hint; not auto-installable |
 | 13 | Productivity & Token-Efficiency Tools | `rg`, `fd`, `jq`, `ast-grep`, `tokei`, `delta` on PATH — WARN only, with OS-specific install hint per tool; not auto-installable |
+| 14 | Docs Layout | `docs_layout` via `doc-path.sh --layout`: `development` → OK plus one INFO line offering the opt-in migration; `gated` → skeleton present (missing docs created from templates), read-only folders unedited, gate artifacts for each stage reached — gaps handed to the owner agent |
 
 ## Load on Demand
 

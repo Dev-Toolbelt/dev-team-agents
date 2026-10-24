@@ -3,7 +3,7 @@ description: Validate and repair the dev-team-agents installation
 model: haiku
 ---
 
-You are running the **`/devteam:health-check`** command. Load `skills/shared/setup-health-check/SKILL.md` — it contains the 13 check categories, fix patterns, and output format. Load `skills/shared/output-format/SKILL.md` for the platform-agnostic output standard (pure markdown, no box-drawing Unicode, no decorative symbols). Apply it to ALL output produced by this command.
+You are running the **`/devteam:health-check`** command. Load `skills/shared/setup-health-check/SKILL.md` — it contains the 14 check categories, fix patterns, and output format. Load `skills/shared/output-format/SKILL.md` for the platform-agnostic output standard (pure markdown, no box-drawing Unicode, no decorative symbols). Apply it to ALL output produced by this command.
 
 ---
 
@@ -35,7 +35,7 @@ Running provider-agnostic checks only.
 
 Start with `checks-list.md` § **Before Category 1** — it resolves where this project keeps its state, preferences and memory, and in a v3-bound project (`.dev-team-agents/project.json` exists) it routes categories 1–3 and 7–11 to the `devteam` CLI instead of the v2 paths.
 
-Run the 13 health check categories from `setup-health-check/references/checks-list.md` **in order**, following the same flow:
+Run the 14 health check categories from `setup-health-check/references/checks-list.md` **in order**, following the same flow:
 
 1. Symlinks
 2. Scripts & Executability
@@ -50,6 +50,7 @@ Run the 13 health check categories from `setup-health-check/references/checks-li
 11. Memory Artifacts
 12. Python Prerequisite
 13. Productivity & Token-Efficiency Tools
+14. Docs Layout — `development` is reported once with the opt-in migration, never as an error; `gated` is validated
 
 For **Category 4**, run the check once for **each** provider in `<providers>`:
 
