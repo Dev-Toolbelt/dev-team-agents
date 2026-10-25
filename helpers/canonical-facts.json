@@ -1,0 +1,68 @@
+{
+  "_doc": "Claims known to be wrong. helpers/canonical-facts.py fails when a line under `paths` matches `pattern` (case-insensitive) and no `allow` regex matches the same line. Matching is per line: a correction on the next line does not excuse a hit, so keep the correcting wording on the same line, or add it to `allow` — the allow list is the escape hatch for legitimate uses (e.g. rel=next for browser prefetch). Allow lists are deliberately broad (a negation anywhere on the line suppresses the hit): this is a tripwire for restated claims, not a parser. Each entry carries the reason and the primary source.",
+  "paths": [
+    "agents",
+    "skills",
+    "commands",
+    "templates"
+  ],
+  "facts": [
+    {
+      "id": "fid-as-current-metric",
+      "pattern": "\\b(FID|First Input Delay)\\b",
+      "allow": [
+        "\\b(replaced|retired|deprecated|no longer|never report)\\b",
+        "FID\\s*(→|->)\\s*INP"
+      ],
+      "why": "INP replaced FID as a Core Web Vital in March 2024 — FID is never a current metric or threshold",
+      "source": "https://web.dev/blog/inp-cwv-march-12"
+    },
+    {
+      "id": "faq-howto-rich-result-promise",
+      "pattern": "\\b(FAQ(Page)?|HowTo)\\b.{0,60}\\b(rich (result|snippet)s?|SERP feature)\\b|\\b(rich (result|snippet)s?|SERP feature)\\b.{0,60}\\b(FAQ(Page)?|HowTo)\\b",
+      "allow": [
+        "\\bno (rich|FAQ|HowTo)\\b",
+        "\\b(never promise|only for|restricted|retired|deprecated|removed|no longer|limited to)\\b"
+      ],
+      "why": "HowTo rich results were removed in 2023-09 and FAQ rich results are limited to well-known government and health sites since 2023-08",
+      "source": "https://developers.google.com/search/blog/2023/08/howto-faq-changes"
+    },
+    {
+      "id": "rel-next-prev-pagination",
+      "pattern": "rel=[\"']?(next|prev)\\b",
+      "allow": [
+        "\\b(ignored|ignores|no longer|stopped|not used|deprecated)\\b"
+      ],
+      "why": "Google stopped using rel=next/prev as an indexing signal in 2019",
+      "source": "https://developers.google.com/search/docs/specialty/ecommerce/pagination-and-incremental-page-loading"
+    },
+    {
+      "id": "google-extended-affects-search",
+      "pattern": "Google-Extended.{0,80}\\b(Search|AI Overviews?|ranking)\\b",
+      "allow": [
+        "\\b(no effect|does not|doesn't|not affect|never)\\b",
+        "\\b(separate from|only governs|governs .{0,30}only)\\b"
+      ],
+      "why": "Google-Extended controls Gemini training and grounding only; it does not affect Google Search or AI Overviews",
+      "source": "https://developers.google.com/search/docs/crawling-indexing/google-common-crawlers#google-extended"
+    },
+    {
+      "id": "sitemap-priority-changefreq-used",
+      "pattern": "(<(priority|changefreq)>|\\b(sitemap|xml)\\b.{0,40}\\b(priority|changefreq)\\b).{0,60}\\b(Google|crawl(ing)? (rate|frequency)|ranking)\\b",
+      "allow": [
+        "\\b(ignore[sd]?|not used|no effect|harmless)\\b"
+      ],
+      "why": "Google ignores <priority> and <changefreq> in sitemaps",
+      "source": "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap#additional-notes-about-xml-sitemaps"
+    },
+    {
+      "id": "sitelinks-search-box-benefit",
+      "pattern": "sitelinks? search ?box",
+      "allow": [
+        "\\b(removed|retired|no (Google )?effect|no longer|deprecated)\\b"
+      ],
+      "why": "Google removed the sitelinks search box from results in November 2024",
+      "source": "https://developers.google.com/search/blog/2024/10/sitelinks-search-box"
+    }
+  ]
+}

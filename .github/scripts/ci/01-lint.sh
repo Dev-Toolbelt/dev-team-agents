@@ -69,6 +69,10 @@ blocking "agent-lint" bash helpers/agent-lint.sh
 # Plugin manifests (plugins/*/plugin.json) against the ADR-0019 schema rules.
 blocking "plugin-lint" bash helpers/plugin-lint.sh
 
+# Claims known to be wrong (retired metrics, removed Google features) restated in shipped
+# Markdown. Blocking: zero hits today, and each entry carries its primary source.
+blocking "canonical-facts" python3 -I helpers/canonical-facts.py
+
 # A skill with no agent referencing it is dead weight, not a broken build, and
 # the scan is heuristic (it matches path and backtick-name references, so it can
 # miss an indirect load).
