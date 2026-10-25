@@ -111,7 +111,7 @@ STATE_FILE="${STATE_DIR}/state.json"
 # Exception — CONSENT_KEYS. This file already exists, so its owner never saw
 # the installer prompt for a field added after they installed. Backfilling the
 # schema's enabled default would switch telemetry or auto-update on without
-# anyone agreeing to it, so those two are backfilled as false. The user opts in
+# anyone agreeing to it, so those are backfilled as false. The user opts in
 # by editing preferences.json (or re-running the installer on a fresh install).
 if devteam_prefs_is_legacy "$MAIN_REPO_ROOT" \
     && [ -f "$PREFS_FILE" ] && [ -f "$PREFS_DEFAULTS_FILE" ] && command -v python3 >/dev/null 2>&1; then
@@ -125,7 +125,7 @@ try:
         prefs = json.load(f)
 except (json.JSONDecodeError, IOError):
     sys.exit(0)
-CONSENT_KEYS = ("telemetry", "auto_update")
+CONSENT_KEYS = ("telemetry", "auto_update", "branch_overlap_active")
 missing = {k: v for k, v in defaults.items() if k not in prefs}
 for k in CONSENT_KEYS:
     if k in missing:
@@ -443,6 +443,18 @@ if devteam_memory_still_in_project "$MAIN_REPO_ROOT"; then
         "Este projeto ainda guarda sua memória em .dev-team-agents/user-data — execute \`devteam upgrade\` para movê-la para o store. Nada é movido até você fazer isso." \
         "Este proyecto todavía guarda su memoria en .dev-team-agents/user-data — ejecuta \`devteam upgrade\` para moverla al store. Nada se mueve hasta que lo hagas.")" \
         "$DAY_TTL" "layout.upgrade_available:${TODAY_KEY}"
+fi
+
+# ── Branch-overlap refresher (ADR-0051) ───────────────────────────
+# Detached and silent: the session never waits on it. branch_overlap.py rate-limits itself
+# (at most every 10 minutes), fetches quietly and keeps the old cache when offline.
+if [ -f "${SCRIPT_DIR}/../lib/devteam/branch_overlap.py" ] && command -v python3 >/dev/null 2>&1 \
+    && ! { [ -f "$PREFS_FILE" ] && grep -qE '"branch_overlap_active"[[:space:]]*:[[:space:]]*false' "$PREFS_FILE" 2>/dev/null; } \
+    && git -C "$PROJECT_ROOT" remote get-url origin >/dev/null 2>&1; then
+    (
+        python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); from devteam import branch_overlap; sys.exit(branch_overlap.main(sys.argv[2:]))' \
+            "${SCRIPT_DIR}/../lib" refresh "$PROJECT_ROOT" "$STATE_DIR" </dev/null >/dev/null 2>&1 &
+    ) >/dev/null 2>&1
 fi
 
 exit 0
