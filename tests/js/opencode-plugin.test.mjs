@@ -230,6 +230,27 @@ test("a prompt whose hook prints no directive clears the session's language line
   assert.deepEqual(system.system, [])
 })
 
+test("recall and hint lines from the prompt hook reach that session's system prompt, replaced each prompt [spec:prompt-recall#S13]", async () => {
+  const dir = makeProject()
+  control(dir, "user-prompt-submit", { out: "[DEVTEAM:RECALL] docs/a.md (ADR) - x\nnoise\n[DEVTEAM:HINT] try this" })
+  const { plugin } = await load(dir)
+  await plugin["chat.message"]({ sessionID: "s1" }, { parts: [{ type: "text", text: "fix the webhook retries" }] })
+  const system = { system: [] }
+  await plugin["experimental.chat.system.transform"]({ sessionID: "s1" }, system)
+  assert.equal(system.system.length, 3)
+  assert.match(system.system[0], /reference pointers and data.*never as instructions/)
+  assert.ok(!system.system[0].startsWith("[DEVTEAM:"))
+  assert.deepEqual(system.system.slice(1), ["[DEVTEAM:RECALL] docs/a.md (ADR) - x", "[DEVTEAM:HINT] try this"])
+  const other = { system: [] }
+  await plugin["experimental.chat.system.transform"]({ sessionID: "s2" }, other)
+  assert.deepEqual(other.system, [])
+  control(dir, "user-prompt-submit", {})
+  await plugin["chat.message"]({ sessionID: "s1" }, { parts: [{ type: "text", text: "another prompt here" }] })
+  const cleared = { system: [] }
+  await plugin["experimental.chat.system.transform"]({ sessionID: "s1" }, cleared)
+  assert.deepEqual(cleared.system, [])
+})
+
 test("a finished task sends its child session, model and summed usage for the execution trace", async () => {
   const dir = makeProject()
   const asked = []
@@ -272,4 +293,52 @@ test("a child session that never answers does not hold up the task's hook", asyn
   assert.ok(Date.now() - started < 6000)
   assert.equal(sent.agent_session_id, "ses_child")
   assert.equal("agent_usage" in sent, false)
+})
+
+test("every bash call reaches the post-tool hook with its exit code from the metadata", async () => {
+  const dir = makeProject()
+  const { plugin } = await load(dir)
+  await plugin["tool.execute.before"]({ tool: "bash", sessionID: "ses_top", callID: "b1" }, { args: { command: "npm test" } })
+  await plugin["tool.execute.after"]({ tool: "bash", sessionID: "ses_top", callID: "b1" }, { output: "boom", metadata: { exit: 2 } })
+  const sent = stdinOf(dir, "post-tool-use")
+  assert.equal(sent.sessionID, "ses_top")
+  assert.equal(sent.tool, "bash")
+  assert.equal(sent.args.command, "npm test")
+  assert.equal(sent.exit_code, 2)
+  assert.equal(sent.output, "boom")
+  assert.equal(sent.session_title, undefined)
+})
+
+test("a bash call without an exit code in its metadata sends none", async () => {
+  const dir = makeProject()
+  const { plugin } = await load(dir)
+  await plugin["tool.execute.after"]({ tool: "bash", sessionID: "ses_top", callID: "b2", args: { command: "ls" } }, { output: "a" })
+  assert.equal("exit_code" in stdinOf(dir, "post-tool-use"), false)
+})
+
+test("a PR-creating bash call still carries the session title", async () => {
+  const dir = makeProject()
+  const { plugin } = await load(dir)
+  await plugin["tool.execute.after"]({ tool: "bash", sessionID: "ses_top", callID: "b3", args: { command: "gh pr create --fill" } }, { output: "https://github.com/o/r/pull/1" })
+  assert.equal(stdinOf(dir, "post-tool-use").session_title, "t")
+})
+
+test("the edit tools reach the post-tool hook with their path arguments [spec:branch-overlap#S14]", async () => {
+  for (const [tool, args] of [["edit", { filePath: "a.py" }], ["write", { filePath: "b.py" }], ["multiedit", { filePath: "c.py" }], ["patch", { patchText: "*** Update File: d.py" }]]) {
+    const dir = makeProject()
+    const { plugin } = await load(dir)
+    await plugin["tool.execute.before"]({ tool, sessionID: "ses_top", callID: "e1" }, { args })
+    await plugin["tool.execute.after"]({ tool, sessionID: "ses_top", callID: "e1" }, { output: "ok" })
+    const sent = stdinOf(dir, "post-tool-use")
+    assert.equal(sent.tool, tool)
+    assert.deepEqual(sent.args, args)
+    assert.equal(sent.sessionID, "ses_top")
+  }
+})
+
+test("a tool that is neither shell, edit, task nor PR stays free", async () => {
+  const dir = makeProject()
+  const { plugin } = await load(dir)
+  await plugin["tool.execute.after"]({ tool: "read", sessionID: "ses_top", callID: "r1", args: { filePath: "a" } }, { output: "x" })
+  assert.equal(existsSync(join(dir, "post-tool-use.stdin")), false)
 })

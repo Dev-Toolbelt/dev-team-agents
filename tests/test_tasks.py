@@ -1245,7 +1245,7 @@ class HooksWiringTest(StoreTestCase):
         hooks.wire(self.root)
         data = self.read()
         (post,) = self.ours(data, "PostToolUse")
-        self.assertEqual(post["matcher"], "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request")
+        self.assertEqual(post["matcher"], "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|Edit|MultiEdit|Write|NotebookEdit|mcp__.*create_pull_request|mcp__.*merge_pull_request")
         self.assertIn("post-tool-use.sh", post["hooks"][0]["command"])
         (end,) = self.ours(data, "SessionEnd")
         self.assertNotIn("matcher", end)
@@ -1273,7 +1273,18 @@ class HooksWiringTest(StoreTestCase):
         self.settings.write_text(json.dumps(data))
         hooks.wire(self.root)
         entries = self.read()["hooks"]["PostToolUse"]
-        self.assertEqual([e["matcher"] for e in entries], ["TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request"])
+        self.assertEqual([e["matcher"] for e in entries], [hooks.MATCHERS["PostToolUse"]])
+
+    def test_wire_rewrites_the_matcher_that_predates_the_edit_tools_in_place(self):
+        hooks.wire(self.root)
+        data = self.read()
+        data["hooks"]["PostToolUse"][0]["matcher"] = "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request"
+        self.settings.write_text(json.dumps(data))
+        hooks.wire(self.root)
+        (post,) = self.ours(self.read(), "PostToolUse")
+        self.assertEqual(post["matcher"], hooks.MATCHERS["PostToolUse"])
+        for tool in ("Bash", "Edit", "MultiEdit", "Write", "NotebookEdit"):
+            self.assertIn(tool, post["matcher"].split("|"))
 
     def test_wire_keeps_a_matcher_the_user_customized_and_warns(self):
         hooks.wire(self.root)
@@ -1368,7 +1379,7 @@ class InstallInjectHookTest(StoreTestCase):
         post = data["hooks"]["PostToolUse"]
         self.assertEqual(post[0], foreign)
         self.assertEqual(len(post), 2)
-        self.assertEqual(post[1]["matcher"], "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request")
+        self.assertEqual(post[1]["matcher"], "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|Edit|MultiEdit|Write|NotebookEdit|mcp__.*create_pull_request|mcp__.*merge_pull_request")
         self.assertEqual(post[1]["hooks"][0]["command"], self.POST)
         self.assertEqual(data["hooks"]["SessionEnd"], [{"hooks": [{"type": "command", "command": self.END}]}])
         self.assertTrue(data["other"])
@@ -1385,7 +1396,7 @@ class InstallInjectHookTest(StoreTestCase):
 
     def test_our_entry_with_a_matcher_we_shipped_before_is_widened(self):
         post, _ = self.widen("TodoWrite|TaskCreate|TaskUpdate")
-        self.assertEqual([e["matcher"] for e in post], ["TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request"])
+        self.assertEqual([e["matcher"] for e in post], ["TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|Edit|MultiEdit|Write|NotebookEdit|mcp__.*create_pull_request|mcp__.*merge_pull_request"])
 
     def test_our_entry_with_the_users_own_matcher_is_left_alone_and_warned_about(self):
         for custom in (".*", "TodoWrite", "Bash|Edit"):

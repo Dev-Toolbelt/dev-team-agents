@@ -1270,7 +1270,7 @@ class WiringTest(tt.BoardCase):
         (post,) = [e for e in settings["hooks"]["PostToolUse"] if hooks._is_devteam_entry(e, "post-tool-use.sh")]
         self.assertEqual(
             post["matcher"],
-            "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request",
+            "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|Edit|MultiEdit|Write|NotebookEdit|mcp__.*create_pull_request|mcp__.*merge_pull_request",
         )
         (failure,) = [e for e in settings["hooks"]["PostToolUseFailure"] if hooks._is_devteam_entry(e, "post-tool-use.sh")]
         self.assertEqual(failure["matcher"], "Agent|Task|Bash|mcp__.*create_pull_request")
@@ -1295,7 +1295,7 @@ class WiringTest(tt.BoardCase):
         (post,) = [g for g in data["PostToolUse"] if any("_dev_team_agents_managed" in h.get("statusMessage", "") for h in g["hooks"])]
         self.assertEqual(
             post["matcher"],
-            ".*(wait_agent|spawn_agent|close_agent|Bash|mcp__.*(create_pull_request|merge_pull_request))",
+            ".*(wait_agent|spawn_agent|close_agent|Bash|apply_patch|mcp__.*(create_pull_request|merge_pull_request))",
         )
         for tool in ("wait_agent", "agents.wait_agent", "spawn_agent", "close_agent"):
             self.assertTrue(re.search(post["matcher"], tool), tool)
@@ -1998,7 +1998,7 @@ class RoundThreePluginTest(tt.BoardCase):
 
     def test_call_ids_are_forwarded_and_the_subagent_type_is_remembered_by_call_id(self):
         text = self.text()
-        self.assertEqual(text.count("tool_use_id"), 3)
+        self.assertEqual(text.count("tool_use_id"), 4)
         self.assertIn("subagentByCall", text)
         self.assertIn("SUBAGENT_CALLS_KEPT", text)
         self.assertIn("args.subagent_type = subagentByCall.get(callID)", text)

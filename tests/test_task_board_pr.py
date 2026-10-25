@@ -894,9 +894,9 @@ class ProviderWiringTest(StoreTestCase):
 
     def check_claude(self):
         post, failure = hooks.MATCHERS["PostToolUse"], hooks.MATCHERS["PostToolUseFailure"]
-        for tool in ("Bash", "mcp__github__create_pull_request", "mcp__gitlab__merge_pull_request", "TodoWrite", "Agent", "Task", "TaskCreate"):
+        for tool in ("Bash", "mcp__github__create_pull_request", "mcp__gitlab__merge_pull_request", "TodoWrite", "Agent", "Task", "TaskCreate", "Edit", "MultiEdit", "Write", "NotebookEdit"):
             self.assertTrue(re.fullmatch(post, tool), tool)
-        for tool in ("Read", "Edit", "mcp__github__list_pull_requests", "mcp__github__get_issue"):
+        for tool in ("Read", "Grep", "mcp__github__list_pull_requests", "mcp__github__get_issue"):
             self.assertFalse(re.fullmatch(post, tool), tool)
         for tool in ("Bash", "mcp__github__create_pull_request", "Agent", "Task"):
             self.assertTrue(re.fullmatch(failure, tool), tool)
@@ -987,9 +987,9 @@ class ProviderWiringTest(StoreTestCase):
     def check_codex(self):
         text = (REPO_ROOT / "scripts" / "lib" / "codex_hooks_merge.py").read_text(encoding="utf-8")
         matcher = re.search(r'MATCHERS = \{"PostToolUse": "([^"]+)"\}', text).group(1)
-        for tool in ("spawn_agent", "agents.wait_agent", "close_agent", "Bash", "mcp__github__create_pull_request", "mcp__x__merge_pull_request"):
+        for tool in ("spawn_agent", "agents.wait_agent", "close_agent", "Bash", "apply_patch", "mcp__github__create_pull_request", "mcp__x__merge_pull_request"):
             self.assertTrue(re.search(matcher, tool), tool)
-        for tool in ("update_plan", "apply_patch", "mcp__github__list_issues", "shell"):
+        for tool in ("update_plan", "mcp__github__list_issues", "shell"):
             self.assertFalse(re.search(matcher, tool), tool)
 
     def test_codex_replaces_its_previously_managed_post_tool_use_group_on_reinstall(self):
