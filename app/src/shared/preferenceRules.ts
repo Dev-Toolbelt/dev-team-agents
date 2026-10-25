@@ -101,6 +101,7 @@ export const PREFERENCE_RULES: Readonly<Record<string, PreferenceRule>> = Object
   worktree_commit_action: { kind: 'choice', values: ['ask', 'finalize', 'rebase', 'commit-only'] },
   worktree_docker_isolate: { kind: 'boolean' },
   suppress_notifications: { kind: 'boolean' },
+  review_gate_mode: { kind: 'choice', values: ['ask', 'auto', 'skip'] },
   qa_browser: { kind: 'text', nullable: true, validate: validateBrowserName },
   ci_cd_detected: { kind: 'nullable-boolean' },
 });

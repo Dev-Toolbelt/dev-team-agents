@@ -43,7 +43,7 @@ export const GROUPS: readonly Group[] = [
   { id: 'memory', title: 'Memory & docs', description: 'How long session memory is kept and when docs count as stale.' },
   { id: 'worktrees', title: 'Worktrees', description: 'Whether each task gets its own git worktree, and how it is finished.' },
   { id: 'notifications', title: 'Notifications', description: 'What the harness tells you while agents work.' },
-  { id: 'qa', title: 'QA & CI', description: 'Browser testing and the cached CI detection.' },
+  { id: 'qa', title: 'Review, QA & CI', description: 'When finished work is reviewed, browser testing and the cached CI detection.' },
 ];
 
 export interface ChoiceOption {
@@ -263,7 +263,21 @@ export const FIELDS: readonly Field[] = [
     control: { type: 'switch' },
   },
 
-  // QA & CI
+  // Review, QA & CI
+  {
+    key: 'review_gate_mode',
+    group: 'qa',
+    label: 'Review after changes',
+    help: 'What agents do once work that changed code is finished. A review a command always runs is not affected.',
+    control: {
+      type: 'cards',
+      options: [
+        { value: 'ask', label: 'Ask each time', description: 'Offer the review, recommended by default, and let you choose.' },
+        { value: 'auto', label: 'Review automatically', description: 'Run the recommended review right away, without asking.' },
+        { value: 'skip', label: "Don't review", description: 'Go straight to the commit or PR hand-off, with no review prompt, even for sensitive changes.' },
+      ],
+    },
+  },
   {
     key: 'qa_browser',
     group: 'qa',

@@ -560,8 +560,8 @@ export function ProjectSettings({
                       aria-labelledby={`settings-${group.id}-title`}
                       className="scroll-mt-4 rounded-xl border bg-card text-card-foreground shadow-sm"
                     >
-                      <header className="border-b px-5 py-4">
-                        <h3 id={`settings-${group.id}-title`} className="font-semibold">
+                      <header className="rounded-t-xl border-b bg-muted/40 px-5 py-4">
+                        <h3 id={`settings-${group.id}-title`} className="text-base font-semibold tracking-tight">
                           {group.title}
                         </h3>
                         <p className="text-sm text-muted-foreground">{group.description}</p>
@@ -596,8 +596,8 @@ export function ProjectSettings({
                       aria-labelledby="settings-other-title"
                       className="rounded-xl border bg-card text-card-foreground shadow-sm"
                     >
-                      <header className="border-b px-5 py-4">
-                        <h3 id="settings-other-title" className="font-semibold">
+                      <header className="rounded-t-xl border-b bg-muted/40 px-5 py-4">
+                        <h3 id="settings-other-title" className="text-base font-semibold tracking-tight">
                           Other
                         </h3>
                         <p className="text-sm text-muted-foreground">

@@ -134,6 +134,11 @@ describe('the rules the main process enforces', () => {
     expect(valueProblem('not_a_key', 1)).not.toBeNull();
   });
 
+  it('accepts only the listed review gate modes', () => {
+    for (const mode of ['ask', 'auto', 'skip']) expect(valueProblem('review_gate_mode', mode), mode).toBeNull();
+    for (const bad of ['AUTO', 'never', '', null, 1]) expect(valueProblem('review_gate_mode', bad), String(bad)).not.toBeNull();
+  });
+
   it('refuses text the CLI would read as a literal or as a flag', () => {
     for (const text of ['null', 'None', 'TRUE', '-x', ' padded', 'a'.repeat(201)]) expect(textProblem(text), text).not.toBeNull();
     expect(textProblem('chrome')).toBeNull();

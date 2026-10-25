@@ -256,7 +256,7 @@ describe('ProjectSettings — navigation', () => {
 describe('ProjectSettings — grouping and origin', () => {
   it('renders every group and says where each value comes from', async () => {
     renderSettings();
-    for (const title of ['General', 'Context & session', 'Memory & docs', 'Worktrees', 'Notifications', 'QA & CI']) {
+    for (const title of ['General', 'Context & session', 'Memory & docs', 'Worktrees', 'Notifications', 'Review, QA & CI']) {
       expect(await screen.findByRole('heading', { name: title, level: 3 })).toBeInTheDocument();
     }
     expect(screen.getAllByText('Not opted in').length).toBe(2);
@@ -384,9 +384,10 @@ describe('ProjectSettings — saving', () => {
     await user.selectOptions(screen.getByLabelText('Conversation language'), 'pt-BR');
     await user.click(screen.getByRole('button', { name: '1M' }));
     await user.click(screen.getByRole('radio', { name: /Finalize/ }));
+    await user.click(screen.getByRole('radio', { name: /Review automatically/ }));
     await user.selectOptions(screen.getByLabelText('GitHub Actions'), 'false');
 
-    expect(within(screen.getByRole('region', { name: 'Unsaved changes' })).getByText('5 unsaved changes')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Unsaved changes' })).getByText('6 unsaved changes')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Save changes/ }));
 
     const expected: PreferenceChange[] = [
@@ -394,10 +395,11 @@ describe('ProjectSettings — saving', () => {
       { key: 'model_max_tokens', action: 'set', value: 1000000 },
       { key: 'worktree_active', action: 'set', value: false },
       { key: 'worktree_commit_action', action: 'set', value: 'finalize' },
+      { key: 'review_gate_mode', action: 'set', value: 'auto' },
       { key: 'ci_cd_detected', action: 'set', value: false },
     ];
     expect(bridge.updateProjectPreferences).toHaveBeenCalledWith('proj-1', expected);
-    expect(await screen.findByText(/Saved 5 changes to this project/)).toBeInTheDocument();
+    expect(await screen.findByText(/Saved 6 changes to this project/)).toBeInTheDocument();
     expect(bridge.projectPreferences).toHaveBeenCalledTimes(2);
   });
 
