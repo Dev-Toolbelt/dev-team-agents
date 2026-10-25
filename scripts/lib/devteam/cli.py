@@ -18,7 +18,7 @@ from pathlib import Path
 from . import auth, bind as bind_module
 from . import auth_gate as gate
 from . import detect
-from . import backlog, catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, trace, insights, update, upgrade, versions
+from . import backlog, catalog, check as check_module, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, trace, insights, mining, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .console import stdin_is_console as _stdin_is_console
@@ -579,6 +579,21 @@ def _featured_commands():
     if not any("featured" in meta for meta in entries.values() if isinstance(meta, dict)):
         return list(_FALLBACK_FEATURED)
     return [name for name, meta in entries.items() if isinstance(meta, dict) and meta.get("featured")]
+
+
+def cmd_check(args, emitter):
+    result = check_module.run(args.path, args.base)
+    return result, check_module.render(result)
+
+
+def cmd_mine_sessions(args, emitter):
+    result = mining.sessions(project.resolve_root(args.path))
+    return result, mining.render_sessions(result)
+
+
+def cmd_mine_reviews(args, emitter):
+    result = mining.reviews(project.resolve_root(args.path))
+    return result, mining.render_reviews(result)
 
 
 def cmd_start(args, emitter):
@@ -2381,6 +2396,21 @@ def build_parser():
     detect_parser = leaf(sub, "detect", help="read a folder: providers, stack, project type, first task")
     detect_parser.add_argument("--path", help="project directory (default: the current one)")
     detect_parser.set_defaults(func=cmd_detect)
+
+    check_parser = leaf(sub, "check", help="compare the branch diff with the base branch's ADRs and reuse rules")
+    check_parser.add_argument("--base", help="base ref (default: origin's default branch)")
+    check_parser.add_argument("--path", help="project directory (default: the current one)")
+    check_parser.set_defaults(func=cmd_check)
+
+    mine_parser = leaf(
+        sub, "mine", help="candidate rules from local session transcripts and merged-PR review threads"
+    ).add_subparsers(dest="mine_cmd")
+    mine_sessions = leaf(mine_parser, "sessions", help="corrections and preferences typed on 2+ distinct days")
+    mine_sessions.add_argument("--path", help="project directory (default: the current one)")
+    mine_sessions.set_defaults(func=cmd_mine_sessions)
+    mine_reviews = leaf(mine_parser, "reviews", help="resolved or outdated review threads of the last 50 merged PRs")
+    mine_reviews.add_argument("--path", help="project directory (default: the current one)")
+    mine_reviews.set_defaults(func=cmd_mine_reviews)
 
     start_parser = leaf(sub, "start", help="set a folder up and suggest a first, read-only task")
     start_parser.add_argument("--path", help="project directory (default: the current one)")

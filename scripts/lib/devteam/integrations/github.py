@@ -16,6 +16,16 @@ DEFAULT_API_URL = "https://api.github.com"
 _REPO_RE = re.compile(r"^(?!\.+/)[A-Za-z0-9_.-]+/(?!\.+$)[A-Za-z0-9_.-]+$")
 
 
+#: Inline review threads of the most recently merged pull requests (ADR-0049). Resolution and
+#: outdatedness exist only in GraphQL; the REST comment list carries neither.
+REVIEW_THREADS_QUERY = (
+    "query($owner:String!,$name:String!,$prs:Int!){repository(owner:$owner,name:$name){"
+    "pullRequests(states:MERGED,first:$prs,orderBy:{field:UPDATED_AT,direction:DESC}){nodes{"
+    "number url reviewThreads(first:50){nodes{isResolved isOutdated path "
+    "comments(first:1){nodes{body}}}}}}}}"
+)
+
+
 class GitHub:
     name = "github"
     origin_key = "api_url"
@@ -96,6 +106,21 @@ class GitHub:
         ]
         truncated = 'rel="next"' in (headers.get("Link") or "")
         return {"items": items, "truncated": truncated}
+
+    def review_threads(self, account, token, repository, merged_prs=50):
+        """The GraphQL ``pullRequests`` nodes for ``repository`` (``owner/name``), newest merged first."""
+        owner, _, name = repository.partition("/")
+        base = http.validate_base_url(account["api_url"], "api_url")
+        # GitHub Enterprise Server serves GraphQL at <host>/api/graphql, beside /api/v3.
+        base = base[: -len("/v3")] if base.endswith("/api/v3") else base
+        data, _headers = http.post_json(
+            base, "/graphql", self._headers(token),
+            {"query": REVIEW_THREADS_QUERY, "variables": {"owner": owner, "name": name, "prs": merged_prs}},
+        )
+        try:
+            return data["data"]["repository"]["pullRequests"]["nodes"]
+        except (KeyError, TypeError):
+            raise http.FetchError("unreachable", "The server did not answer like the GitHub API") from None
 
     def detect(self, project_root, account):
         api_host = (urllib.parse.urlsplit(account["api_url"]).hostname or "").lower()
