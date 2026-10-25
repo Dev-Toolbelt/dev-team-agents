@@ -121,7 +121,7 @@ There is also a silent-fallback case: if the org restricts models via an `availa
 
 | Provider | Hook point | Tool | Replace or incremental | Ownership |
 | --- | --- | --- | --- | --- |
-| **Claude Code** | `PostToolUse` (matcher: `TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request`) | `TaskCreate` / `TaskUpdate` (default) | Incremental; each task tracked by id | `TaskUpdate.tool_input.taskId`; parsed from output for `TaskCreate` |
+| **Claude Code** | `PostToolUse` (matcher: `TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|Edit|MultiEdit|Write|NotebookEdit|mcp__.*create_pull_request|mcp__.*merge_pull_request`) | `TaskCreate` / `TaskUpdate` (default) | Incremental; each task tracked by id | `TaskUpdate.tool_input.taskId`; parsed from output for `TaskCreate` |
 | **Claude Code** | `PostToolUse` (same matcher) | `TodoWrite` (legacy, disabled by default) | Replace — full list each call | Matched by normalized content |
 | **Claude Code** | `SessionEnd` | — | Marks session ended | Raises `tasks.session_abandoned` if tasks remain |
 | **Codex** | `SessionEnd` (`codex-rs/hooks/src/events/session_end.rs`: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `reason`) | — | Marks session ended | Raises `tasks.session_abandoned` if tasks remain |
@@ -185,6 +185,16 @@ opencode's usage comes from the plugin's SDK calls: these are verified against s
 Claude Code: `PostToolUseFailure` on matchers `Agent|Task|Bash|mcp__.*create_pull_request` carries gh's non-zero "already exists" form and can only CREATE a PR/MR mark (failure events never record merges); field read order is the first present of `tool_response`, `tool_output`, `output`, `error` (the Claude failure payload is not verified live).
 
 Codex confirmed: `exec_command` and `write_stdin` completion fire `PostToolUse` with `tool_name: "Bash"`, `tool_input: {command: …}`, `tool_use_id`, and `tool_response` = a JSON string of the output (only when the process finishes, so success/failure is inferred from the output). MCP tools emit `PostToolUse` with `tool_name: "mcp__<server>__<tool>"` and structured `tool_response` (content[], structuredContent, isError). Codex is **in scope**; no provider is excluded. Matchers for PR/MR creation widen to catch `Bash` and MCP tools ending in `create_pull_request|merge_pull_request`.
+
+**Post-tool hints per provider** (ADR-0047, ADR-0050, ADR-0051). The shell and edit hooks in `post-tool-use.sh` feed the context-hints channel. Delivery timing differs by provider:
+
+| Provider | `PostToolUse` tools that reach `post-tool-use.sh` | Hint delivery |
+|----------|--------------------------------------------------|---------------|
+| **Claude Code** | Matcher `TodoWrite\|TaskCreate\|TaskUpdate\|Agent\|Task\|Bash\|Edit\|MultiEdit\|Write\|NotebookEdit\|mcp__.*create_pull_request\|mcp__.*merge_pull_request` | Immediately after the tool call, as `hookSpecificOutput.additionalContext` |
+| **Codex** | Matcher `.*(wait_agent\|spawn_agent\|close_agent\|Bash\|apply_patch\|mcp__.*(create_pull_request\|merge_pull_request))`; `apply_patch` is every Codex file edit | Immediately after the tool call. Codex honors `PostToolUse` `additionalContext`, verified against `codex-rs/hooks/src/events/post_tool_use.rs` at openai/codex commit `970111f6cb62` (`parse_post_tool_use` hands it to the model) |
+| **opencode** | Plugin `tool.execute.after` forwards every `bash` call, with `exit_code` when the metadata carries one, and the edit tools `edit`, `write`, `multiedit`, `patch` with their path arguments | At the next prompt: the plugin captures the `[DEVTEAM:RECALL]` and `[DEVTEAM:HINT]` lines and adds them through `experimental.chat.system.transform`, because `chat.message` output is not shown to the model |
+
+Hint delivery on Codex is therefore immediate, the same as on Claude Code. The opencode `exit_code` key names are not verified against a live session: the plugin reads `exit`, `exitCode`, `exit_code` and `returncode` from the metadata, and when the metadata carries none of them, the payload has no `exit_code` field at all.
 
 opencode notes (unverified): `tool.execute.after` behavior for bash non-zero exit is not verified live.
 
