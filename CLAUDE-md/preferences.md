@@ -27,13 +27,17 @@ On a v2 install that is not bound yet, all user-level preferences are stored in 
   "worktree_docker_isolate": true,
   "qa_browser": null,
   "review_gate_mode": "ask",
-  "ci_cd_detected": null
+  "ci_cd_detected": null,
+  "recall_active": true,
+  "check_active": true,
+  "repair_hints_active": true,
+  "branch_overlap_active": true
 }
 ```
 
 **These are the values a preferences.json gets when it does not exist yet.** They are never applied to a file that already exists: `install.sh` merges with existing values winning, and the backfill only adds absent keys. `credentials.local.json` is not created implicitly; see [Credentials Reference](../docs/credentials.local.md) for creation methods.
 
-**Consent keys — `telemetry` and `auto_update`.** Both are `true` in the schema, which is the value a *fresh* file gets (for `telemetry`, still subject to the install prompt below). Neither is ever written as `true` into a preferences.json that already exists: that file's owner never saw a prompt for a field added after they installed, so an absent key means "no". Both `install.sh` and the session-start backfill write `false` in that case.
+**Consent keys — `telemetry`, `auto_update` and `branch_overlap_active`.** All are `true` in the schema, which is the value a *fresh* file gets (for `telemetry`, still subject to the install prompt below). None is ever written as `true` into a preferences.json that already exists: that file's owner never saw a prompt for a field added after they installed, so an absent key means "no". `install.sh` and the session-start backfill write `false` in that case. `branch_overlap_active` is a consent key for that backfill only: the v3 cascade (`scripts/lib/devteam/prefs.py` `CONSENT_KEYS`) lists just `telemetry` and `auto_update`, so a v3 project resolves it to `true` unless a layer sets it (ADR-0051).
 
 ### Retiring a key
 
@@ -73,6 +77,10 @@ Existing preferences.json files keep the key forever; the backfill does not rein
 | `qa_browser` | `null` | Preferred browser when the in-app Claude browser is unavailable — used by `qa-specialist` browser testing and by the Visual Check Gate. `null` = ask on first use and offer to save the choice here | `skills/shared/interaction-patterns/SKILL.md` § Visual Check Gate → Browser Choice |
 | `review_gate_mode` | `"ask"` | What the Review Next-Step Gate does when a flow that changed code finishes: `ask` (show the gate), `auto` (run the recommended review without asking), or `skip` (go straight to the commit/PR hand-off). Absent or unknown means `ask`. A review a command runs as a mandatory phase is not affected | `skills/shared/interaction-patterns/SKILL.md` § Review Next-Step Gate (agent-executed) |
 | `ci_cd_detected` | `null` | Cached result of the GitHub Actions detection (`.github/workflows/*.yml`/`.yaml` present). `null` = not yet checked; `true`/`false` once checked. A cached `true` is trusted as-is; a cached `false` is always rechecked (cheap, and workflows get added over time) | `skills/shared/github-actions/SKILL.md` (agent-executed) |
+| `recall_active` | `true` | Per-prompt recall pointers from the ADR, wiki and reuse retrieval indexes (ADR-0047). `false` turns it off | the per-prompt recall hook (`scripts/hooks/`) |
+| `check_active` | `true` | The `devteam check` pre-flight that compares the branch diff with base-branch decisions in `/devteam:pr` and `/devteam:push` (ADR-0048). `false` turns it off | `commands/pr.md`, `commands/push.md`, `devteam check` |
+| `repair_hints_active` | `true` | Repair hints surfaced from the machine-local repair ledger after repeated command failures (ADR-0050). `false` turns it off | the repair-ledger hint hook |
+| `branch_overlap_active` | `true` on a fresh file, `false` on backfill | Warnings about overlapping edits on teammates' unmerged branches (ADR-0051). `false` turns it off. Consent key — it fetches from the remote | the branch-overlap check |
 
 > **Fallback safety**: all scripts that read `preferences.json` use hardcoded defaults for every key. If the file is missing, malformed, or a key is removed, scripts fall back to the defaults above without error. Never leave a key out — the schema above is the authoritative default set.
 >
@@ -80,7 +88,7 @@ Existing preferences.json files keep the key forever; the backfill does not rein
 
 > **Exception — the `telemetry` read path fails closed.** `scripts/lib/telemetry-guard.sh` is the single definition of the gate (`_telemetry_enabled`), sourced by `scripts/helpers/telemetry-send.sh`, `stop/05-telemetry.sh` and `pre-tool-use/02b-telemetry.sh`. It returns "disabled" for a missing file, an unreadable file, a **missing `telemetry` key**, or no `python3` to read it with — consent that was never recorded is not consent. Never flip that to `true`, and never let a consumer that cannot source the guard fall back to sending.
 >
-> **The read path and the backfill now agree.** They used to disagree: `preferences-defaults.json` carries `"telemetry": true`, so a legacy file missing the key read as *disabled*, and then the next session start backfilled the schema value and silently flipped it to *enabled*. The fix was not to change the schema value — a fresh install should still default to enabled, subject to the prompt — but to make the backfill consent-aware. `telemetry` and `auto_update` are `CONSENT_KEYS` in both `install.sh` and `scripts/hooks/session-start.sh`: when the key is absent from an **existing** `preferences.json`, `false` is written, not the schema default. Keep the two lists in sync, and do not add a key to either without deciding whether an absent value means "no".
+> **The read path and the backfill now agree.** They used to disagree: `preferences-defaults.json` carries `"telemetry": true`, so a legacy file missing the key read as *disabled*, and then the next session start backfilled the schema value and silently flipped it to *enabled*. The fix was not to change the schema value — a fresh install should still default to enabled, subject to the prompt — but to make the backfill consent-aware. `telemetry`, `auto_update` and `branch_overlap_active` are `CONSENT_KEYS` in both `install.sh` and `scripts/hooks/session-start.sh`: when the key is absent from an **existing** `preferences.json`, `false` is written, not the schema default. Keep the two lists in sync, and do not add a key to either without deciding whether an absent value means "no".
 
 ### Telemetry consent
 
@@ -110,7 +118,7 @@ The reachability test is "can we open `/dev/tty`", **not** `[ -t 0 ]`. The docum
 
 On every session start, `scripts/hooks/session-start.sh` compares `preferences.json` against `scripts/lib/preferences-defaults.json` and writes any **missing** key with its default value. Existing user values are never overwritten; the write is a no-op when the file is already complete. This self-heals installs that predate a new key.
 
-**Consent keys are the exception.** `telemetry` and `auto_update` are backfilled as `false`, never as the schema's `true`. The file already existing means its owner never saw a prompt for a field added later, so the backfill must not decide for them. Nothing else is special-cased.
+**Consent keys are the exception.** `telemetry`, `auto_update` and `branch_overlap_active` are backfilled as `false`, never as the schema's `true`. The file already existing means its owner never saw a prompt for a field added later, so the backfill must not decide for them. Nothing else is special-cased.
 
 ### Language Rule
 

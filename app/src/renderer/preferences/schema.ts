@@ -38,7 +38,7 @@ export const GROUPS: readonly Group[] = [
   {
     id: 'context',
     title: 'Context & session',
-    description: 'When agents warn about the context window, and how long a dirty tree may go uncommitted.',
+    description: 'When agents warn about the context window, how long a dirty tree may go uncommitted, and what context the hooks hand the agent.',
   },
   { id: 'memory', title: 'Memory & docs', description: 'How long session memory is kept and when docs count as stale.' },
   { id: 'worktrees', title: 'Worktrees', description: 'Whether each task gets its own git worktree, and how it is finished.' },
@@ -174,6 +174,34 @@ export const FIELDS: readonly Field[] = [
     help: 'Turns of work on a dirty tree with no commit before a one-time reminder.',
     control: { type: 'integer', ...integerRange('session_no_commit_turns'), unit: 'turns' },
   },
+  {
+    key: 'recall_active',
+    group: 'context',
+    label: 'Prompt recall pointers',
+    help: 'Point each prompt at the ADR, wiki and reuse entries that match it.',
+    control: { type: 'switch' },
+  },
+  {
+    key: 'check_active',
+    group: 'context',
+    label: 'Pre-PR and pre-push check',
+    help: 'Run devteam check in /devteam:pr and /devteam:push against base-branch decisions.',
+    control: { type: 'switch' },
+  },
+  {
+    key: 'repair_hints_active',
+    group: 'context',
+    label: 'Repair hints',
+    help: 'Surface hints from the repair ledger after repeated command failures.',
+    control: { type: 'switch' },
+  },
+  {
+    key: 'branch_overlap_active',
+    group: 'context',
+    label: 'Branch overlap warnings',
+    help: 'Warn about overlapping edits on unmerged branches from teammates.',
+    control: { type: 'switch' },
+  },
 
   // Memory & docs
   {
@@ -253,7 +281,6 @@ export const FIELDS: readonly Field[] = [
     dependsOn: { key: 'worktree_active', note: 'Applies when worktrees are on.' },
     control: { type: 'switch' },
   },
-
   // Notifications
   {
     key: 'suppress_notifications',

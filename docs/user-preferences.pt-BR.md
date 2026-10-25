@@ -71,7 +71,11 @@ scripts/lib/preferences-defaults.json
   "worktree_docker_isolate": true,
   "qa_browser": null,
   "review_gate_mode": "ask",
-  "ci_cd_detected": null
+  "ci_cd_detected": null,
+  "recall_active": true,
+  "check_active": true,
+  "repair_hints_active": true,
+  "branch_overlap_active": true
 }
 ```
 
@@ -102,6 +106,10 @@ scripts/lib/preferences-defaults.json
 | `qa_browser` | `null` | string ou null | Navegador preferido quando o browser do app não está disponível — testes de QA e a conferência visual após trabalho de UI |
 | `review_gate_mode` | `"ask"` | string | O que acontece quando um trabalho que alterou código termina: `ask` mostra a escolha de review, `auto` roda o review recomendado sem perguntar, `skip` vai direto para o hand-off de commit/PR |
 | `ci_cd_detected` | `null` | bool ou null | Estado em cache da detecção de CI/CD |
+| `recall_active` | `true` | bool | Ponteiros de recall por prompt a partir dos índices de ADR, wiki e reuso (ADR-0047) |
+| `check_active` | `true` | bool | Pré-checagem `devteam check` que compara o diff da branch com as decisões da base em `/devteam:pr` e `/devteam:push` (ADR-0048) |
+| `repair_hints_active` | `true` | bool | Dicas de reparo vindas do ledger local de reparos após falhas repetidas de comando (ADR-0050) |
+| `branch_overlap_active` | `true` | bool | Avisos de edições sobrepostas em branches não mergeadas de colegas (ADR-0051) |
 
 ---
 
@@ -117,6 +125,15 @@ O comportamento de worktree é guiado principalmente por cinco preferências:
 | `auto_learn_before_commit` | `true` | Executa `/devteam:learn` silenciosamente antes de cada commit — os docs gerados entram nos commits do trabalho; `false` pula por padrão |
 | `worktree_path` | `".worktrees"` | Define onde as worktrees geradas ficam |
 | `worktree_docker_isolate` | `true` | Cria namespace isolado para recursos Docker Compose por worktree quando houver Docker |
+
+### Entrega de contexto
+
+| Chave | Padrão | Efeito |
+|-------|--------|--------|
+| `recall_active` | `true` | Ponteiros de recall por prompt a partir dos índices de ADR, wiki e reuso (ADR-0047); `false` desliga |
+| `check_active` | `true` | Pré-checagem `devteam check` que compara o diff da branch com as decisões da base em `/devteam:pr` e `/devteam:push` (ADR-0048); `false` desliga |
+| `repair_hints_active` | `true` | Dicas de reparo vindas do ledger local de reparos após falhas repetidas de comando (ADR-0050); `false` desliga |
+| `branch_overlap_active` | `true` | Avisos de edições sobrepostas em branches não mergeadas de colegas (ADR-0051); `false` desliga |
 
 ### Cascata de decisão
 
@@ -161,14 +178,15 @@ Essas configurações afetam warnings de runtime e o nível de ruído local:
 
 ## Configurações Guiadas por Consentimento
 
-Duas chaves são tratadas como configurações explícitas de consentimento:
+Três chaves são tratadas como configurações explícitas de consentimento:
 
 | Chave | Significado |
 |-------|-------------|
 | `telemetry` | Relato anônimo de uso |
 | `auto_update` | Aplicação automática de updates |
+| `branch_overlap_active` | Fetch periódico para avisar sobre edições sobrepostas em branches de colegas |
 
-Elas são especiais porque valores ausentes são tratados de forma conservadora em instalações já existentes. Na prática, ausência de consentimento é lida como desativado até o usuário registrar a escolha explicitamente.
+Elas são especiais porque valores ausentes são tratados de forma conservadora em instalações já existentes. Na prática, ausência de consentimento é lida como desativado até o usuário registrar a escolha explicitamente. Exceção: num projeto v3 (store global), `branch_overlap_active` resolve para `true` a menos que você o defina — desligue com `devteam prefs set branch_overlap_active false --scope project`.
 
 ---
 

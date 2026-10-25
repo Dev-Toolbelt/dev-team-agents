@@ -104,6 +104,10 @@ export const PREFERENCE_RULES: Readonly<Record<string, PreferenceRule>> = Object
   review_gate_mode: { kind: 'choice', values: ['ask', 'auto', 'skip'] },
   qa_browser: { kind: 'text', nullable: true, validate: validateBrowserName },
   ci_cd_detected: { kind: 'nullable-boolean' },
+  recall_active: { kind: 'boolean' },
+  check_active: { kind: 'boolean' },
+  repair_hints_active: { kind: 'boolean' },
+  branch_overlap_active: { kind: 'boolean' },
 });
 
 /** The range of an integer key, for the renderer's controls. Throws on a non-integer key: a table error. */

@@ -343,6 +343,10 @@ export function projectPreferences(overrides: Partial<ProjectPreferencesView> = 
       review_gate_mode: 'ask',
       qa_browser: null,
       ci_cd_detected: null,
+      recall_active: true,
+      check_active: true,
+      repair_hints_active: true,
+      branch_overlap_active: true,
     },
     origin: {
       language: 'project',
@@ -366,6 +370,10 @@ export function projectPreferences(overrides: Partial<ProjectPreferencesView> = 
       review_gate_mode: 'defaults',
       qa_browser: 'defaults',
       ci_cd_detected: 'defaults',
+      recall_active: 'defaults',
+      check_active: 'defaults',
+      repair_hints_active: 'defaults',
+      branch_overlap_active: 'defaults',
     },
     unknown: [],
   };

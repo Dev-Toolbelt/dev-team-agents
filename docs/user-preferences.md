@@ -71,7 +71,11 @@ scripts/lib/preferences-defaults.json
   "worktree_docker_isolate": true,
   "qa_browser": null,
   "review_gate_mode": "ask",
-  "ci_cd_detected": null
+  "ci_cd_detected": null,
+  "recall_active": true,
+  "check_active": true,
+  "repair_hints_active": true,
+  "branch_overlap_active": true
 }
 ```
 
@@ -102,6 +106,10 @@ scripts/lib/preferences-defaults.json
 | `qa_browser` | `null` | string or null | Preferred browser when the in-app browser is unavailable — QA browser testing and the visual check after UI work |
 | `review_gate_mode` | `"ask"` | string | What happens when work that changed code finishes: `ask` shows the review chooser, `auto` runs the recommended review without asking, `skip` goes straight to the commit/PR hand-off |
 | `ci_cd_detected` | `null` | bool or null | Cached CI/CD detection state |
+| `recall_active` | `true` | bool | Per-prompt recall pointers from the ADR, wiki and reuse retrieval indexes (ADR-0047) |
+| `check_active` | `true` | bool | The `devteam check` pre-flight that compares the branch diff with base-branch decisions in `/devteam:pr` and `/devteam:push` (ADR-0048) |
+| `repair_hints_active` | `true` | bool | Repair hints surfaced from the machine-local repair ledger after repeated command failures (ADR-0050) |
+| `branch_overlap_active` | `true` | bool | Warnings about overlapping edits on teammates' unmerged branches (ADR-0051) |
 
 ---
 
@@ -117,6 +125,15 @@ Worktree behavior is driven primarily by five preferences:
 | `auto_learn_before_commit` | `true` | Run `/devteam:learn` silently before each commit — its docs are committed with the work; `false` skips it by default |
 | `worktree_path` | `".worktrees"` | Choose where generated worktrees live |
 | `worktree_docker_isolate` | `true` | Namespace Docker Compose resources per worktree when Docker is in use |
+
+### Context delivery
+
+| Key | Default | Effect |
+|-----|---------|--------|
+| `recall_active` | `true` | Per-prompt recall pointers from the ADR, wiki and reuse retrieval indexes (ADR-0047); `false` turns it off |
+| `check_active` | `true` | The `devteam check` pre-flight that compares the branch diff with base-branch decisions in `/devteam:pr` and `/devteam:push` (ADR-0048); `false` turns it off |
+| `repair_hints_active` | `true` | Repair hints surfaced from the machine-local repair ledger after repeated command failures (ADR-0050); `false` turns it off |
+| `branch_overlap_active` | `true` | Warnings about overlapping edits on teammates' unmerged branches (ADR-0051); `false` turns it off |
 
 ### Decision cascade
 
@@ -161,14 +178,15 @@ These settings affect runtime warnings and local noise level:
 
 ## Consent-Driven Settings
 
-Two keys are treated as explicit consent settings:
+Three keys are treated as explicit consent settings:
 
 | Key | Meaning |
 |-----|---------|
 | `telemetry` | Anonymous usage reporting |
 | `auto_update` | Automatic update application |
+| `branch_overlap_active` | Periodic fetch to warn about overlapping edits on teammates' branches |
 
-They are special because missing values are treated conservatively on existing installs. In practice, absent consent is read as disabled until the user explicitly records a choice.
+They are special because missing values are treated conservatively on existing installs. In practice, absent consent is read as disabled until the user explicitly records a choice. Exception: in a v3 project (global store), `branch_overlap_active` resolves to `true` unless you set it — turn it off with `devteam prefs set branch_overlap_active false --scope project`.
 
 ---
 
