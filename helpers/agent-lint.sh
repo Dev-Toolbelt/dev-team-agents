@@ -297,18 +297,26 @@ check_skill() {
     fi
   done
 
-  # Check for non-canonical keys (only name and description allowed at top level)
-  while IFS= read -r line; do
-    [ -z "$line" ] && continue
-    key=$(echo "$line" | grep -oE '^[a-zA-Z_-]+:' | tr -d ':' || true)
-    [ -z "$key" ] && continue
-    case "$key" in
-      name|description) ;;  # canonical
-      *) ERRORS+=("  · ${file}: non-canonical frontmatter key: ${key} (only name/description allowed)") ;;
-    esac
-  done <<< "$frontmatter"
-
   local rel="${file#"$REPO_ROOT"/}"
+
+  # Vendored third-party skills (skills/third-party/, see its README.md) keep their
+  # upstream frontmatter and description untouched: only the checks a provider
+  # depends on — required fields, name = directory, unique name — apply to them.
+  local third_party=false
+  [[ "$rel" == skills/third-party/* ]] && third_party=true
+
+  # Check for non-canonical keys (only name and description allowed at top level)
+  if [ "$third_party" = false ]; then
+    while IFS= read -r line; do
+      [ -z "$line" ] && continue
+      key=$(echo "$line" | grep -oE '^[a-zA-Z_-]+:' | tr -d ':' || true)
+      [ -z "$key" ] && continue
+      case "$key" in
+        name|description) ;;  # canonical
+        *) ERRORS+=("  · ${file}: non-canonical frontmatter key: ${key} (only name/description allowed)") ;;
+      esac
+    done <<< "$frontmatter"
+  fi
 
   # ── name must equal the directory basename ─────────────────────────────────
   # The render engine resolves opencode skills by frontmatter `name`, while the
@@ -327,7 +335,7 @@ check_skill() {
   # ── description budget (warning — see SKILL_DESC_STRICT) ───────────────────
   local desc
   desc=$(echo "$frontmatter" | grep -E "^description:" | head -1 | sed 's/^description:[[:space:]]*//' | tr -d '\r' | sed 's/^["'"'"']//; s/["'"'"']$//; s/[[:space:]]*$//')
-  if [ -n "$desc" ] && [ "${#desc}" -gt "$SKILL_DESC_LIMIT" ]; then
+  if [ "$third_party" = false ] && [ -n "$desc" ] && [ "${#desc}" -gt "$SKILL_DESC_LIMIT" ]; then
     if [ "$SKILL_DESC_STRICT" = true ]; then
       ERRORS+=("  · ${rel}: description is ${#desc} chars (budget: ${SKILL_DESC_LIMIT})")
     else

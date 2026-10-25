@@ -64,6 +64,8 @@ done < <(find "$AGENTS_DIR" -name "*.md" | sort)
 while IFS= read -r f; do
   rel="${f#"$REPO_ROOT"/}"
   [[ "$rel" == *"/references/"* ]] && continue
+  # Vendored upstream content is not authored here (skills/third-party/README.md).
+  [[ "$rel" == skills/third-party/* ]] && continue
   lines=$(wc -l < "$f")
   if [ "$lines" -gt "$SKILL_LIMIT" ]; then
     VIOLATIONS+=("  · $rel: $lines lines (limit: $SKILL_LIMIT)")

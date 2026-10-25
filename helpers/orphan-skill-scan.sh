@@ -126,6 +126,12 @@ while IFS= read -r skill_file; do
     is_user_invocable "$skill_name" && continue
 
     referenced=false
+    # A vendored third-party skill is loaded through the framework skill that
+    # routes to it (skills/third-party/README.md), not directly by an agent.
+    if [[ "$rel_path" == skills/third-party/* ]]; then
+        grep -rqF --include=SKILL.md --exclude-dir=third-party "\`${skill_name}\`" "$SKILLS_DIR" 2>/dev/null \
+            && continue
+    fi
     if grep -q "$rel_path" "$COMBINED_TMP" 2>/dev/null; then
         referenced=true
     elif grep -qE "\`${skill_name}\`|[^a-zA-Z0-9_-]${skill_name}[[:space:]]+(skill|Skill)|[Ss]kill[[:space:]]+\`?${skill_name}\`?" \
