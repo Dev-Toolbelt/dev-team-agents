@@ -14,6 +14,12 @@ Load `skills/shared/git-workflow/SKILL.md` and run its **Dirty-Tree Pre-flight**
 
 ---
 
+## Step -0 — Decision check pre-flight
+
+Run the `git-workflow` skill (loaded above)'s **Decision Check Pre-flight** with the **Justify in the commit message** option, then continue to Step 0.
+
+---
+
 ## Step 0 — Push, with CI/CD-aware quiz
 
 Load `skills/shared/github-actions/SKILL.md` and follow it in full: it checks its preconditions (gh authenticated + `.github/workflows/*` present, using the cached `ci_cd_detected` preference), then — only if both hold — asks the quiz in its Flow § 0 (watch CI vs. push-only vs. other). If the preconditions fail, push normally without a quiz.
