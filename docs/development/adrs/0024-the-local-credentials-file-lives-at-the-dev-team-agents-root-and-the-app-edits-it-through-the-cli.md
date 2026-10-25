@@ -3,6 +3,7 @@
 **Date:** 2026-10-01
 **Status:** Accepted
 **Deciders:** dev-team-agents maintainers
+**Amended by:** ADR-0046 (§ 5: a fourth leaf, `cred local copy-value`, lets the app copy a hidden value)
 
 ## Context
 
@@ -137,6 +138,10 @@ credential guard hook already treats the basename as a secret at any path.
   two-space-indented JSON with a trailing newline, mode `0600`, atomically.
 
 `cred get` stays forbidden to the app. The app's allowlist widens to exactly these three leaves.
+
+> **Amended by ADR-0046:** a fourth leaf, `cred local copy-value`, returns one hidden, set value so
+> the app's main process can put it on the clipboard. It is the one output path that carries a
+> secret value; the renderer still never receives one.
 
 ### 6. The file is free-form, with two reserved keys
 

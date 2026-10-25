@@ -41,7 +41,7 @@ The file does not exist by default. Create it in one of three ways:
 
 Open the **Credentials** tab in the project view. Click **Create file** to create `credentials.local.json` from the starter example. The tab is a tree editor: add, rename, nest, move between groups and remove groups and fields, mark a field secret or a group production, and search keys and visible values.
 
-Secrets are write-only: a value marked in `$secrets`, or one that looks secret, appears only as set / not set, with Replace.
+Secrets are write-only: a value marked in `$secrets`, or one that looks secret, appears only as set / not set, with Replace. A secret that is set also has a copy button. It puts the raw value on the clipboard without showing it, and the clipboard is cleared after 30 seconds, or when the app quits, unless you copied something else meanwhile. Save or discard your edits before copying.
 
 ### Via the CLI
 

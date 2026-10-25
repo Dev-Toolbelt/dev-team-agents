@@ -774,6 +774,7 @@ A value is stored on the first-available backend by default; `--backend` on `dev
 | `devteam cred local show` | Read the file; never prints a secret value | `{path, exists, valid, error, hash, data}` |
 | `devteam cred local init` | Write the canonical template; refuses (exit 4) if the file exists | same as `show` |
 | `devteam cred local patch --expect-hash <H>` | Apply `set`/`unset`/`move` JSON Pointer ops from stdin atomically; refuses (exit 4) on hash conflict | same as `show` |
+| `devteam cred local copy-value --pointer <P> --expect-hash <H>` | Return one hidden, set value (ADR-0046); refuses a visible or unset field (exit 2) and a stale hash (exit 4); audited without the value. Human mode prints only the value | `{pointer, value}` |
 
 **The file is free-form** (ADR-0024 § 6): the user's own groups and fields, plus two reserved keys valid in any object — `$production: true` (that object and everything below it is production) and `$secrets: [names]` (those sibling keys are secret). **Redaction follows the marks with a safety net** (§ 5): a marked value becomes `{"secret": true, "set": <boolean>, "marked": true}` (a marked container is hidden whole); an unmarked scalar whose key or value looks secret is hidden with `"marked": false`; everything else is shown. `move` renames or re-nests a value without the app ever holding it, and a value hidden by its key stays hidden where it lands (the destination's `$secrets` gains its new name). On `patch`, every value travels on stdin; argv never carries one.
 
@@ -781,7 +782,7 @@ A value is stored on the first-available backend by default; `--backend` on `dev
 
 **Relocation:** `doctor`, `sync`, `migrate --apply` and `upgrade --apply` move a legacy copy (`user-data/`, or the store copy of a project the registry binds here) to the root byte-for-byte, after making sure git ignores the target, and report it in an additive `credentials_local` key `{path, changed, moved, quarantined, conflicts}`. Symlinks are reported, never followed; a file at the project's own root is never scanned for; `upgrade` refuses while two different copies exist.
 
-**The app's allowlist:** `devteam cred local show`, `devteam cred local init`, and `devteam cred local patch` are the only `cred` commands the desktop app is allowed to run. `devteam cred get` stays forbidden, as it prints secret values.
+**The app's allowlist:** `devteam cred local show`, `init`, `patch` and `copy-value` are the only `cred` commands the desktop app is allowed to run. `copy-value` is run only by the main process, which writes the value to the clipboard, clears it after 30 s, and never sends it to the renderer (ADR-0046). `devteam cred get` stays forbidden.
 
 ## Integrations
 

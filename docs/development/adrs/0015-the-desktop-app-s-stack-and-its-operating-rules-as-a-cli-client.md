@@ -3,7 +3,7 @@
 **Date:** 2026-09-28
 **Status:** Accepted
 **Deciders:** dev-team-agents maintainers
-**Amended by:** ADR-0024 (app runs `devteam cred local` commands for credentials editing)
+**Amended by:** ADR-0024 (app runs `devteam cred local` commands for credentials editing); ADR-0046 (§ 7: a hidden value of the local credentials file enters the main process, never the renderer, to be copied)
 
 ## Context
 
@@ -179,6 +179,11 @@ refuses `--json` so a secret cannot ride inside a document a caller would pipe, 
 a refusal ADR-0011's amendment records as the one hardcoded exception every client needs. The app does
 not need that exception for `cred get`, because it never calls it; it still needs it as a *category*,
 since any future secret-handling command joins the same list.
+
+> **Amended by ADR-0046:** one read value now enters the app's process. `cred local copy-value`
+> returns a hidden value of the local credentials file to the main process, which writes it to the
+> clipboard and drops it; it never reaches the renderer, a log or an IPC reply. `cred get` is still
+> never called.
 
 A consequence that is part of the decision: the app's subprocess logging is **per-operation and
 allow-listed**, never a generic "log every subprocess's stdout." A blanket logger is how a value would

@@ -41,7 +41,7 @@ O arquivo não existe por padrão. Crie-o de uma das três formas:
 
 Abra a aba **Credentials** na visão do projeto. Clique em **Create file** para criar o `credentials.local.json` a partir do exemplo inicial. A aba é um editor em árvore: adicione, renomeie, aninhe, mova entre grupos e remova grupos e campos, marque um campo como segredo ou um grupo como produção, e pesquise por chaves e valores visíveis.
 
-Segredos são somente escrita: um valor marcado em `$secrets`, ou que parece segredo, aparece só como definido / não definido, com Substituir.
+Segredos são somente escrita: um valor marcado em `$secrets`, ou que parece segredo, aparece só como definido / não definido, com Substituir. Um segredo definido também tem um botão de copiar. Ele coloca o valor bruto na área de transferência sem exibi-lo, e a área de transferência é limpa após 30 segundos, ou quando o app fecha, a menos que você tenha copiado outra coisa nesse meio-tempo. Salve ou descarte suas edições antes de copiar.
 
 ### Via CLI
 

@@ -3,6 +3,7 @@
 **Date:** 2026-09-27
 **Status:** Accepted
 **Deciders:** dev-team-agents maintainers
+**Amended by:** ADR-0046 (`cred local copy-value` is the deliberate exception to the secret-command `--json` category)
 
 ## Context
 
@@ -115,6 +116,10 @@ disagree.
 > call with an error by design. Every client needs one hardcoded exception, and a client that
 > discovers this at runtime will read it as a bug in the framework. Any future command that handles
 > a secret joins that list, so the exception is a category, not a single case.
+>
+> **Amended by ADR-0046:** `devteam cred local copy-value` handles a secret and still answers
+> `--json` with `{pointer, value}`. It is the one deliberate exception to that category: its only
+> client is the app's main process, which writes the value to the clipboard and logs nothing.
 
 **The app is never a prerequisite.** Every capability is reachable from the CLI. A user who
 never installs the app loses nothing but the screens.

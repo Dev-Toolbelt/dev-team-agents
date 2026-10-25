@@ -3,7 +3,7 @@
 **Date:** 2026-09-27
 **Status:** Accepted
 **Deciders:** dev-team-agents maintainers
-**Amended by:** ADR-0024 (the plaintext file location and creation flow)
+**Amended by:** ADR-0024 (the plaintext file location and creation flow); ADR-0046 (one `--json` leaf, `cred local copy-value`, carries a hidden value of the plaintext file to the app's main process)
 
 ## Context
 
