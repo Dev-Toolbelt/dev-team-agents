@@ -31,6 +31,7 @@ import os
 import re
 import shlex
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -780,7 +781,7 @@ _MARKER_MAX_AGE = 24 * 3600
 _MARKER_PREFIXES = (".prompt-", ".direct-", ".directw-")
 
 
-def _sweep_turn_markers(directory, now):
+def _sweep_turn_markers(directory, now, prefixes=_MARKER_PREFIXES):
     """Remove stale ``.prompt-``, ``.direct-`` and ``.directw-`` markers beside the records.
 
     These are this hook set's own transient turn markers, never user state or a record, so the
@@ -791,14 +792,61 @@ def _sweep_turn_markers(directory, now):
     except OSError:
         return
     for name in names:
-        if not name.startswith(_MARKER_PREFIXES):
+        if not name.startswith(prefixes):
             continue
         try:
             path = os.path.join(directory, name)
             if now - os.stat(path).st_mtime > _MARKER_MAX_AGE:
-                os.unlink(path)
+                if os.path.isdir(path) and not os.path.islink(path):
+                    os.rmdir(path)
+                else:
+                    os.unlink(path)
         except OSError:
             continue
+
+
+#: Per-session transient files of the context-hints channel and the repair ledger (ADR-0047, ADR-0050):
+#: in the state directory beside ``task-board/``, and the repair sentinel in ``$TMPDIR``.
+_STATE_TRANSIENT_PREFIXES = (".context-shown-", ".context-hints-", ".repair-window-")
+_TMP_TRANSIENT_PREFIXES = ("devteam-repair-open-",)
+
+
+def _sweep_session_transients(state_dir, now):
+    tmp = (os.environ.get("TMPDIR") or "/tmp").rstrip("/") or "/tmp"
+    _sweep_turn_markers(state_dir, now, _STATE_TRANSIENT_PREFIXES)
+    _sweep_turn_markers(tmp, now, _TMP_TRANSIENT_PREFIXES)
+    # Branch-overlap sentinels (ADR-0051) are shared by every repo, so a stale one sends them all down
+    # the slow path; a live cache re-asserts its own at the next refresh.
+    _sweep_private_dir(os.path.join(tmp, "devteam-branch-overlap"), now)
+
+
+def _sweep_private_dir(directory, now):
+    """Remove stale regular files from a directory this user owns and nobody else can write.
+
+    The directory sits in a possibly shared ``$TMPDIR``, so it is opened without following a symlink
+    and checked on the open descriptor, and every entry is removed relative to it: a directory planted
+    or swapped in by another account is left alone.
+    """
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(directory, flags)
+    except OSError:
+        return
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o022:
+            return
+        for name in os.listdir(fd):
+            try:
+                entry = os.stat(name, dir_fd=fd, follow_symlinks=False)
+                if stat.S_ISREG(entry.st_mode) and now - entry.st_mtime > _MARKER_MAX_AGE:
+                    os.unlink(name, dir_fd=fd)
+            except OSError:
+                continue
+    except OSError:
+        return
+    finally:
+        os.close(fd)
 
 
 def _prompt_path(path):
@@ -2909,6 +2957,7 @@ def mark(root, payload, state, now=None):
             return result
         now = int(time.time() if now is None else now)
         _sweep_turn_markers(path.parent, now)
+        _sweep_session_transients(path.parent.parent, now)
         # Read before the lock, like `git` in `record`: the transcript tail is file I/O.
         stored = _load(path) or {}
         title = session_title(payload, stored.get("provider"))
