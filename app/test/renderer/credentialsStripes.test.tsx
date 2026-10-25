@@ -23,7 +23,7 @@ function stripes(list: HTMLElement): (string | null)[] {
 }
 
 function renderEditor() {
-  render(<CredentialsEditor doc={DOC} disabled={false} onEdit={vi.fn()} onProblem={vi.fn()} />);
+  render(<CredentialsEditor doc={DOC} disabled={false} onEdit={vi.fn()} onProblem={vi.fn()} onCopySecret={vi.fn(() => Promise.resolve(true))} copyBlocked={null} />);
   return userEvent.setup();
 }
 

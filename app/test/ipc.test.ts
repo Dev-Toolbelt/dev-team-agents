@@ -1489,6 +1489,64 @@ describe('the local credentials file is three named operations', () => {
   });
 });
 
+describe('copying a hidden credential (ADR-0046)', () => {
+  const HASH = 'a'.repeat(64);
+  type Failure = { readonly ok: false; readonly kind: string; readonly message: string; readonly reason?: string };
+
+  function fakeClipboard() {
+    const copied: string[] = [];
+    return { copied, secretClipboard: { copy: vi.fn((value: string) => Promise.resolve(void copied.push(value))), clearNow: vi.fn(() => Promise.resolve()), hasPending: () => copied.length > 0 } };
+  }
+
+  async function register(registerIpc: typeof IpcModule.registerIpc, secretClipboard?: IpcModule.IpcDependencies['secretClipboard']) {
+    await writeFile(join(dir, 'settings.json'), JSON.stringify({ cliPath: FAKE_BINARY }), 'utf8');
+    registerIpc({
+      userDataDir: dir,
+      appVersion: '0.0.0-test',
+      electronVersion: '39.8.10',
+      packaged: false,
+      trustedRenderer: TRUSTED_RENDERER,
+      ...(secretClipboard !== undefined ? { secretClipboard } : {}),
+    });
+  }
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('writes the value to the clipboard and answers without it', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    const { copied, secretClipboard } = fakeClipboard();
+    await register(registerIpc, secretClipboard);
+
+    const result = await handlers.get(CHANNELS.credentialsLocalCopySecret)?.(TRUSTED, 'proj-1', HASH, '/jira/token');
+    expect(copied).toEqual(['raw-T0KEN-value']);
+    expect(JSON.stringify(result)).not.toContain('raw-T0KEN-value');
+    expect(result).toMatchObject({ ok: true, data: { clearsInSeconds: 30 } });
+    expect((result as { command: string }).command).toContain(`cred local copy-value --path /repo/project-1 --pointer /jira/token --expect-hash ${HASH} --json`);
+  });
+
+  it.skipIf(skipOnWindowsWithoutLauncher)('copies nothing on a refusal, a conflict or a breach, and never quotes the value', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    const { copied, secretClipboard } = fakeClipboard();
+    await register(registerIpc, secretClipboard);
+    const copy = (hash: string, pointer: string) =>
+      handlers.get(CHANNELS.credentialsLocalCopySecret)?.(TRUSTED, 'proj-1', hash, pointer) as Promise<Failure>;
+
+    expect((await copy(HASH, '/jira/baseUrl')).kind).toBe('usage');
+    expect(await copy('f'.repeat(64), '/jira/token')).toMatchObject({ kind: 'conflict', reason: 'hash-conflict' });
+    const breach = await copy('9'.repeat(64), '/jira/token');
+    expect(breach.kind).toBe('contract-breach');
+    expect(JSON.stringify(breach)).not.toContain('raw-T0KEN-value');
+    for (const args of [['nope', HASH, '/jira/token'], ['proj-1', 'short', '/jira/token'], ['proj-1', HASH, 'no-slash'], ['proj-1', HASH, 7]]) {
+      expect(((await handlers.get(CHANNELS.credentialsLocalCopySecret)?.(TRUSTED, ...args)) as Failure).kind).toBe('refused');
+    }
+    expect(copied).toEqual([]);
+  });
+
+  it('is refused when the build has no clipboard to write to', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await register(registerIpc);
+    expect(((await handlers.get(CHANNELS.credentialsLocalCopySecret)?.(TRUSTED, 'proj-1', HASH, '/jira/token')) as Failure).kind).toBe('refused');
+  });
+});
+
 // ── integrations (ADR-0023) ──────────────────────────────────────────────────────────────
 
 describe('integrations are named operations with validated arguments', () => {

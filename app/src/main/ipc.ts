@@ -33,6 +33,7 @@ import {
   catalogSummary,
   doctorMachine,
   installSkill,
+  credentialsLocalCopyValue,
   credentialsLocalInit,
   credentialsLocalPatch,
   credentialsLocalShow,
@@ -90,9 +91,11 @@ import { launchArgvProblem } from './firstTaskLauncher.js';
 import { projectFoldersProblem, sanitizeProjectFolders, type ProjectFolders, type ProjectFoldersAnswer } from '../shared/projectFolders.js';
 import { PROVIDERS } from '../shared/providers.js';
 import { CODE_SIGNED, HAS_WRITE_ACTIONS } from './build-info.js';
+import type { SecretClipboard } from './secretClipboard.js';
 import {
   type CliInstallResult,
   CHANNELS,
+  CREDENTIALS_CLIPBOARD_CLEAR_SECONDS,
   projectNameProblem,
   type RenameProjectAnswer,
   type BindMode,
@@ -120,6 +123,7 @@ import {
   type IntegrationConnectReport,
   type IntegrationDisconnectReport,
   type CredentialsLocalView,
+  type CredentialsSecretCopied,
   type IntegrationList,
   type IntegrationResources,
   type IntegrationTestReport,
@@ -316,6 +320,8 @@ export interface IpcDependencies {
   readonly runFix?: (fix: string, cliPath: string | null) => Promise<MachineFixAnswer>;
   /** Opens the first task in the user's terminal (`firstTaskLauncher.ts`); absent means unsupported. */
   readonly launchTerminal?: (cwd: string, argv: readonly string[]) => Promise<LaunchFirstTaskAnswer>;
+  /** Where a copied credentials secret goes (`secretClipboard.ts`); absent means copying is unsupported. */
+  readonly secretClipboard?: SecretClipboard;
 }
 
 const NO_CLI: OperationResult<never> = {
@@ -1460,6 +1466,39 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
       const gated = await gatedContext('cred local patch');
       if (!gated.ready) return gated.problem;
       return credentialsLocalPatch(gated.ctx, resolved.path, expectHash, ops);
+    },
+  );
+
+  // ADR-0046: the one handler that reads a secret. The value goes from the CLI to the
+  // clipboard here and is dropped; the renderer gets only how long until it is cleared.
+  handle(
+    CHANNELS.credentialsLocalCopySecret,
+    async (_event, projectId: unknown, expectHash: unknown, pointer: unknown): Promise<OperationResult<CredentialsSecretCopied>> => {
+      if (typeof projectId !== 'string') return refusedBadArgument('cred local copy-value');
+      if (typeof expectHash !== 'string' || !CREDENTIALS_HASH.test(expectHash) || typeof pointer !== 'string') {
+        return refusedRequest('cred local copy-value', '`devteam cred local copy-value` was refused: invalid request');
+      }
+      const clipboard = deps.secretClipboard;
+      if (clipboard === undefined) return refusedRequest('cred local copy-value', 'This build cannot copy secrets.');
+      const resolved = await resolveProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const ctx = await context();
+      if (ctx === null) return NO_CLI;
+      const result = await credentialsLocalCopyValue(ctx, resolved.path, pointer, expectHash);
+      if (!result.ok) return result;
+      try {
+        await clipboard.copy(result.data.value);
+      } catch {
+        return refusedRequest('cred local copy-value', 'The clipboard refused the value.');
+      }
+      // Built field by field: nothing else from the CLI's answer (its stderr `notice`) goes back.
+      return {
+        ok: true,
+        outcome: result.outcome,
+        data: { clearsInSeconds: CREDENTIALS_CLIPBOARD_CLEAR_SECONDS },
+        command: result.command,
+        durationMs: result.durationMs,
+      };
     },
   );
 

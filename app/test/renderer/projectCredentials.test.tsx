@@ -8,6 +8,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProjectCredentials } from '../../src/renderer/credentials/ProjectCredentials.js';
@@ -330,6 +331,39 @@ describe('ProjectCredentials — free-form editor', () => {
     expect(screen.getByText('Not set')).toBeInTheDocument();
     expect(document.body.innerHTML).not.toContain('"secret"');
     expect(screen.getByRole('button', { name: /Mark secret.*token/ })).toBeInTheDocument();
+  });
+
+  it('copies a stored secret through the bridge, only for a value that is set', async () => {
+    const success = vi.spyOn(toast, 'success');
+    const { bridge, user } = renderTab();
+    await screen.findByText('example');
+    // Two stored secrets get a copy button; the unset one does not.
+    expect(screen.getAllByRole('button', { name: /^Copy the value of/ })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Copy the value of example › staging › password' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Copy the value of example › production › password' }));
+    expect(bridge.credentialsLocalCopySecret).toHaveBeenCalledWith('proj-1', 'hash-1', '/example/production/password');
+    await waitFor(() => expect(success).toHaveBeenCalledWith('Copied. The clipboard is cleared in 30 s', expect.anything()));
+  });
+
+  it('holds copying back after a conflict, until the file is reloaded', async () => {
+    const { bridge, user } = renderTab({
+      credentialsLocalCopySecret: vi.fn(() => Promise.resolve(fail('changed', { kind: 'conflict', exitCode: 4, reason: CREDENTIALS_HASH_CONFLICT }))),
+    });
+    await screen.findByText('example');
+    const copy = () => screen.getByRole('button', { name: 'Copy the value of example › production › token' });
+    await user.click(copy());
+    expect(bridge.credentialsLocalCopySecret).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(copy()).toBeDisabled());
+  });
+
+  it('holds copying back while there are unsaved edits', async () => {
+    const { user } = renderTab();
+    await screen.findByText('example');
+    await user.click(screen.getByRole('button', { name: 'Replace example › production › password' }));
+    await user.type(document.querySelector('input[type="password"]') as HTMLInputElement, 'x');
+    expect(screen.getByRole('button', { name: 'Copy the value of example › production › token' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /Discard/ }));
+    expect(screen.getByRole('button', { name: 'Copy the value of example › production › token' })).toBeEnabled();
   });
 
   it('sends a replaced secret as one set op with the loaded hash', async () => {

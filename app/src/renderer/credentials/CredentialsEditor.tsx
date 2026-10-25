@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, FolderInput, FolderPlus, KeyRound, Lock, LockOpen, Pencil, Plus, Search, ShieldAlert, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, FolderInput, FolderPlus, KeyRound, Lock, LockOpen, Pencil, Plus, Search, ShieldAlert, Trash2 } from 'lucide-react';
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Hint } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { CREDENTIALS_CLIPBOARD_CLEAR_SECONDS } from '../../shared/api.js';
 import { SELECT_CLASS } from '../formStyles.js';
 import {
   coerce,
@@ -33,6 +34,9 @@ import {
 /** A DOM id for a pointer. Injective: `/` reads as `-` and every other symbol is spelled out. */
 const slug = (pointer: string): string =>
   `cred${pointer.replace(/[^A-Za-z0-9/]/g, (char) => `_${char.charCodeAt(0).toString(16)}_`).replace(/\//g, '-')}`;
+
+/** How long the copy button shows its check mark. */
+const COPIED_MS = 2000;
 
 const labelOf = (path: Path): string => path.map(String).join(' › ') || 'the file';
 
@@ -91,6 +95,10 @@ interface Ctx {
   bulk: Bulk | null;
   onEdit: (edit: Edit) => void;
   onProblem: (pointer: string, problem: string | null) => void;
+  /** Copies a stored secret to the clipboard; resolves whether it did. */
+  onCopySecret: (pointer: string) => Promise<boolean>;
+  /** Why copying is unavailable right now, or `null`. */
+  copyBlocked: string | null;
 }
 
 /**
@@ -103,16 +111,20 @@ export function CredentialsEditor({
   disabled,
   onEdit,
   onProblem,
+  onCopySecret,
+  copyBlocked,
 }: {
   doc: Doc;
   disabled: boolean;
   onEdit: (edit: Edit) => void;
   onProblem: (pointer: string, problem: string | null) => void;
+  onCopySecret: (pointer: string) => Promise<boolean>;
+  copyBlocked: string | null;
 }) {
   const [query, setQuery] = useState('');
   const [bulk, setBulk] = useState<Bulk | null>(null);
   const hits = searchHits(doc, query);
-  const ctx: Ctx = { doc, disabled, hits, bulk, onEdit, onProblem };
+  const ctx: Ctx = { doc, disabled, hits, bulk, onEdit, onProblem, onCopySecret, copyBlocked };
   const empty = hits !== null && hits.size === 0;
   const hasGroups = Object.entries(doc).some(([key, value]) => !isReserved(key) && isContainer(value));
   // A search opens every group it matches, so neither action would change what is drawn.
@@ -269,7 +281,13 @@ function Field({ ctx, path, value, stripe = 'even' }: { ctx: Ctx; path: Path; va
       </div>
       <div className="min-w-0 flex-1">
         {hidden ? (
-          <SecretField ctx={ctx} path={path} id={id} isSet={isSecretLeaf(value) ? value.set : value !== '' && value !== null} />
+          <SecretField
+            ctx={ctx}
+            path={path}
+            id={id}
+            isSet={isSecretLeaf(value) ? value.set : value !== '' && value !== null}
+            stored={isSecretLeaf(value) && value.set}
+          />
         ) : typeof value === 'boolean' ? (
           <Switch
             id={id}
@@ -327,8 +345,11 @@ function TextField({ ctx, path, id, value }: { ctx: Ctx; path: Path; id: string;
   );
 }
 
-/** Write-only: the stored value is never shown. Typing is offered only after Replace (or Set). */
-function SecretField({ ctx, path, id, isSet }: { ctx: Ctx; path: Path; id: string; isSet: boolean }) {
+/**
+ * Write-only: the stored value is never shown. Typing is offered only after Replace (or Set).
+ * `stored`: the value is in the file as loaded, so it can be copied (ADR-0046).
+ */
+function SecretField({ ctx, path, id, isSet, stored }: { ctx: Ctx; path: Path; id: string; isSet: boolean; stored: boolean }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
   if (editing) {
@@ -369,7 +390,33 @@ function SecretField({ ctx, path, id, isSet }: { ctx: Ctx; path: Path; id: strin
       >
         {isSet ? 'Replace' : 'Set'}
       </Button>
+      {stored ? <CopySecret ctx={ctx} path={path} /> : null}
     </div>
+  );
+}
+
+/** Copies the stored value without it ever reaching this screen: the main process writes the clipboard. */
+function CopySecret({ ctx, path }: { ctx: Ctx; path: Path }) {
+  const [state, setState] = useState<'idle' | 'copying' | 'copied'>('idle');
+  useEffect(() => {
+    if (state !== 'copied') return;
+    const timer = setTimeout(() => setState('idle'), COPIED_MS);
+    return () => clearTimeout(timer);
+  }, [state]);
+  return (
+    <IconAction
+      label={`Copy the value of ${labelOf(path)}`}
+      hint={ctx.copyBlocked ?? `Copy the value. The clipboard is cleared after ${CREDENTIALS_CLIPBOARD_CLEAR_SECONDS} s`}
+      disabled={ctx.disabled || ctx.copyBlocked !== null || state === 'copying'}
+      onClick={() => {
+        setState('copying');
+        void ctx
+          .onCopySecret(pointerOf(path))
+          .then((copied) => setState(copied ? 'copied' : 'idle'), () => setState('idle'));
+      }}
+    >
+      {state === 'copied' ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+    </IconAction>
   );
 }
 

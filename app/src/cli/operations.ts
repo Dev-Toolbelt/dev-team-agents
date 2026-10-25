@@ -150,6 +150,9 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['integration', 'resources'],
   // ADR-0024. Reads the local credentials file; secret values are masked by the CLI itself.
   ['cred', 'local', 'show'],
+  // ADR-0046. The one read that returns a secret: only `credentialsLocalCopyValue` runs it,
+  // and its value goes from the main process to the clipboard, never to the renderer.
+  ['cred', 'local', 'copy-value'],
   ['notifications', 'list'],
   ['notifications', 'watch'],
   ['skills', 'list'],
@@ -356,6 +359,7 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'cred local show': { operands: 0, flags: { '--path': 'value' } },
   'cred local init': { operands: 0, flags: { '--path': 'value' } },
   'cred local patch': { operands: 0, flags: { '--path': 'value', '--expect-hash': 'value' } },
+  'cred local copy-value': { operands: 0, flags: { '--path': 'value', '--pointer': 'value', '--expect-hash': 'value' } },
   // One id per ack: the app acknowledges each notification as it shows it. Never `--all`
   // — an ack the user did not see happen is a notification they never got.
   'notifications list': { operands: 0, flags: { '--unseen': 'bare' } },
@@ -1380,6 +1384,16 @@ function refusedCredentials(command: string, message: string): OperationResult<n
   return { ok: false, kind: 'refused', message, exitCode: null, command: `devteam ${command}`, durationMs: 0 };
 }
 
+/** Why `pointer` is not a JSON pointer this app sends to the CLI, or `null`. */
+export function credentialsPointerProblem(pointer: unknown): string | null {
+  if (typeof pointer !== 'string' || !pointer.startsWith('/') || pointer.length > CREDENTIALS_MAX_POINTER) {
+    return 'a pointer is a JSON pointer starting with "/"';
+  }
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(pointer)) return 'a pointer cannot contain control characters';
+  return null;
+}
+
 /** Why `ops` cannot be sent to `cred local patch`, or `null`. Exported for `main/ipc.ts`. */
 export function credentialsOpsProblem(ops: unknown): string | null {
   if (!Array.isArray(ops)) return 'ops must be an array';
@@ -1391,11 +1405,8 @@ export function credentialsOpsProblem(ops: unknown): string | null {
     if (op !== 'set' && op !== 'unset' && op !== 'move') return 'an edit\'s op is `set`, `unset` or `move`';
     const pointers = op === 'move' ? [pointer, entry['from']] : [pointer];
     for (const candidate of pointers) {
-      if (typeof candidate !== 'string' || !candidate.startsWith('/') || candidate.length > CREDENTIALS_MAX_POINTER) {
-        return 'an edit\'s pointer is a JSON pointer starting with "/"';
-      }
-      // eslint-disable-next-line no-control-regex
-      if (/[\u0000-\u001f\u007f]/.test(candidate)) return 'a pointer cannot contain control characters';
+      const problem = credentialsPointerProblem(candidate);
+      if (problem !== null) return problem;
     }
     if (op === 'set' && (!('value' in entry) || entry['value'] === undefined)) return 'a `set` edit needs a value';
     if (op !== 'set' && 'value' in entry) return `\`${op}\` takes no value`;
@@ -1465,6 +1476,44 @@ export function asCredentialsLocalView(body: Record<string, unknown>): Credentia
 
 export function credentialsLocalShow(context: CliContext, path: string): Promise<OperationResult<CredentialsLocalView>> {
   return run(context, ['cred', 'local', 'show', '--path', path], asCredentialsLocalView);
+}
+
+/** `cred local copy-value --json`: the raw text of one hidden value (ADR-0046). */
+function asCredentialsCopiedValue(body: Record<string, unknown>): { readonly value: string } | string {
+  return typeof body['value'] === 'string' ? { value: body['value'] } : 'no string `value`';
+}
+
+/**
+ * The raw value of one hidden field, for the main process to put on the clipboard (ADR-0046).
+ * Never forward the success to the renderer. A failure is rebuilt from the CLI's own error
+ * text only: a breach or timeout keeps a fixed message, because its detail can quote stdout.
+ */
+export async function credentialsLocalCopyValue(
+  context: CliContext,
+  path: string,
+  pointer: string,
+  expectHash: string,
+): Promise<OperationResult<{ readonly value: string }>> {
+  const problem =
+    (typeof expectHash === 'string' && CREDENTIALS_HASH.test(expectHash) ? null : 'the expected hash is 64 hex characters') ??
+    credentialsPointerProblem(pointer);
+  if (problem !== null) return refusedCredentials('cred local copy-value', problem);
+  const result = await run(
+    context,
+    ['cred', 'local', 'copy-value', '--path', path, '--pointer', pointer, '--expect-hash', expectHash],
+    asCredentialsCopiedValue,
+  );
+  if (result.ok || result.kind === 'usage' || result.kind === 'conflict' || result.kind === 'environment' || result.kind === 'refused') {
+    return result;
+  }
+  return {
+    ok: false,
+    kind: result.kind,
+    message: 'The value could not be read.',
+    exitCode: result.exitCode,
+    command: result.command,
+    durationMs: result.durationMs,
+  };
 }
 
 /** An existing file is refused with `details.reason: 'exists'`, which the CLI itself sets. */

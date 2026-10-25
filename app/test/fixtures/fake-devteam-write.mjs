@@ -487,6 +487,25 @@ switch (command) {
       emit(view({ hash: 'c'.repeat(64), data: { received: ops.map((entry) => entry.pointer) } }));
       process.exit(0);
     }
+    // ADR-0046. 64 `f` is the exit-4 conflict; a pointer other than /jira/token is not hidden (exit 2);
+    // a hash of 64 `9` writes the value outside any document, to prove a breach never quotes it.
+    if (verb === 'copy-value') {
+      const expected = flagValue('--expect-hash');
+      if (expected === 'f'.repeat(64)) {
+        emit({ ok: false, error: 'credentials.local.json changed since it was read', exit_code: 4, details: { reason: 'hash-conflict' } });
+        process.exit(4);
+      }
+      if (expected === '9'.repeat(64)) {
+        process.stdout.write('raw-T0KEN-value not json\n');
+        process.exit(0);
+      }
+      if (flagValue('--pointer') !== '/jira/token') {
+        emit({ ok: false, error: `'${flagValue('--pointer')}' is not a hidden value`, exit_code: 2 });
+        process.exit(2);
+      }
+      emit({ ok: true, pointer: '/jira/token', value: 'raw-T0KEN-value' });
+      process.exit(0);
+    }
     process.exit(64);
     break;
   }

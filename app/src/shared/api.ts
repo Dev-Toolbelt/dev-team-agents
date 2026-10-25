@@ -913,6 +913,14 @@ export type CredentialsPatchOp =
   | { readonly op: 'unset'; readonly pointer: string }
   | { readonly op: 'move'; readonly from: string; readonly pointer: string };
 
+/** How long a copied secret stays on the clipboard before the app clears it (ADR-0046). */
+export const CREDENTIALS_CLIPBOARD_CLEAR_SECONDS = 30;
+
+/** `credentialsLocalCopySecret`: the value went to the clipboard; the renderer never receives it. */
+export interface CredentialsSecretCopied {
+  readonly clearsInSeconds: number;
+}
+
 /** `reason` on a refused `credentialsLocalPatch` when the file changed since it was read (exit 4). */
 export const CREDENTIALS_HASH_CONFLICT = 'hash-conflict';
 /** `reason` on a refused `credentialsLocalInit` when the file already exists (exit 4). */
@@ -1413,6 +1421,16 @@ export interface DevteamBridge {
     expectHash: string,
     ops: readonly CredentialsPatchOp[],
   ) => Promise<OperationResult<CredentialsLocalView>>;
+  /**
+   * Copy one hidden value to the clipboard (ADR-0046). The main process reads it through the CLI
+   * and writes the clipboard itself; the answer carries no value. The clipboard is cleared after
+   * `clearsInSeconds` unless it changed meanwhile. Refused like a patch on a stale `expectHash`.
+   */
+  readonly credentialsLocalCopySecret: (
+    projectId: ProjectId,
+    expectHash: string,
+    pointer: string,
+  ) => Promise<OperationResult<CredentialsSecretCopied>>;
   // Notifications. The main process owns the stream (`devteam notifications watch`) and
   // shows each one natively, so they arrive with the window closed; the renderer only
   // reads the feed for the bell. Spawns nothing from the renderer's side.
@@ -1913,6 +1931,7 @@ export const CHANNELS = {
   credentialsLocalShow: 'devteam:credentials-local-show',
   credentialsLocalInit: 'devteam:credentials-local-init',
   credentialsLocalPatch: 'devteam:credentials-local-patch',
+  credentialsLocalCopySecret: 'devteam:credentials-local-copy-secret',
   notificationFeed: 'devteam:notification-feed',
   markNotificationsRead: 'devteam:mark-notifications-read',
   setNotificationsPaused: 'devteam:set-notifications-paused',

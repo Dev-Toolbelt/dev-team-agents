@@ -243,8 +243,9 @@ describe('what this slice is allowed to run', () => {
     // app's memory, its logs or its renderer. The app shows references only.
     const flat = ALLOWED_COMMANDS.map((command) => command.join(' '));
     expect(flat).not.toContain('cred get');
-    // ADR-0024 § 5: the allowlist widens to exactly the local-file leaves, nothing else.
+    // ADR-0024 § 5 and ADR-0046: the allowlist widens to exactly the local-file leaves, nothing else.
     expect(flat.filter((command) => command.startsWith('cred')).sort()).toEqual([
+      'cred local copy-value',
       'cred local init',
       'cred local patch',
       'cred local show',

@@ -520,6 +520,7 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     credentialsLocalShow: vi.fn(() => Promise.resolve(ok(credentialsView()))),
     credentialsLocalInit: vi.fn(() => Promise.resolve(ok(credentialsView()))),
     credentialsLocalPatch: vi.fn(() => Promise.resolve(ok(credentialsView()))),
+    credentialsLocalCopySecret: vi.fn(() => Promise.resolve(ok({ clearsInSeconds: 30 }))),
     projectPlugins: vi.fn(() => Promise.resolve(ok(pluginList()))),
     setPluginEnabled: vi.fn((_projectId: string, name: string, enabled: boolean) =>
       Promise.resolve(ok({ plugin: pluginView({ name, enabled }), changed: true, seeded: false })),

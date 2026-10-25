@@ -16,7 +16,7 @@ import {
 } from '../../shared/api.js';
 import { Loading, Problem } from '../Problem.js';
 import { SaveBar } from '../SaveBar.js';
-import { toastPartialFailure, toastResult } from '../toasts.js';
+import { toastFailure, toastPartialFailure, toastResult } from '../toasts.js';
 import { useOnActivate } from '../useOnDeactivate.js';
 import { unreachable } from '../useOperation.js';
 import { WriteButton } from '../WriteButton.js';
@@ -67,6 +67,7 @@ export function ProjectCredentials({
   const [confirmReload, setConfirmReload] = useState(false);
   const request = useRef(0);
   const changesNow = useRef(0);
+  const copying = useRef(false);
 
   /** `discard`: the user chose to drop unsaved edits, so nothing typed meanwhile is kept either. */
   const load = useCallback(async (discard = false) => {
@@ -186,6 +187,33 @@ export function ProjectCredentials({
     }
   }
 
+  /**
+   * Copy one hidden value (ADR-0046). The main process puts it on the clipboard; this answer
+   * carries only when it is cleared. Not offered over unsaved edits: a renamed or moved field's
+   * pointer would no longer match the file the hash names.
+   */
+  async function copySecret(pointer: string): Promise<boolean> {
+    // One copy at a time across the tab: the clipboard holds one value, and a second copy
+    // racing the first would leave which one is on it to chance.
+    if (view === null || view.hash === null || stale || copying.current) return false;
+    copying.current = true;
+    const result = await window.devteam
+      .credentialsLocalCopySecret(projectId, view.hash, pointer)
+      .catch(unreachable)
+      .finally(() => {
+        copying.current = false;
+      });
+    if (result.ok) {
+      toastResult(result, `Copied. The clipboard is cleared in ${result.data.clearsInSeconds} s`, 'credentials-copy');
+      return true;
+    }
+    if (isHashConflict(result)) setStale(true);
+    toastFailure(result, 'credentials-copy');
+    return false;
+  }
+  const copyBlocked =
+    stale ? 'The file changed on disk: reload to copy' : report.changes > 0 ? 'Save or discard your edits to copy a value' : null;
+
   const gate = environment === null
     ? { withheld: true as const, reason: 'the app has not finished checking its own preconditions' }
     : isWithheld(environment.withheld, CREDENTIALS_COMMANDS.patch);
@@ -265,7 +293,14 @@ export function ProjectCredentials({
           </p>
           <fieldset disabled={reloading || stale} className="m-0 min-w-0 border-0 p-0" aria-busy={reloading || undefined}>
             {doc !== null ? (
-              <CredentialsEditor doc={doc} disabled={busy || reloading || stale} onEdit={onEdit} onProblem={onProblem} />
+              <CredentialsEditor
+                doc={doc}
+                disabled={busy || reloading || stale}
+                onEdit={onEdit}
+                onProblem={onProblem}
+                onCopySecret={copySecret}
+                copyBlocked={copyBlocked}
+              />
             ) : null}
           </fieldset>
         </>

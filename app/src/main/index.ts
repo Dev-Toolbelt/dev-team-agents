@@ -11,12 +11,13 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { BrowserWindow, Menu, Notification, Tray, app, nativeImage, screen, session, shell } from 'electron';
+import { BrowserWindow, Menu, Notification, Tray, app, clipboard, nativeImage, screen, session, shell } from 'electron';
 
 import { APP_ID, DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
 import { hasPendingWrites, settleInFlight, terminateInFlight } from '../cli/invoke.js';
 import { GATED_COMMANDS, ackNotification, listTasks, watchNotifications, watchTasks } from '../cli/operations.js';
 import { registerIpc } from './ipc.js';
+import { createSecretClipboard, settleSecretClipboard } from './secretClipboard.js';
 import { installCli, runBrewProcess, runInstallerProcess } from './cliInstaller.js';
 import { launchInTerminal, startDetached } from './firstTaskLauncher.js';
 import { runMachineFix } from './machineFix.js';
@@ -30,7 +31,7 @@ import { TaskBoard, saveBoardSettings } from './taskBoard.js';
 import { registerTaskBoardIpc } from './taskBoardIpc.js';
 import { loginItemOptions, loginItemState, shouldHideOnClose, trayTitle, trayTooltip } from './background.js';
 import { readSettings, writeBoardSettings, writeOpenAtLogin } from './settings.js';
-import { CHANNELS, type BackgroundSettings, type NotificationFeed, type ProjectId } from '../shared/api.js';
+import { CHANNELS, CREDENTIALS_CLIPBOARD_CLEAR_SECONDS, type BackgroundSettings, type NotificationFeed, type ProjectId } from '../shared/api.js';
 
 /**
  * Set by `npm run dev:app` to the Vite dev server's origin. Absent — and ignored even when
@@ -197,7 +198,12 @@ function takePendingProject(): ProjectId | null {
 
 /** How long quitting waits for in-flight CLI writes before giving up on them. */
 const WRITE_SETTLE_MS = 5_000;
+/** ADR-0046: where a copied credentials secret goes, cleared after a while and on quit. */
+const secretClipboard = createSecretClipboard(clipboard, CREDENTIALS_CLIPBOARD_CLEAR_SECONDS * 1000);
+/** How long quitting waits for that clipboard to be cleared. */
+const CLIPBOARD_SETTLE_MS = 1_000;
 let writesSettled = false;
+let clipboardSettled = false;
 
 function quitForReal(): void {
   quitting = true;
@@ -398,11 +404,18 @@ if (!primaryInstance) {
     // Only cancellable plugin runs are ended; a write (bind, upgrade, prefs, skills...) is
     // never killed mid-write. Quit is held for up to WRITE_SETTLE_MS while writes finish,
     // then resumed. `writesSettled` makes the second `before-quit` pass straight through.
+    // A copied secret is cleared off the clipboard the same way (ADR-0046).
     terminateInFlight();
-    if (writesSettled || !hasPendingWrites()) return;
+    const holdWrites = !writesSettled && hasPendingWrites();
+    const holdClipboard = !clipboardSettled && secretClipboard.hasPending();
+    if (!holdWrites && !holdClipboard) return;
     event.preventDefault();
-    void settleInFlight(WRITE_SETTLE_MS).finally(() => {
-      writesSettled = true;
+    void Promise.all([
+      holdWrites ? settleInFlight(WRITE_SETTLE_MS) : Promise.resolve(),
+      holdClipboard ? settleSecretClipboard(secretClipboard, CLIPBOARD_SETTLE_MS) : Promise.resolve(),
+    ]).finally(() => {
+      if (holdWrites) writesSettled = true;
+      clipboardSettled = true;
       app.quit();
     });
   });
@@ -465,6 +478,7 @@ function onReady(): void {
         runBrew: runBrewProcess,
       }),
     runFix: (fix, cliPath) => runMachineFix({ platform: process.platform, env: process.env, cliPath }, fix),
+    secretClipboard,
     launchTerminal: (cwd, argv) =>
       launchInTerminal({ platform: process.platform, tempDir: app.getPath('temp'), start: startDetached }, cwd, argv),
     onResolved: (resolution) => {
