@@ -725,6 +725,8 @@ class AppFacingKeySetContractTest(StoreTestCase):
         "cred local init": {"path", "exists", "valid", "error", "hash", "data"},
         "cred local patch": {"path", "exists", "valid", "error", "hash", "data"},
         "cred local error": {"message", "line", "column"},
+        # ADR-0046: the one leaf whose payload carries a secret, for the app's copy button.
+        "cred local copy-value": {"pointer", "value"},
         # `problems` is unconditional. This pin caught it appearing only on the
         # findings branch, which made the payload's shape depend on the data — a
         # client doing `payload.problems.length` would have worked until the day
@@ -1269,6 +1271,13 @@ class AppFacingKeySetContractTest(StoreTestCase):
         patched = json.loads(out)
         self._assert_exact_keys("cred local patch", patched, self.EXPECTED["cred local patch"])
         self.assertNotIn("s3cr3t-value", json.dumps(patched))
+
+        copied = self._run_ok(
+            "cred", "local", "copy-value", "--pointer", "/app/staging/password",
+            "--expect-hash", patched["hash"], "--path", str(self.project_root), "--json",
+        )
+        self._assert_exact_keys("cred local copy-value", copied, self.EXPECTED["cred local copy-value"])
+        self.assertEqual(copied["value"], "s3cr3t-value")
 
         # An invalid file is data for `show` (exit 0), with the error shape pinned.
         (self.project_root / ".dev-team-agents" / "credentials.local.json").write_text("{ x")

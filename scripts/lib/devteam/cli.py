@@ -1690,6 +1690,21 @@ def cmd_cred_local_patch(args, emitter):
     return state, "patched " + _cred_local_human(state)
 
 
+def cmd_cred_local_copy_value(args, emitter):
+    # ADR-0046: the desktop app's main process writes this straight to the clipboard and
+    # never logs it or hands it to its renderer. Audited like `cred get`, never the value.
+    root, project_id = _bound_project(getattr(args, "path", None))
+    try:
+        result = credentials_local.copy_value(root, args.pointer, args.expect_hash)
+    except DevteamError:
+        creds.audit(project_id, "local-copy", args.pointer, outcome="refused")
+        raise
+    creds.audit(project_id, "local-copy", args.pointer)
+    if not emitter.as_json:
+        emitter.raw(result["value"])
+    return result, None
+
+
 def cmd_cred_import(args, emitter):
     project_id = _cred_project_id(args)
     result = creds.import_file(args.file, project_id)
@@ -2303,6 +2318,15 @@ def build_parser():
         help="the hash `show` returned; the patch is refused if the file changed since",
     )
     cred_local_patch.set_defaults(func=cmd_cred_local_patch)
+    cred_local_copy = cred_local_leaf(
+        "copy-value", help="print the raw value of one hidden field, for the desktop app's copy button"
+    )
+    cred_local_copy.add_argument("--pointer", required=True, help="JSON pointer of the field, e.g. /app/staging/password")
+    cred_local_copy.add_argument(
+        "--expect-hash", dest="expect_hash", required=True,
+        help="the hash `show` returned; refused if the file changed since",
+    )
+    cred_local_copy.set_defaults(func=cmd_cred_local_copy_value)
 
     cred_backends = leaf(cred_parser, "backends", help="which secret stores this machine has")
     cred_backends.set_defaults(func=cmd_cred_backends)

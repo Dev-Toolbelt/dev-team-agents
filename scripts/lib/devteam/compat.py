@@ -495,6 +495,8 @@ READ_ONLY = {
     ("cred", "check"): "reports references with no value or an insecure backend",
     ("cred", "local", "show"): "reads credentials.local.json with every secret replaced by a "
     "marker; never a value (ADR-0024)",
+    ("cred", "local", "copy-value"): "reads one hidden value of credentials.local.json for the "
+    "app's copy button and appends to the machine-local audit log (ADR-0046)",
     ("notifications", "list"): "reads each project's queue and seen marks",
     ("notifications", "watch"): "stats each project's queue and streams new records; writes "
     "nothing — acknowledging is `notifications ack`",

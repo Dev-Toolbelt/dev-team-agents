@@ -566,6 +566,75 @@ class CliTest(LocalCredsCase):
         code, body, _ = self.run_json("cred", "local", "patch", input_text="[]")
         self.assertEqual((code, body["exit_code"]), (2, 2))
 
+    def test_copy_value_returns_only_a_hidden_set_value(self):
+        self.put(self.target, CONTENT)
+        shown = cl.show(self.root)
+        code, body, err = self.run_json(
+            "cred", "local", "copy-value", "--pointer", "/custom/password", "--expect-hash", shown["hash"]
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual((body["pointer"], body["value"]), ("/custom/password", PLANTED))
+        # Human mode prints the value and nothing else, like `cred get`.
+        code, out, _ = self.run_cli(
+            "cred", "local", "copy-value", "--pointer", "/custom/password",
+            "--expect-hash", shown["hash"], "--path", str(self.root),
+        )
+        self.assertEqual((code, out), (0, PLANTED + "\n"))
+
+    def test_copy_value_refuses_anything_show_does_not_hide(self):
+        self.put(self.target, CONTENT)
+        digest = cl.show(self.root)["hash"]
+        for pointer in ("/app/staging/appUrl", "/app", "/custom/password/secret", "/missing", ""):
+            with self.subTest(pointer=pointer):
+                code, body, _ = self.run_json(
+                    "cred", "local", "copy-value", "--pointer", pointer, "--expect-hash", digest
+                )
+                self.assertEqual((code, body["exit_code"]), (2, 2))
+                self.assertNotIn(PLANTED, json.dumps(body))
+
+    def test_copy_value_covers_marked_groups_net_hidden_values_and_escaped_pointers(self):
+        doc = {
+            "db": {"$secrets": ["conn"], "conn": {"user": "u", "pw": PLANTED}},
+            "links": {"mirror": "https://u:%s@host/x" % PLANTED},
+            "a/b": {"$secrets": ["k~"], "k~": PLANTED},
+        }
+        self.put(self.target, json.dumps(doc) + "\n")
+        digest = cl.show(self.root)["hash"]
+        copy = lambda pointer: self.run_json(  # noqa: E731
+            "cred", "local", "copy-value", "--pointer", pointer, "--expect-hash", digest
+        )
+        code, body, err = copy("/db/conn")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(body["value"]), {"user": "u", "pw": PLANTED})
+        code, body, err = copy("/links/mirror")
+        self.assertEqual((code, body["value"]), (0, "https://u:%s@host/x" % PLANTED), err)
+        code, body, err = copy("/a~1b/k~0")
+        self.assertEqual((code, body["value"]), (0, PLANTED), err)
+        # Inside a hidden group, a pointer goes no further than `show` lets it.
+        code, body, _ = copy("/db/conn/pw")
+        self.assertEqual((code, body["exit_code"]), (2, 2))
+
+    def test_copy_value_refuses_a_stale_hash_and_an_empty_secret(self):
+        self.put(self.target, '{"a": {"$secrets": ["k"], "k": ""}, "token": "%s"}\n' % PLANTED)
+        digest = cl.show(self.root)["hash"]
+        code, body, _ = self.run_json("cred", "local", "copy-value", "--pointer", "/a/k", "--expect-hash", digest)
+        self.assertEqual((code, body["exit_code"]), (2, 2))
+        code, body, _ = self.run_json("cred", "local", "copy-value", "--pointer", "/token", "--expect-hash", "0" * 64)
+        self.assertEqual((code, body["exit_code"]), (4, 4))
+        self.assertNotIn(PLANTED, json.dumps(body))
+
+    def test_copy_value_is_audited_without_the_value(self):
+        self.put(self.target, CONTENT)
+        digest = cl.show(self.root)["hash"]
+        self.run_json("cred", "local", "copy-value", "--pointer", "/custom/password", "--expect-hash", digest)
+        self.run_json("cred", "local", "copy-value", "--pointer", "/app", "--expect-hash", digest)
+        logs = list(self.home.rglob("audit.log"))
+        self.assertTrue(logs)
+        text = "".join(log.read_text(encoding="utf-8") for log in logs)
+        records = [json.loads(line) for line in text.splitlines() if '"local-copy"' in line]
+        self.assertEqual([(r["key"], r["outcome"]) for r in records], [("/custom/password", "ok"), ("/app", "refused")])
+        self.assertNotIn(PLANTED, text)
+
     def test_human_output_never_carries_a_secret(self):
         self.put(self.target, CONTENT)
         code, out, _ = self.run_cli("cred", "local", "show", "--path", str(self.root))

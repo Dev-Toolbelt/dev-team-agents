@@ -588,6 +588,49 @@ def show(project_root):
     return _state(path, _read_raw(path))
 
 
+def copy_value(project_root, pointer, expect_hash):
+    """The raw value of one hidden field, for the desktop app's copy button (ADR-0046).
+
+    Only a value ``show`` hides and that is set is returned; everything else is refused, so
+    this can never become a way to read the file around ``show``. ``expect_hash`` ties the
+    copy to the version the caller was shown. A non-string value — a group or list marked
+    secret as a whole — is returned as JSON text.
+    """
+    tokens = _tokens(pointer)
+    path = file_path(project_root)
+    _require_contained(path, main_root(project_root))
+    if os.path.islink(str(path)):
+        raise EnvError("{} is a symlink; it is never read through a link".format(path), details={"path": str(path)})
+    raw = _read_raw(path)
+    if raw is None:
+        raise EnvError("{} does not exist".format(path), details={"path": str(path)})
+    actual = _hash(raw)
+    if expect_hash != actual:
+        raise ConflictError(
+            "credentials.local.json changed since it was read",
+            hint="Re-read it with `devteam cred local show` and copy again.",
+            details={"path": str(path), "reason": "hash-conflict"},
+        )
+    current = _state(path, raw)
+    if not current["valid"]:
+        raise EnvError("{} is not valid JSON".format(path), details={"path": str(path)})
+    shown = _lookup(current["data"], tokens, pointer)
+    value = _lookup(_loads(raw), tokens, pointer)
+    is_marker = (
+        isinstance(shown, dict)
+        and set(shown) == {"secret", "set", "marked"}
+        and shown["secret"] is True
+        and isinstance(shown["set"], bool)
+        and isinstance(shown["marked"], bool)
+    )
+    if not is_marker:
+        raise UsageError("{!r} is not a hidden value".format(pointer), hint="Only a secret field can be copied.")
+    if not shown["set"]:
+        raise UsageError("{!r} has no value to copy".format(pointer))
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+    return {"pointer": pointer, "value": text}
+
+
 # --- init --------------------------------------------------------------------------
 
 

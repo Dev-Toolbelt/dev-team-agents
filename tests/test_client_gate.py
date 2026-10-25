@@ -1041,7 +1041,14 @@ class PreSplitStoreTest(ClientGateTestCase):
     # `notifications watch` streams until its stdin closes, so it cannot be run for "one
     # answer" twice and compared; its pre-split behaviour is the refusal
     # `NEEDS_MACHINE_LAYOUT` gives it, which the migration-error tests already cover.
-    READ_SWEEP_EXCLUDED = {("cred", "get"), ("notifications", "watch"), ("tasks", "watch")}
+    # `cred local copy-value` is excluded for `cred get`'s reason: it appends an audit line
+    # on every run, refused or not (ADR-0046).
+    READ_SWEEP_EXCLUDED = {
+        ("cred", "get"),
+        ("cred", "local", "copy-value"),
+        ("notifications", "watch"),
+        ("tasks", "watch"),
+    }
 
     def setUp(self):
         super().setUp()
