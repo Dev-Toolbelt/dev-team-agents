@@ -10,7 +10,7 @@ depends_on: [prompt-recall.md]
 As a developer whose agent hits the same failing shell command again, I want it told what fixed that command last time, so that it does not rediscover the fix by trial and error.
 
 ### Context
-Agents repeatedly fail on the same environment quirks (a missing env var, a wrapper, a flag). This spec records the fix when a failed command is retried successfully and replays it as a hint through the context-hints channel of `prompt-recall.md`. Decision record: ADR-0050.
+Agents repeatedly fail on the same environment quirks (a missing env var, a wrapper, a flag). This spec records the fix when a failed command is retried successfully and replays it as a hint through the context-hints channel of `prompt-recall.md`. Decision record: ADR-0051.
 
 #### Detection
 
@@ -110,4 +110,4 @@ Ignored failures: hook or host denials, reads of test or CI logs, SQL and GraphQ
 
 ### Amendment Log
 - 2026-10-25 | backend-developer | S14 Then clause: conditional wording replaced by immediate delivery on Codex | Codex PostToolUse additionalContext verified in openai/codex@970111f6cb62 (post_tool_use.rs); Codex tools are Bash and apply_patch
-- 2026-10-25 | software-architect | S6 Then clause: an added flag is stored by option name only, without its value | fix round decision recorded in ADR-0050 amendment — flag values may carry secrets redact() does not recognise
+- 2026-10-25 | software-architect | S6 Then clause: an added flag is stored by option name only, without its value | fix round decision recorded in ADR-0051 amendment — flag values may carry secrets redact() does not recognise

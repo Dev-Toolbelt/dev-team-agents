@@ -10,7 +10,7 @@ depends_on: []
 As a developer onboarding a project, I want the corrections I keep repeating to agents and the review comments that made authors change code to be offered as reuse rules, wiki entries or preferences, so that knowledge already sitting in my history becomes project knowledge — and nothing is recorded unless I say yes.
 
 ### Context
-Corrections and review feedback are lost after the session or PR closes. This spec reads them back and turns them into candidates; the user decides each one. Decision record: ADR-0049. Proposal flow lives in a new skill, `skills/shared/history-mining/SKILL.md`; `setup-assistant` references it from FIRST_RUN in one line.
+Corrections and review feedback are lost after the session or PR closes. This spec reads them back and turns them into candidates; the user decides each one. Decision record: ADR-0050. Proposal flow lives in a new skill, `skills/shared/history-mining/SKILL.md`; `setup-assistant` references it from FIRST_RUN in one line.
 
 #### Commands
 
@@ -117,6 +117,6 @@ Each candidate is proposed with one `AskUserQuestion`: as a reuse rule (through 
 - **Blocks**: none
 
 ### Amendment Log
-- 2026-10-25 | software-architect | S4 Then clause: transcripts are kept only when their recorded cwd is this project | the slug encoding is lossy and two paths can share one (ADR-0049 amendment)
-- 2026-10-25 | software-architect | S7 Then clause: skipped-file counts are reported per provider | an empty result must be distinguishable from a failed read (ADR-0049 amendment)
-- 2026-10-25 | software-architect | S8 Given clause: last 50 merged PRs is approximate | the GitHub API orders by UPDATED_AT, not merge date (ADR-0049 amendment)
+- 2026-10-25 | software-architect | S4 Then clause: transcripts are kept only when their recorded cwd is this project | the slug encoding is lossy and two paths can share one (ADR-0050 amendment)
+- 2026-10-25 | software-architect | S7 Then clause: skipped-file counts are reported per provider | an empty result must be distinguishable from a failed read (ADR-0050 amendment)
+- 2026-10-25 | software-architect | S8 Given clause: last 50 merged PRs is approximate | the GitHub API orders by UPDATED_AT, not merge date (ADR-0050 amendment)

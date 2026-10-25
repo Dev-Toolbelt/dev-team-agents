@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# context-hints.sh — the context-hints channel (ADR-0047): a per-session queue of short hint lines
+# context-hints.sh — the context-hints channel (ADR-0048): a per-session queue of short hint lines
 # that hooks enqueue and the next UserPromptSubmit drains into the model context.
 #
 # Not a hook. Source it, then:

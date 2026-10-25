@@ -1,4 +1,4 @@
-"""Prompt recall (ADR-0047): pointers to the ADRs, wiki entries and reuse rules a prompt touches.
+"""Prompt recall (ADR-0048): pointers to the ADRs, wiki entries and reuse rules a prompt touches.
 
 Usage: python3 -I recall.py <repo-root> <shown-file|-> <max-lines> <max-chars>   (prompt JSON text on stdin)
 

@@ -1,14 +1,14 @@
-# ADR-0049: Setup mines local session transcripts and PR review threads into proposed rules
+# ADR-0050: Setup mines local session transcripts and PR review threads into proposed rules
 
 **Date:** 2026-10-25  
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
 **Applies to:** `scripts/lib/devteam/mining.py`, `skills/shared/history-mining/SKILL.md`, `agents/setup-assistant.md`, `scripts/lib/devteam/integrations/github.py`, `scripts/lib/devteam/integrations/__init__.py`  
-**Relates to:** [ADR-0023](0023-integrations-are-account-level-connections-whose-network-calls-live-in-the-cli.md) (integration network calls), [ADR-0036](0036-path-scoped-and-severity-graded-rules-in-the-reuse-registry-enforced-at-stop-by-exit-2.md) (reuse registry), [ADR-0011](0011-two-distribution-channels-and-the-desktop-app-as-a-cli-client.md) / [ADR-0014](0014-store-schemas-as-the-normative-write-gate-and-the-json-contract-deprecation-policy.md) (`--json` contract), [ADR-0047](0047-a-context-hints-channel-and-deterministic-per-prompt-recall-from-the-retrieval-indexes.md) (recall)
+**Relates to:** [ADR-0023](0023-integrations-are-account-level-connections-whose-network-calls-live-in-the-cli.md) (integration network calls), [ADR-0036](0036-path-scoped-and-severity-graded-rules-in-the-reuse-registry-enforced-at-stop-by-exit-2.md) (reuse registry), [ADR-0011](0011-two-distribution-channels-and-the-desktop-app-as-a-cli-client.md) / [ADR-0014](0014-store-schemas-as-the-normative-write-gate-and-the-json-contract-deprecation-policy.md) (`--json` contract), [ADR-0048](0048-a-context-hints-channel-and-deterministic-per-prompt-recall-from-the-retrieval-indexes.md) (recall)
 
 ## Context
 
-Recall (ADR-0047) and `devteam check` (ADR-0048) only deliver what the indexes already hold. A newly bound project starts nearly empty, while its real conventions are already written down in two places nobody reads at setup: the corrections the user typed to agents in past sessions, and the review threads on merged PRs where a reviewer asked for a change and the author made it. The Correction Pattern Rule in `CLAUDE.md` catches a repeated correction only within one session.
+Recall (ADR-0048) and `devteam check` (ADR-0049) only deliver what the indexes already hold. A newly bound project starts nearly empty, while its real conventions are already written down in two places nobody reads at setup: the corrections the user typed to agents in past sessions, and the review threads on merged PRs where a reviewer asked for a change and the author made it. The Correction Pattern Rule in `CLAUDE.md` catches a repeated correction only within one session.
 
 ## Decision
 

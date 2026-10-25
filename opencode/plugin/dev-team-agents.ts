@@ -72,7 +72,7 @@ const SUBAGENT_CALLS_KEPT = 256
 // scripts/lib/devteam/pr_refs.py; this is only the cheap filter.
 const PR_COMMAND_RE = /gh\s+pr\s+(create|merge)|glab\s+mr\s+(create|merge)|git\s[^|;&\n]*merge/
 const PR_TOOL_RE = /(create|merge)_pull_request$/
-// File-edit tools: forwarded with their path arguments so the branch-overlap hint (ADR-0051) can
+// File-edit tools: forwarded with their path arguments so the branch-overlap hint (ADR-0052) can
 // compare the edited lines with a teammate's unmerged branch. Their output is never needed.
 const EDIT_TOOL_RE = /^(edit|write|multiedit|patch)$/
 // Where an exit code can sit in a finished shell call's metadata (not verified live, see docs/providers.md).

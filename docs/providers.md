@@ -186,7 +186,7 @@ Claude Code: `PostToolUseFailure` on matchers `Agent|Task|Bash|mcp__.*create_pul
 
 Codex confirmed: `exec_command` and `write_stdin` completion fire `PostToolUse` with `tool_name: "Bash"`, `tool_input: {command: …}`, `tool_use_id`, and `tool_response` = a JSON string of the output (only when the process finishes, so success/failure is inferred from the output). MCP tools emit `PostToolUse` with `tool_name: "mcp__<server>__<tool>"` and structured `tool_response` (content[], structuredContent, isError). Codex is **in scope**; no provider is excluded. Matchers for PR/MR creation widen to catch `Bash` and MCP tools ending in `create_pull_request|merge_pull_request`.
 
-**Post-tool hints per provider** (ADR-0047, ADR-0050, ADR-0051). The shell and edit hooks in `post-tool-use.sh` feed the context-hints channel. Delivery timing differs by provider:
+**Post-tool hints per provider** (ADR-0048, ADR-0051, ADR-0052). The shell and edit hooks in `post-tool-use.sh` feed the context-hints channel. Delivery timing differs by provider:
 
 | Provider | `PostToolUse` tools that reach `post-tool-use.sh` | Hint delivery |
 |----------|--------------------------------------------------|---------------|

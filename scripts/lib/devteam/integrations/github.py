@@ -16,7 +16,7 @@ DEFAULT_API_URL = "https://api.github.com"
 _REPO_RE = re.compile(r"^(?!\.+/)[A-Za-z0-9_.-]+/(?!\.+$)[A-Za-z0-9_.-]+$")
 
 
-#: Inline review threads of the most recently merged pull requests (ADR-0049). Resolution and
+#: Inline review threads of the most recently merged pull requests (ADR-0050). Resolution and
 #: outdatedness exist only in GraphQL; the REST comment list carries neither.
 REVIEW_THREADS_QUERY = (
     "query($owner:String!,$name:String!,$prs:Int!){repository(owner:$owner,name:$name){"

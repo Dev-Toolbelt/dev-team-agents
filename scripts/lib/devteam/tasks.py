@@ -805,7 +805,7 @@ def _sweep_turn_markers(directory, now, prefixes=_MARKER_PREFIXES):
             continue
 
 
-#: Per-session transient files of the context-hints channel and the repair ledger (ADR-0047, ADR-0050):
+#: Per-session transient files of the context-hints channel and the repair ledger (ADR-0048, ADR-0051):
 #: in the state directory beside ``task-board/``, and the repair sentinel in ``$TMPDIR``.
 _STATE_TRANSIENT_PREFIXES = (".context-shown-", ".context-hints-", ".repair-window-")
 _TMP_TRANSIENT_PREFIXES = ("devteam-repair-open-",)
@@ -815,7 +815,7 @@ def _sweep_session_transients(state_dir, now):
     tmp = (os.environ.get("TMPDIR") or "/tmp").rstrip("/") or "/tmp"
     _sweep_turn_markers(state_dir, now, _STATE_TRANSIENT_PREFIXES)
     _sweep_turn_markers(tmp, now, _TMP_TRANSIENT_PREFIXES)
-    # Branch-overlap sentinels (ADR-0051) are shared by every repo, so a stale one sends them all down
+    # Branch-overlap sentinels (ADR-0052) are shared by every repo, so a stale one sends them all down
     # the slow path; a live cache re-asserts its own at the next refresh.
     _sweep_private_dir(os.path.join(tmp, "devteam-branch-overlap"), now)
 

@@ -5,7 +5,7 @@ description: Propose rules, wiki entries and preferences from past corrections a
 
 # History Mining
 
-Turns knowledge already sitting in the user's history into project knowledge. Two read-only commands list **candidates**; the user decides each one. Decision record: ADR-0049. Spec: `docs/specs/history-mining.md`.
+Turns knowledge already sitting in the user's history into project knowledge. Two read-only commands list **candidates**; the user decides each one. Decision record: ADR-0050. Spec: `docs/specs/history-mining.md`.
 
 ## Gather
 

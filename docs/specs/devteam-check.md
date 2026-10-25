@@ -10,7 +10,7 @@ depends_on: []
 As a developer about to push or open a PR, I want my branch's changes checked against the ADRs and reuse rules that govern the files I touched, so that I find a contradiction with an accepted decision before a reviewer does, without being blocked by rules that are still under review.
 
 ### Context
-The `03h` Stop hook only reminds the user to re-read an ADR whose `**Applies to:**` globs match a touched path. This spec adds an explicit check that can fail. Decision record: ADR-0048. Glob semantics follow `skills/shared/adr/SKILL.md` § Applies To and the reuse-row detection follows the existing reuse-lint logic — neither is restated here.
+The `03h` Stop hook only reminds the user to re-read an ADR whose `**Applies to:**` globs match a touched path. This spec adds an explicit check that can fail. Decision record: ADR-0049. Glob semantics follow `skills/shared/adr/SKILL.md` § Applies To and the reuse-row detection follows the existing reuse-lint logic — neither is restated here.
 
 #### Command — `devteam check [--base <ref>] [--json] [--path <dir>]`
 
@@ -138,5 +138,5 @@ Runs before the push. On a conflict, the findings are shown and one `AskUserQues
 
 ### Amendment Log
 - 2026-10-25 | main | S11: justification goes in the commit message for `/devteam:push` | a push has no PR body yet; matches `commands/push.md`
-- 2026-10-25 | software-architect | S3 Then clause: the edit lead is measured against the merge-base version of the ADR | a later base-branch change must not be reported as the branch's edit (ADR-0048 amendment)
-- 2026-10-25 | software-architect | S4 Then clause: a detection pattern that times out yields a lead | detection runs through grep -E with a timeout, the reuse-lint engine; a timeout must never fail the check (ADR-0048 amendment)
+- 2026-10-25 | software-architect | S3 Then clause: the edit lead is measured against the merge-base version of the ADR | a later base-branch change must not be reported as the branch's edit (ADR-0049 amendment)
+- 2026-10-25 | software-architect | S4 Then clause: a detection pattern that times out yields a lead | detection runs through grep -E with a timeout, the reuse-lint engine; a timeout must never fail the check (ADR-0049 amendment)

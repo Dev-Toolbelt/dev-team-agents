@@ -10,7 +10,7 @@ depends_on: []
 As a developer working in a bound project, I want the ADRs, wiki entries and reuse rules that bear on what I just asked to be pointed out to the agent automatically, so that existing project knowledge is used without depending on the agent remembering to look it up.
 
 ### Context
-Today project knowledge reaches the agent only if it follows the Context Loading Order in `skills/shared/project-context/SKILL.md`. This spec delivers it by deterministic code at prompt time, and defines the shared context-hints channel that `repair-ledger.md` and `branch-overlap.md` also use. Decision record: ADR-0047 (context-hints channel and prompt recall). Provider set: `scripts/lib/devteam/providers.py:ALL_PROVIDERS`.
+Today project knowledge reaches the agent only if it follows the Context Loading Order in `skills/shared/project-context/SKILL.md`. This spec delivers it by deterministic code at prompt time, and defines the shared context-hints channel that `repair-ledger.md` and `branch-overlap.md` also use. Decision record: ADR-0048 (context-hints channel and prompt recall). Provider set: `scripts/lib/devteam/providers.py:ALL_PROVIDERS`.
 
 #### Context-hints channel
 

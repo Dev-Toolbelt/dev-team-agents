@@ -67,7 +67,7 @@ EVENTS = (
 #: tools and the subagent tool (`Agent`, `Task` in older builds — where a review agent's
 #: report comes back), `Bash` (a PR/MR creation or merge is confirmed; the repair ledger reads the
 #: result) and the edit tools (`Edit`, `MultiEdit`, `Write`, `NotebookEdit`: the branch-overlap
-#: hint, ADR-0051) and the pull-request MCP tools — every sub-script gates in bash before forking
+#: hint, ADR-0052) and the pull-request MCP tools — every sub-script gates in bash before forking
 #: anything — so no other tool call
 #: forks the dispatcher at all; `PostToolUseFailure` is
 #: narrowed to the subagent tool, `Bash` and the create tool (`gh pr create` exits non-zero when the PR

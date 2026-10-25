@@ -1,4 +1,4 @@
-"""Branch overlap (ADR-0051, spec docs/specs/branch-overlap.md).
+"""Branch overlap (ADR-0052, spec docs/specs/branch-overlap.md).
 
 Fixtures are real git: a temp bare "origin", a seed clone, the developer's clone (`me`) and a teammate's
 clone (`mate`, different user.email). The refresher runs for real; the edit hook is driven as a subprocess

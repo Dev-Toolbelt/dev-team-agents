@@ -1,4 +1,4 @@
-"""The context-hints channel (ADR-0047): a per-session queue drained by the next prompt.
+"""The context-hints channel (ADR-0048): a per-session queue drained by the next prompt.
 
 `scripts/hooks/lib/context-hints.sh` is sourced by hooks that raise a hint and by
 `05-recall.sh` that drains it. These tests run it in bash against a throwaway git repository

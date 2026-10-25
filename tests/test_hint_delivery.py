@@ -1,6 +1,6 @@
 """Delivery of PostToolUse hints per provider, the widened matchers, and the opencode exit code.
 
-ADR-0047 (delivery), ADR-0050 (repair ledger), ADR-0051 (branch overlap). The shared
+ADR-0048 (delivery), ADR-0051 (repair ledger), ADR-0052 (branch overlap). The shared
 emit-now-or-queue step lives in `devteam_hints_deliver` (scripts/hooks/lib/context-hints.sh).
 """
 

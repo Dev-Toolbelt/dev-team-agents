@@ -1,4 +1,4 @@
-"""History mining (ADR-0049, docs/specs/history-mining.md): transcript readers, clustering,
+"""History mining (ADR-0050, docs/specs/history-mining.md): transcript readers, clustering,
 review threads, and the read-only `devteam mine` commands. No network beyond a loopback fake."""
 
 import json

@@ -10,7 +10,7 @@ depends_on: [prompt-recall.md]
 As a developer editing a file, I want to know when a teammate's unmerged branch changes the same lines, so that I can coordinate before we both produce conflicting work.
 
 ### Context
-Overlapping edits are found today only at merge time. This spec warns at edit time, from a local cache, through the context-hints channel of `prompt-recall.md`. Decision record: ADR-0051.
+Overlapping edits are found today only at merge time. This spec warns at edit time, from a local cache, through the context-hints channel of `prompt-recall.md`. Decision record: ADR-0052.
 
 #### Refresh
 
@@ -113,6 +113,6 @@ After an edit, if the edited file's changed hunks overlap a cached branch's hunk
 
 ### Amendment Log
 - 2026-10-25 | backend-developer | S15 Then clause: conditional wording replaced by immediate delivery on Codex | Codex PostToolUse additionalContext verified in openai/codex@970111f6cb62 (post_tool_use.rs); Codex tools are Bash and apply_patch
-- 2026-10-25 | software-architect | S1 Then clause: branch and author are sanitized and quoted | branch and author names are teammate-controlled text (ADR-0051 amendment)
-- 2026-10-25 | software-architect | S4: branches whose last commit is older than 60 days are excluded too | abandoned branches should not raise hints (ADR-0051 amendment)
+- 2026-10-25 | software-architect | S1 Then clause: branch and author are sanitized and quoted | branch and author names are teammate-controlled text (ADR-0052 amendment)
+- 2026-10-25 | software-architect | S4: branches whose last commit is older than 60 days are excluded too | abandoned branches should not raise hints (ADR-0052 amendment)
 - 2026-10-25 | software-architect | Context: branch_overlap_active is a consent key, backfilled false into existing preferences | user decision in the fix round — the refresher runs a background git fetch the existing owner never agreed to

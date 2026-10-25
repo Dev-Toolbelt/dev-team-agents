@@ -1,4 +1,4 @@
-# ADR-0047: A context-hints channel and deterministic per-prompt recall from the retrieval indexes
+# ADR-0048: A context-hints channel and deterministic per-prompt recall from the retrieval indexes
 
 **Date:** 2026-10-25  
 **Status:** Accepted  
@@ -10,7 +10,7 @@
 
 A project's knowledge already sits in three greppable indexes: the ADR index (`<adr-dir>/README.md`, ADR-0038), the wiki retrieval index (`docs/wiki/README.md`) and the reuse registry (`docs/development/reuse-guidelines.md`, ADR-0036). Reaching it depends on the agent obeying the Context Loading Order in `skills/shared/project-context/SKILL.md` and choosing the right keywords. Agents skip the lookup, or search with the wrong words, and then re-decide what an ADR already settled. ADR-0039 covers the Stop end of that gap; nothing covers the start of a task, when the decision is cheapest to respect.
 
-The design is borrowed from trailhq/Trail-Code: deliver existing knowledge by deterministic code at the moment it matters, instead of asking the model to fetch it. Three later features (ADR-0050, ADR-0051) also need to put a short line in front of the agent from a hook, so the delivery path is decided once here.
+The design is borrowed from trailhq/Trail-Code: deliver existing knowledge by deterministic code at the moment it matters, instead of asking the model to fetch it. Three later features (ADR-0051, ADR-0052) also need to put a short line in front of the agent from a hook, so the delivery path is decided once here.
 
 ## Decision
 
@@ -31,7 +31,7 @@ The design is borrowed from trailhq/Trail-Code: deliver existing knowledge by de
 
 ### Positive
 - The decision that governs a task reaches the agent before work starts, whether or not the agent looks for it, on all three providers.
-- One channel serves recall, repair hints (ADR-0050) and branch overlap (ADR-0051); a fourth producer adds no provider wiring.
+- One channel serves recall, repair hints (ADR-0051) and branch overlap (ADR-0052); a fourth producer adds no provider wiring.
 - Output is a pointer, so context cost is bounded and constant regardless of how large the ADR or wiki entry is.
 
 ### Negative

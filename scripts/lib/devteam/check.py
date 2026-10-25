@@ -1,4 +1,4 @@
-"""`devteam check` -- the branch diff against the decisions the base branch has accepted (ADR-0048).
+"""`devteam check` -- the branch diff against the decisions the base branch has accepted (ADR-0049).
 
 Three sources are compared with what the branch changed (merge-base with the base, plus
 the working tree):

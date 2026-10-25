@@ -1,10 +1,10 @@
-# ADR-0051: Teammates' unmerged branches are cached locally to warn about overlapping edits
+# ADR-0052: Teammates' unmerged branches are cached locally to warn about overlapping edits
 
 **Date:** 2026-10-25  
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
 **Applies to:** `scripts/lib/devteam/branch_overlap.py`, `scripts/hooks/post-tool-use/04-branch-overlap.sh`, `scripts/hooks/session-start.sh`, `scripts/lib/devteam/hooks.py`  
-**Relates to:** [ADR-0047](0047-a-context-hints-channel-and-deterministic-per-prompt-recall-from-the-retrieval-indexes.md) (context-hints channel), [ADR-0013](0013-portable-and-machine-local-split-of-the-data-store.md) (machine-local records), [ADR-0018](0018-the-task-board-is-captured-by-hooks-into-a-machine-local-per-session-record.md) (hook-fed records)
+**Relates to:** [ADR-0048](0048-a-context-hints-channel-and-deterministic-per-prompt-recall-from-the-retrieval-indexes.md) (context-hints channel), [ADR-0013](0013-portable-and-machine-local-split-of-the-data-store.md) (machine-local records), [ADR-0018](0018-the-task-board-is-captured-by-hooks-into-a-machine-local-per-session-record.md) (hook-fed records)
 
 ## Context
 
@@ -13,10 +13,10 @@ An agent editing a file has no view of the teammate who is changing the same lin
 ## Decision
 
 1. `scripts/lib/devteam/branch_overlap.py` runs as a **detached refresher**, started at session start and at most every 10 minutes. It runs `git fetch --quiet`, lists remote branches not merged into the base and not authored by the current git user, and records each branch's changed files and hunk ranges into a dot-prefixed cache in the machine-local state dir. Offline or any error: exit 0, cache left as it was.
-2. `scripts/hooks/post-tool-use/04-branch-overlap.sh` runs after an edit. If the edited file's changed hunks overlap a cached branch's hunks, it enqueues a hint naming the branch and its author on the context-hints channel (ADR-0047). It **reads the cache only** — never git network.
+2. `scripts/hooks/post-tool-use/04-branch-overlap.sh` runs after an edit. If the edited file's changed hunks overlap a cached branch's hunks, it enqueues a hint naming the branch and its author on the context-hints channel (ADR-0048). It **reads the cache only** — never git network.
 3. The `PostToolUse` matcher in `hooks.py` is widened to the edit tools, with the previous matcher added to `PREVIOUS_MATCHERS` so existing installs are rewritten in place.
 4. Preference `branch_overlap_active`, default `true`.
-5. **Provider parity.** The refresher starts from `session-start.sh` and the hook from `post-tool-use.sh`, which all three providers dispatch. The edit tool names differ per provider (claude `Edit`/`Write`, opencode lowercase `edit`/`write`, codex its patch tool), so the sub-script recognises each provider's edit tool from the hook payload, and the codex installer and the opencode plugin get the matching filter. Which tool name and payload shape Codex reports for a patch is confirmed against its source before wiring, as with ADR-0047's `PostToolUse` check. Delivery follows ADR-0047.
+5. **Provider parity.** The refresher starts from `session-start.sh` and the hook from `post-tool-use.sh`, which all three providers dispatch. The edit tool names differ per provider (claude `Edit`/`Write`, opencode lowercase `edit`/`write`, codex its patch tool), so the sub-script recognises each provider's edit tool from the hook payload, and the codex installer and the opencode plugin get the matching filter. Which tool name and payload shape Codex reports for a patch is confirmed against its source before wiring, as with ADR-0048's `PostToolUse` check. Delivery follows ADR-0048.
 
 ## Consequences
 
@@ -40,7 +40,7 @@ An agent editing a file has no view of the teammate who is changing the same lin
 | Fetch on each edit | Network on the edit path; slow, and fails offline |
 | Query the forge's PR API | Needs an integration and credentials, and misses pushed branches with no PR; plain git covers every provider and forge |
 | File-level overlap only | Too noisy on shared files such as manifests and indexes; hunk ranges keep the hint meaningful |
-| Check at PR time only | `devteam check` (ADR-0048) is about decisions; overlap is cheapest to act on at edit time, before the work exists |
+| Check at PR time only | `devteam check` (ADR-0049) is about decisions; overlap is cheapest to act on at edit time, before the work exists |
 
 ## Amendment 2026-10-25
 

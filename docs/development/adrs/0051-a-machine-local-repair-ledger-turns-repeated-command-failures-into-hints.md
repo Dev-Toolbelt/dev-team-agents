@@ -1,10 +1,10 @@
-# ADR-0050: A machine-local repair ledger turns repeated command failures into hints
+# ADR-0051: A machine-local repair ledger turns repeated command failures into hints
 
 **Date:** 2026-10-25  
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
 **Applies to:** `scripts/hooks/post-tool-use/03-repair-detect.sh`, `scripts/lib/devteam/repairs.py`, `scripts/lib/devteam/paths.py`  
-**Relates to:** [ADR-0047](0047-a-context-hints-channel-and-deterministic-per-prompt-recall-from-the-retrieval-indexes.md) (context-hints channel), [ADR-0013](0013-portable-and-machine-local-split-of-the-data-store.md) (machine-local records), [ADR-0018](0018-the-task-board-is-captured-by-hooks-into-a-machine-local-per-session-record.md) (PostToolUse hooks)
+**Relates to:** [ADR-0048](0048-a-context-hints-channel-and-deterministic-per-prompt-recall-from-the-retrieval-indexes.md) (context-hints channel), [ADR-0013](0013-portable-and-machine-local-split-of-the-data-store.md) (machine-local records), [ADR-0018](0018-the-task-board-is-captured-by-hooks-into-a-machine-local-per-session-record.md) (PostToolUse hooks)
 
 ## Context
 
@@ -17,9 +17,9 @@ Agents rediscover the same local fix every session: a command fails, and a few c
 3. **Ignored failures:** hook or host denies, reads of test or CI logs, SQL and GraphQL errors, flakes (same command succeeding with no delta), and look-only commands.
 4. Deltas are redacted with the credential-guard patterns before they are stored.
 5. **Store:** `repair-ledger.json`, machine-local. It is added to `paths.py:MACHINE_LOCAL_RECORDS` and its mirrors (`CLAUDE-md/cli.md`, `CLAUDE-md/user-data.md`, the machine-local list in `CLAUDE.md`, the tuple's docstring).
-6. **Hint:** a later failure with the same signature enqueues "this failed before; what fixed it: <delta>" on the context-hints channel (ADR-0047).
+6. **Hint:** a later failure with the same signature enqueues "this failed before; what fixed it: <delta>" on the context-hints channel (ADR-0048).
 7. Preference `repair_hints_active`, default `true`.
-8. **Provider parity.** Detection runs from the shared `post-tool-use.sh` dispatcher, which all three providers wire (`hooks.py` for claude, `install-codex.sh` for codex, the plugin's `tool.execute.after` for opencode). Delivery is ADR-0047's: immediate on claude, next prompt on codex and opencode. The shell tool's name differs per provider, so the sub-script recognises each provider's shell tool from the hook payload rather than one hardcoded name; a per-provider fixture covers each.
+8. **Provider parity.** Detection runs from the shared `post-tool-use.sh` dispatcher, which all three providers wire (`hooks.py` for claude, `install-codex.sh` for codex, the plugin's `tool.execute.after` for opencode). Delivery is ADR-0048's: immediate on claude, next prompt on codex and opencode. The shell tool's name differs per provider, so the sub-script recognises each provider's shell tool from the hook payload rather than one hardcoded name; a per-provider fixture covers each.
 
 ## Consequences
 
@@ -46,7 +46,7 @@ Agents rediscover the same local fix every session: a command fails, and a few c
 
 ## Amendment 2026-10-25
 
-- **Codex delivery is immediate.** Codex `PostToolUse` `additionalContext` was verified at openai/codex `970111f6cb62`, as ADR-0047 records, so Decision 8's "next prompt on codex" no longer holds: repair hints are delivered right after the tool call on claude and codex, and on the next prompt on opencode.
+- **Codex delivery is immediate.** Codex `PostToolUse` `additionalContext` was verified at openai/codex `970111f6cb62`, as ADR-0048 records, so Decision 8's "next prompt on codex" no longer holds: repair hints are delivered right after the tool call on claude and codex, and on the next prompt on opencode.
 - **Latency sentinel.** `$TMPDIR/devteam-repair-open-<session>` marks that the session has an open failure, so a successful command with nothing to pair skips the Python call. It lives outside the store, holds no data, and is harmless when stale or missing (the full path runs). It is opened with `O_NOFOLLOW` and mode `0600`.
 - **Flag values are not stored.** A flag delta records the option name only, never its value; every stored delta, env var or wrapper included, passes through `redact()` first. This narrows the Negative consequence about paths or hostnames leaking through a delta.
 - **Transient files are swept.** Transient per-session files, the sentinel included, are removed by age, so an abandoned session leaves nothing that grows.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # UserPromptSubmit sub-script: points the agent at the ADRs, wiki entries and reuse rules the prompt
-# touches (ADR-0047), then drains the hints other hooks queued for this session. Output is pointers
+# touches (ADR-0048), then drains the hints other hooks queued for this session. Output is pointers
 # only: `[DEVTEAM:RECALL]` lines from scripts/lib/recall.py, then `[DEVTEAM:HINT]` lines — at most 5
 # lines and about 1200 characters together. Claude Code and Codex add this stdout to the model
 # context; the opencode plugin captures both prefixes from `chat.message` and adds them to the

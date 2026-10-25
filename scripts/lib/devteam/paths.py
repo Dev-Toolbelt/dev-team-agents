@@ -509,7 +509,7 @@ def locks_dir():
 #: task right now (ADR-0044). A claim expires and names an owner token minted here.
 #:
 #: `repair-ledger.json` records shell commands that failed on this machine and the delta
-#: (env var, flag, wrapper, step) that made the same signature succeed (ADR-0050). The fix
+#: (env var, flag, wrapper, step) that made the same signature succeed (ADR-0051). The fix
 #: belongs to this host's toolchain.
 MACHINE_LOCAL_RECORDS = (
     "state.json",
@@ -552,7 +552,7 @@ MACHINE_LOCAL_RECORDS = (
     # sprint file in git carries the status; a claim is a live fact about this host only.
     "backlog-claims.json",
     # Shell commands that failed on THIS machine and the delta that made the same command
-    # signature succeed (ADR-0050): an env var, a flag, a wrapper, a step. The fix belongs to
+    # signature succeed (ADR-0051): an env var, a flag, a wrapper, a step. The fix belongs to
     # this host's toolchain, so it is neither committed nor carried to another machine.
     "repair-ledger.json",
 )

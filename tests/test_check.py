@@ -1,4 +1,4 @@
-"""`devteam check` (ADR-0048, docs/specs/devteam-check.md).
+"""`devteam check` (ADR-0049, docs/specs/devteam-check.md).
 
 Every test builds a throwaway git repository with a `main` branch holding the decisions and a
 feature branch holding the change, then runs the real CLI (or `check.run`) against it.

@@ -1,4 +1,4 @@
-"""Prompt recall (ADR-0047, docs/specs/prompt-recall.md).
+"""Prompt recall (ADR-0048, docs/specs/prompt-recall.md).
 
 `scripts/lib/recall.py` matches a prompt against the ADR, wiki and reuse indexes;
 `scripts/hooks/user-prompt-submit/05-recall.sh` gates it, delivers the lines and drains queued

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PostToolUse sub-script: after a file edit, warns when a teammate's unmerged remote branch changes
-# the same lines (ADR-0051). The hint goes out through the context-hints channel (ADR-0047), naming
+# the same lines (ADR-0052). The hint goes out through the context-hints channel (ADR-0048), naming
 # the branch and its author, once per session per branch and file: immediately on Claude Code and Codex
 # (PostToolUse additionalContext), queued for the next prompt on opencode (`devteam_hints_deliver`).
 #   Claude Code  Edit|MultiEdit|Write|NotebookEdit   file_path / notebook_path

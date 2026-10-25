@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# PostToolUse sub-script: the repair ledger (ADR-0050, spec docs/specs/repair-ledger.md).
+# PostToolUse sub-script: the repair ledger (ADR-0051, spec docs/specs/repair-ledger.md).
 #   A shell tool's result (Claude Code `Bash`, Codex `Bash`/`exec_command`, opencode `bash`; the
 #   Claude `PostToolUseFailure` event carries the same tool name) goes to scripts/lib/devteam/repairs.py,
 #   which keeps a short window of recent shell calls and records "failed, then the same command
 #   succeeded with a delta" in the machine-local repair-ledger.json. A failure whose signature has a
 #   recorded repair prints a hint line; this script delivers it:
-#     Claude Code, Codex   immediately, as PostToolUse(Failure) additionalContext (ADR-0047)
+#     Claude Code, Codex   immediately, as PostToolUse(Failure) additionalContext (ADR-0048)
 #     opencode             queued on the context-hints channel, delivered with the next prompt
 #   `devteam_hints_deliver` tells them apart by the payload's `hook_event_name`. A shell result's exit
 #   code is read from the payload's `exit_code` (opencode's plugin adds it) before any text marker.

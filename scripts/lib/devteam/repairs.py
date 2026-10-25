@@ -1,4 +1,4 @@
-"""Repair ledger (ADR-0050, spec docs/specs/repair-ledger.md).
+"""Repair ledger (ADR-0051, spec docs/specs/repair-ledger.md).
 
 A shell command fails (non-zero) and, within the next 10 shell calls, the same command signature
 succeeds *with a delta*: an env var set, a flag added, a wrapper from a fixed list prepended, or

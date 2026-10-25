@@ -106,10 +106,10 @@ scripts/lib/preferences-defaults.json
 | `qa_browser` | `null` | string or null | Preferred browser when the in-app browser is unavailable — QA browser testing and the visual check after UI work |
 | `review_gate_mode` | `"ask"` | string | What happens when work that changed code finishes: `ask` shows the review chooser, `auto` runs the recommended review without asking, `skip` goes straight to the commit/PR hand-off |
 | `ci_cd_detected` | `null` | bool or null | Cached CI/CD detection state |
-| `recall_active` | `true` | bool | Per-prompt recall pointers from the ADR, wiki and reuse retrieval indexes (ADR-0047) |
-| `check_active` | `true` | bool | The `devteam check` pre-flight that compares the branch diff with base-branch decisions in `/devteam:pr` and `/devteam:push` (ADR-0048) |
-| `repair_hints_active` | `true` | bool | Repair hints surfaced from the machine-local repair ledger after repeated command failures (ADR-0050) |
-| `branch_overlap_active` | `true` | bool | Warnings about overlapping edits on teammates' unmerged branches (ADR-0051) |
+| `recall_active` | `true` | bool | Per-prompt recall pointers from the ADR, wiki and reuse retrieval indexes (ADR-0048) |
+| `check_active` | `true` | bool | The `devteam check` pre-flight that compares the branch diff with base-branch decisions in `/devteam:pr` and `/devteam:push` (ADR-0049) |
+| `repair_hints_active` | `true` | bool | Repair hints surfaced from the machine-local repair ledger after repeated command failures (ADR-0051) |
+| `branch_overlap_active` | `true` | bool | Warnings about overlapping edits on teammates' unmerged branches (ADR-0052) |
 
 ---
 
@@ -130,10 +130,10 @@ Worktree behavior is driven primarily by five preferences:
 
 | Key | Default | Effect |
 |-----|---------|--------|
-| `recall_active` | `true` | Per-prompt recall pointers from the ADR, wiki and reuse retrieval indexes (ADR-0047); `false` turns it off |
-| `check_active` | `true` | The `devteam check` pre-flight that compares the branch diff with base-branch decisions in `/devteam:pr` and `/devteam:push` (ADR-0048); `false` turns it off |
-| `repair_hints_active` | `true` | Repair hints surfaced from the machine-local repair ledger after repeated command failures (ADR-0050); `false` turns it off |
-| `branch_overlap_active` | `true` | Warnings about overlapping edits on teammates' unmerged branches (ADR-0051); `false` turns it off |
+| `recall_active` | `true` | Per-prompt recall pointers from the ADR, wiki and reuse retrieval indexes (ADR-0048); `false` turns it off |
+| `check_active` | `true` | The `devteam check` pre-flight that compares the branch diff with base-branch decisions in `/devteam:pr` and `/devteam:push` (ADR-0049); `false` turns it off |
+| `repair_hints_active` | `true` | Repair hints surfaced from the machine-local repair ledger after repeated command failures (ADR-0051); `false` turns it off |
+| `branch_overlap_active` | `true` | Warnings about overlapping edits on teammates' unmerged branches (ADR-0052); `false` turns it off |
 
 ### Decision cascade
 

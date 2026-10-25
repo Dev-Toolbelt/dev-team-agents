@@ -1,4 +1,4 @@
-"""`devteam mine sessions|reviews` -- candidate rules from history, never written anywhere (ADR-0049).
+"""`devteam mine sessions|reviews` -- candidate rules from history, never written anywhere (ADR-0050).
 
 * **sessions** reads the messages the user typed in this project's local transcripts, one reader
   per provider in ``providers.ALL_PROVIDERS``, and lists a correction or preference that was

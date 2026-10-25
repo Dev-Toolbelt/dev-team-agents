@@ -44,7 +44,7 @@ SCRIPTS = {
 # `wait_agent` (the agents' final states, and a review agent's report) and `close_agent` (an agent
 # closed before it reported), `Bash` (an `exec_command` that finished: a PR/MR creation or merge is
 # confirmed from its output; the repair ledger reads it too), `apply_patch` (every Codex file edit: the
-# branch-overlap hint, ADR-0051) and the pull-request MCP tools. Tool names checked against openai/codex
+# branch-overlap hint, ADR-0052) and the pull-request MCP tools. Tool names checked against openai/codex
 # codex-rs/core/src/tools/hook_names.rs at commit 970111f: the shell tool is `Bash`, the edit tool
 # `apply_patch`. The tools the task board reads are the agent tools and the PR ones. Codex feeds the todo list from PreToolUse (`update_plan`).
 MATCHERS = {"PostToolUse": ".*(wait_agent|spawn_agent|close_agent|Bash|apply_patch|mcp__.*(create_pull_request|merge_pull_request))"}

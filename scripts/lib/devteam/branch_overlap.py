@@ -1,4 +1,4 @@
-"""Branch-overlap cache: teammates' unmerged remote branches, matched against local edits (ADR-0051).
+"""Branch-overlap cache: teammates' unmerged remote branches, matched against local edits (ADR-0052).
 
 Two entry points, both reached through the hook scripts and neither raising to them:
 

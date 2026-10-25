@@ -106,10 +106,10 @@ scripts/lib/preferences-defaults.json
 | `qa_browser` | `null` | string ou null | Navegador preferido quando o browser do app não está disponível — testes de QA e a conferência visual após trabalho de UI |
 | `review_gate_mode` | `"ask"` | string | O que acontece quando um trabalho que alterou código termina: `ask` mostra a escolha de review, `auto` roda o review recomendado sem perguntar, `skip` vai direto para o hand-off de commit/PR |
 | `ci_cd_detected` | `null` | bool ou null | Estado em cache da detecção de CI/CD |
-| `recall_active` | `true` | bool | Ponteiros de recall por prompt a partir dos índices de ADR, wiki e reuso (ADR-0047) |
-| `check_active` | `true` | bool | Pré-checagem `devteam check` que compara o diff da branch com as decisões da base em `/devteam:pr` e `/devteam:push` (ADR-0048) |
-| `repair_hints_active` | `true` | bool | Dicas de reparo vindas do ledger local de reparos após falhas repetidas de comando (ADR-0050) |
-| `branch_overlap_active` | `true` | bool | Avisos de edições sobrepostas em branches não mergeadas de colegas (ADR-0051) |
+| `recall_active` | `true` | bool | Ponteiros de recall por prompt a partir dos índices de ADR, wiki e reuso (ADR-0048) |
+| `check_active` | `true` | bool | Pré-checagem `devteam check` que compara o diff da branch com as decisões da base em `/devteam:pr` e `/devteam:push` (ADR-0049) |
+| `repair_hints_active` | `true` | bool | Dicas de reparo vindas do ledger local de reparos após falhas repetidas de comando (ADR-0051) |
+| `branch_overlap_active` | `true` | bool | Avisos de edições sobrepostas em branches não mergeadas de colegas (ADR-0052) |
 
 ---
 
@@ -130,10 +130,10 @@ O comportamento de worktree é guiado principalmente por cinco preferências:
 
 | Chave | Padrão | Efeito |
 |-------|--------|--------|
-| `recall_active` | `true` | Ponteiros de recall por prompt a partir dos índices de ADR, wiki e reuso (ADR-0047); `false` desliga |
-| `check_active` | `true` | Pré-checagem `devteam check` que compara o diff da branch com as decisões da base em `/devteam:pr` e `/devteam:push` (ADR-0048); `false` desliga |
-| `repair_hints_active` | `true` | Dicas de reparo vindas do ledger local de reparos após falhas repetidas de comando (ADR-0050); `false` desliga |
-| `branch_overlap_active` | `true` | Avisos de edições sobrepostas em branches não mergeadas de colegas (ADR-0051); `false` desliga |
+| `recall_active` | `true` | Ponteiros de recall por prompt a partir dos índices de ADR, wiki e reuso (ADR-0048); `false` desliga |
+| `check_active` | `true` | Pré-checagem `devteam check` que compara o diff da branch com as decisões da base em `/devteam:pr` e `/devteam:push` (ADR-0049); `false` desliga |
+| `repair_hints_active` | `true` | Dicas de reparo vindas do ledger local de reparos após falhas repetidas de comando (ADR-0051); `false` desliga |
+| `branch_overlap_active` | `true` | Avisos de edições sobrepostas em branches não mergeadas de colegas (ADR-0052); `false` desliga |
 
 ### Cascata de decisão
 

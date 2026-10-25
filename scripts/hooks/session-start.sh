@@ -445,7 +445,7 @@ if devteam_memory_still_in_project "$MAIN_REPO_ROOT"; then
         "$DAY_TTL" "layout.upgrade_available:${TODAY_KEY}"
 fi
 
-# ── Branch-overlap refresher (ADR-0051) ───────────────────────────
+# ── Branch-overlap refresher (ADR-0052) ───────────────────────────
 # Detached and silent: the session never waits on it. branch_overlap.py rate-limits itself
 # (at most every 10 minutes), fetches quietly and keeps the old cache when offline.
 if [ -f "${SCRIPT_DIR}/../lib/devteam/branch_overlap.py" ] && command -v python3 >/dev/null 2>&1 \

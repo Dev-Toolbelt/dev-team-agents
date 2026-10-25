@@ -1,4 +1,4 @@
-"""Repair ledger (ADR-0050, spec docs/specs/repair-ledger.md).
+"""Repair ledger (ADR-0051, spec docs/specs/repair-ledger.md).
 
 Two layers: `repairs.process` / `repairs.classify` driven directly, and the PostToolUse sub-script
 `03-repair-detect.sh` driven as a subprocess with each provider's payload shape. Delivery wiring itself

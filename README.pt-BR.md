@@ -387,14 +387,14 @@ Hooks colocam algumas linhas curtas na frente do agente sem que ninguém peça. 
 
 | Quando | O que chega | Desligar |
 |--------|-------------|----------|
-| Você envia um prompt | Até 5 ponteiros para os ADRs, entradas da wiki e regras de reuso cujas palavras-chave casam com o prompt: um caminho e uma linha "leia quando", nunca o corpo ([ADR-0047](docs/development/adrs/0047-a-context-hints-channel-and-deterministic-per-prompt-recall-from-the-retrieval-indexes.md)) | `recall_active: false` |
-| Você roda `/devteam:pr` ou `/devteam:push` | `devteam check` compara antes o diff da branch com os ADRs aceitos e as regras de reuso da branch base. Um conflito pede para corrigir, justificar no corpo do PR ou abortar ([ADR-0048](docs/development/adrs/0048-devteam-check-compares-a-branch-diff-with-base-branch-decisions-before-a-pr.md)) | `check_active: false` |
-| Um comando de shell falha e uma nova tentativa depois dá certo | Na próxima falha desse comando: "isto falhou antes; o que resolveu". O ledger é local da máquina ([ADR-0050](docs/development/adrs/0050-a-machine-local-repair-ledger-turns-repeated-command-failures-into-hints.md)) | `repair_hints_active: false` |
-| Você edita um arquivo que um colega alterou numa branch não mergeada | Um aviso com o nome da branch e do autor ([ADR-0051](docs/development/adrs/0051-teammates-unmerged-branches-are-cached-locally-to-warn-about-overlapping-edits.md)) | `branch_overlap_active: false` |
+| Você envia um prompt | Até 5 ponteiros para os ADRs, entradas da wiki e regras de reuso cujas palavras-chave casam com o prompt: um caminho e uma linha "leia quando", nunca o corpo ([ADR-0048](docs/development/adrs/0048-a-context-hints-channel-and-deterministic-per-prompt-recall-from-the-retrieval-indexes.md)) | `recall_active: false` |
+| Você roda `/devteam:pr` ou `/devteam:push` | `devteam check` compara antes o diff da branch com os ADRs aceitos e as regras de reuso da branch base. Um conflito pede para corrigir, justificar no corpo do PR ou abortar ([ADR-0049](docs/development/adrs/0049-devteam-check-compares-a-branch-diff-with-base-branch-decisions-before-a-pr.md)) | `check_active: false` |
+| Um comando de shell falha e uma nova tentativa depois dá certo | Na próxima falha desse comando: "isto falhou antes; o que resolveu". O ledger é local da máquina ([ADR-0051](docs/development/adrs/0051-a-machine-local-repair-ledger-turns-repeated-command-failures-into-hints.md)) | `repair_hints_active: false` |
+| Você edita um arquivo que um colega alterou numa branch não mergeada | Um aviso com o nome da branch e do autor ([ADR-0052](docs/development/adrs/0052-teammates-unmerged-branches-are-cached-locally-to-warn-about-overlapping-edits.md)) | `branch_overlap_active: false` |
 
 Claude Code e Codex mostram a dica de reparo ou de sobreposição logo após a chamada da ferramenta. O opencode a mostra no próximo prompt.
 
-**Minerando o seu histórico.** Quando `/devteam:setup` integra um projeto novo, ele pode propor regras a partir de duas fontes: correções que você repetiu em pelo menos dois dias diferentes, e threads de review em PRs já mergeados que o autor resolveu. Cada candidata precisa do seu sim. Nada é escrito sem ele ([ADR-0049](docs/development/adrs/0049-setup-mines-local-session-transcripts-and-pr-review-threads-into-proposed-rules.md)). Você também pode listar os candidatos com `devteam mine sessions` e `devteam mine reviews`.
+**Minerando o seu histórico.** Quando `/devteam:setup` integra um projeto novo, ele pode propor regras a partir de duas fontes: correções que você repetiu em pelo menos dois dias diferentes, e threads de review em PRs já mergeados que o autor resolveu. Cada candidata precisa do seu sim. Nada é escrito sem ele ([ADR-0050](docs/development/adrs/0050-setup-mines-local-session-transcripts-and-pr-review-threads-into-proposed-rules.md)). Você também pode listar os candidatos com `devteam mine sessions` e `devteam mine reviews`.
 
 ---
 

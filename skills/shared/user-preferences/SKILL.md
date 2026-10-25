@@ -80,7 +80,7 @@ the user never saw a prompt, and that reads as "no". `devteam prefs list` report
 
 **These defaults apply only to a preferences.json that does not exist yet.** An existing file is never rewritten: `install.sh` merges with existing values winning, and the `session-start.sh` backfill only adds absent keys.
 
-**Consent keys — `telemetry`, `auto_update` and `branch_overlap_active`.** All default to `true` in a fresh file (the installer prompts for `telemetry`). They are **never** backfilled as `true` into a preferences.json that already exists: that file's owner never saw a prompt for a field added after they installed, so an absent key is read as "no". Install and the session-start backfill write `false` in that case. Exception: in a project bound to the v3 store, `branch_overlap_active` resolves to `true` unless a layer sets it (ADR-0051) — only `telemetry` and `auto_update` are withheld there.
+**Consent keys — `telemetry`, `auto_update` and `branch_overlap_active`.** All default to `true` in a fresh file (the installer prompts for `telemetry`). They are **never** backfilled as `true` into a preferences.json that already exists: that file's owner never saw a prompt for a field added after they installed, so an absent key is read as "no". Install and the session-start backfill write `false` in that case. Exception: in a project bound to the v3 store, `branch_overlap_active` resolves to `true` unless a layer sets it (ADR-0052) — only `telemetry` and `auto_update` are withheld there.
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
@@ -105,10 +105,10 @@ the user never saw a prompt, and that reads as "no". `devteam prefs list` report
 | `qa_browser` | string or null | `null` | Browser used when the in-app browser is unavailable — `qa-specialist` and the Visual Check Gate (`null` = ask on first use) |
 | `review_gate_mode` | string | `"ask"` | Review Next-Step Gate behavior: `ask`, `auto` (review without asking), or `skip` |
 | `ci_cd_detected` | bool or null | `null` | Cached GitHub Actions detection (`null` = unchecked) |
-| `recall_active` | bool | `true` | Per-prompt recall pointers from the ADR, wiki and reuse retrieval indexes (ADR-0047) |
-| `check_active` | bool | `true` | The `devteam check` pre-flight that compares the branch diff with base-branch decisions in `/devteam:pr` and `/devteam:push` (ADR-0048) |
-| `repair_hints_active` | bool | `true` | Repair hints surfaced from the machine-local repair ledger after repeated command failures (ADR-0050) |
-| `branch_overlap_active` | bool | `true` | Warnings about overlapping edits on teammates' unmerged branches (ADR-0051; consent key) |
+| `recall_active` | bool | `true` | Per-prompt recall pointers from the ADR, wiki and reuse retrieval indexes (ADR-0048) |
+| `check_active` | bool | `true` | The `devteam check` pre-flight that compares the branch diff with base-branch decisions in `/devteam:pr` and `/devteam:push` (ADR-0049) |
+| `repair_hints_active` | bool | `true` | Repair hints surfaced from the machine-local repair ledger after repeated command failures (ADR-0051) |
+| `branch_overlap_active` | bool | `true` | Warnings about overlapping edits on teammates' unmerged branches (ADR-0052; consent key) |
 
 > For where each field is actually read and applied, see the "Consumed at" column in `CLAUDE-md/preferences.md` — the canonical consumer table, kept current whenever a field's wiring changes.
 

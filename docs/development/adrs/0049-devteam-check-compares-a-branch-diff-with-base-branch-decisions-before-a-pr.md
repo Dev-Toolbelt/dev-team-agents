@@ -1,10 +1,10 @@
-# ADR-0048: devteam check compares a branch diff with base-branch decisions before a PR
+# ADR-0049: devteam check compares a branch diff with base-branch decisions before a PR
 
 **Date:** 2026-10-25  
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
 **Applies to:** `scripts/lib/devteam/check.py`, `scripts/lib/devteam/cli.py`, `commands/pr.md`, `commands/push.md`, `skills/shared/git-workflow/SKILL.md`  
-**Relates to:** [ADR-0039](0039-adrs-declare-the-paths-they-govern-and-a-stop-hook-names-them-when-those-paths-change.md) (Applies to), [ADR-0036](0036-path-scoped-and-severity-graded-rules-in-the-reuse-registry-enforced-at-stop-by-exit-2.md) (reuse registry), [ADR-0011](0011-two-distribution-channels-and-the-desktop-app-as-a-cli-client.md) and [ADR-0014](0014-store-schemas-as-the-normative-write-gate-and-the-json-contract-deprecation-policy.md) (`--json` contract), [ADR-0047](0047-a-context-hints-channel-and-deterministic-per-prompt-recall-from-the-retrieval-indexes.md) (recall)
+**Relates to:** [ADR-0039](0039-adrs-declare-the-paths-they-govern-and-a-stop-hook-names-them-when-those-paths-change.md) (Applies to), [ADR-0036](0036-path-scoped-and-severity-graded-rules-in-the-reuse-registry-enforced-at-stop-by-exit-2.md) (reuse registry), [ADR-0011](0011-two-distribution-channels-and-the-desktop-app-as-a-cli-client.md) and [ADR-0014](0014-store-schemas-as-the-normative-write-gate-and-the-json-contract-deprecation-policy.md) (`--json` contract), [ADR-0048](0048-a-context-hints-channel-and-deterministic-per-prompt-recall-from-the-retrieval-indexes.md) (recall)
 
 ## Context
 
