@@ -23,6 +23,7 @@ The Electron app in `app/` runs its renderer tests (vitest with jsdom) on the No
   - `cd app && nvm use && npx vitest run <path>`
   - `PATH=$HOME/.nvm/versions/node/v24.21.0/bin:$PATH npx vitest run <path>`
 - CI is unaffected. `.github/scripts/ci/05-app.sh` pins Node from `app/.nvmrc`.
+- The root JS plugin test (`tests/js/`) needs Node 22.18 or newer, and a linked worktree needs the main checkout's `node_modules`. See `testing/worktree-node-tests-need-node-22-and-main-node-modules.md`.
 
 ## References
 - `app/package.json` (`engines`), `app/.nvmrc`
