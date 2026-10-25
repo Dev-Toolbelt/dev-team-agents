@@ -41,11 +41,12 @@ Before editing any file, resolve the worktree decision with the cascade in `skil
 
 ## Design System & Design Skills
 
-Before creating any UI, load all three:
+Before creating any UI, load all four:
 
 1. `skills/design/design-system-audit/SKILL.md` — reads and documents the project's current visual language
 2. `skills/design/frontend-design/SKILL.md` — **required**; provides component patterns, layout techniques, and visual design guidance. Installed automatically by `scripts/install.sh`. Load it at the start of every UI session.
 3. `skills/design/web-design-guidelines/SKILL.md` — **required**; audits UI code against Vercel's Web Interface Guidelines (design, accessibility, UX). Installed automatically by `scripts/install.sh`. Load it at the start of every UI session.
+4. `skills/design/third-party-design-skills/SKILL.md` — its routing table adds the vendored third-party design skill the task calls for
 
 **Visual consistency is non-negotiable.** New UI must match the existing visual language of the project — same spacing scale, same color tokens, same component patterns. When in doubt, consult the `ui-ux-designer`.
 
