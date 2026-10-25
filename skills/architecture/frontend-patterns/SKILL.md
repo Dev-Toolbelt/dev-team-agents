@@ -1,6 +1,6 @@
 ---
 name: frontend-patterns
-description: Frontend patterns — debounce, double-submit prevention, error boundaries.
+description: Frontend patterns — debounce, double-submit guard, error boundaries, deferred runtime boot.
 ---
 
 ## Interaction Patterns
@@ -72,3 +72,21 @@ A runtime error in one component must not crash the entire UI. Wrap every route/
 - Always show a user-facing fallback — never a blank screen or a raw JS stack trace
 - Register a global `window.addEventListener('unhandledrejection', ...)` to catch uncaught promise rejections and forward them to the project's error tracking service (Sentry, Datadog, etc.)
 - **Never swallow errors silently** — catching without logging or reporting creates invisible bugs
+
+---
+
+## Deferred Runtime Boot & Failsafes
+
+Applies to any heavy client runtime loaded lazily (animation, scroll, 3D, analytics-driven UI) behind a failsafe that reveals content if the runtime does not start in time.
+
+**Rules:**
+- **Never gate the chunk download on `window.load`** — start `import()` as soon as the module runs (deferred module scripts run just before `DOMContentLoaded`) and attach `.catch()` at creation; a rejection applies the failure marker immediately
+- Gate only the **initialization**: first of `load` (then idle callback) or a short cap after `DOMContentLoaded` (then immediately); guard against running twice and handle every `document.readyState`
+- Skip the download entirely when the runtime is disabled (e.g. `prefers-reduced-motion`)
+- Never initialize after the failsafe fired; on success, signal the failsafe so both never act
+- **Never lengthen or remove the failsafe** to make the runtime fit — it is the guarantee that content is never left hidden; keep it inline in `<head>`, independent of the module
+- **WebKit holds `load` (observed ~2.5 s) for a `<video>` with a WebM/AV1 `<source>`, even with `preload="none"`** — render those sources as `data-src` placeholders hydrated after `load` (near viewport or on play intent), keeping MP4 as the immediate fallback
+
+**Review severity** for a download gated on `load`: `[BLOCKING]` when a fixed-deadline failsafe with a permanent marker can fire before `load` plus download (heavy media, WebM/AV1 sources); otherwise `[SUGGESTION]`.
+
+Symptom, diagnosis checklist, reference implementation, test matrix and manual Safari checks: `references/webkit-motion-boot.md`.
