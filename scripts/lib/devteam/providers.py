@@ -117,6 +117,18 @@ def skill_dirs(version_dir):
     return [(name, path) for name, path in sorted(found.items())]
 
 
+#: The category of vendored upstream skills (ADR-0047). A project may already carry
+#: its own copy of one of them at the same `.claude/skills/<name>`; bind keeps that
+#: copy instead of refusing the whole bind over it.
+THIRD_PARTY_SKILLS_CATEGORY = "third-party"
+
+
+def is_third_party_skill(source):
+    """True when ``source`` is a vendored skill folder, ``skills/third-party/<name>``."""
+    source = Path(source)
+    return source.parent.name == THIRD_PARTY_SKILLS_CATEGORY and source.parent.parent.name == "skills"
+
+
 def claude_artifacts(version_dir):
     """``(relative path in project, absolute source)`` pairs for Claude Code."""
     vdir = Path(version_dir)
