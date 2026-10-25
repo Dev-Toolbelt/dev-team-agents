@@ -228,6 +228,16 @@ Canonical close for any flow that changed code and whose recommended next step i
 
 **Skip the gate when** any of these holds: `git diff --name-only <base>...HEAD` plus `git status --porcelain` is empty (nothing to review); a review (`code-reviewer`, `backend-reviewer`, `frontend-reviewer`, `qa-specialist`) already ran this session; the command already runs a mandatory review phase; or the gate was already asked this session (an outer orchestrator owns it).
 
+**Then read `review_gate_mode`** from `.dev-team-agents/resolved/preferences.json` (absent or unknown → `ask`):
+
+| Mode | Behavior |
+|---|---|
+| `ask` | Ask the gate below |
+| `auto` | Do not ask: say in one line that the review runs per `review_gate_mode`, then act as if `Review <scope> (Recommended)` was picked |
+| `skip` | Do not ask: go to the command's hand-off and prefix it with `review skipped (review_gate_mode=skip)` |
+
+The mode covers this gate only — a command's mandatory review phase and a project rule that requires a review still run.
+
 **Build the options from the session, not a fixed list** (max 4 incl. Other, in the user's language):
 
 | Option | Shown when | Built from |

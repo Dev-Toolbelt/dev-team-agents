@@ -393,8 +393,8 @@ than one or two parallel spawns.
 
    ```
 
-   Then close with the **Review Next-Step Gate** (`skills/shared/interaction-patterns/SKILL.md`)
-   — a dynamic `AskUserQuestion`, never a plain-text "run `/devteam:review`" line. If UI changed,
+   Then run the **Review Next-Step Gate** (`skills/shared/interaction-patterns/SKILL.md`).
+   If UI changed,
    follow it with the **Visual Check Gate** from the same skill, built from the sub-agents'
    **Screens to check** lists.
 

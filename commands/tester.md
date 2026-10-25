@@ -26,7 +26,7 @@ Also spawn if the context includes mobile changes (ios/, android/, *.swift, *.kt
 
 ## Next step (mandatory)
 
-After the agents complete, if code changed, ask the **Review Next-Step Gate** from the interaction-patterns skill loaded above — a dynamic `AskUserQuestion` with the review as the recommended option, never a plain-text next-step line.
+After the agents complete, if code changed, run the **Review Next-Step Gate** from the interaction-patterns skill loaded above.
 
 ---
 

@@ -49,4 +49,4 @@ After the software-architect completes its full workflow (including any spawned 
 [list of agents and what they did]
 ```
 
-Then close with the **Review Next-Step Gate** from the interaction-patterns skill loaded above — a dynamic `AskUserQuestion` with the review as the recommended option, never a plain-text next-step line.
+Then run the **Review Next-Step Gate** from the interaction-patterns skill loaded above.
