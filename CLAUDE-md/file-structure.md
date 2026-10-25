@@ -18,6 +18,7 @@ dev-team-agents/
 │   ├── security/
 │   ├── skill-creator/ ← user-invocable skill-authoring skill
 │   ├── testing/
+│   ├── third-party/ ← vendored upstream skills, pinned in sources.json (ADR-0047); never edited in place
 │   └── ui-libraries/ ← UI component library reference skills
 ├── commands/        ← devteam slash commands (installed to .claude/commands/devteam/, invoked as /devteam:<name>)
 ├── templates/       ← document templates: adr, plan, runbook, spec, contract, and the gated-layout docs (prd, glossary, nfr, trd, data-model, threat-model, design-flow, evals, process)
@@ -42,6 +43,7 @@ dev-team-agents/
 │   ├── orphan-template-scan.sh    ← template references must RESOLVE, not just be mentioned
 │   ├── plugin-lint.sh             ← validates plugin manifests against schema; runs in CI
 │   ├── canonical-facts.py         ← fails on claims known to be wrong (facts in canonical-facts.json); runs in CI
+│   ├── third-party-skills.py      ← vendors skills/third-party/ at the pinned commit (sync) and checks their hashes (verify)
 │   ├── gen-cpanel-uapi-reference.sh ← regenerates the cPanel skill's generated UAPI
 │   │                                reference from the official OpenAPI spec (`--check` = drift)
 │   └── archive-index.sh · check-fingerprint-uniqueness.sh ← report-index rotation and
