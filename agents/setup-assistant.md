@@ -73,6 +73,8 @@ Generate a baseline audit before creating any docs. Write to `docs/audit/audit-$
 
 Audit sections: project overview · repository health (README/CLAUDE.md/AGENTS.md/CONTRIBUTING.md/LICENSE) · CI/CD · infrastructure (Docker, IaC) · testing (framework, coverage config) · code quality (lint/format/types) · dependencies (package manager, lock file) · documentation · conventions (commit style, branch naming) · gaps & recommendations.
 
+If the project has history, load `skills/shared/history-mining/SKILL.md` and offer to mine past corrections and review threads into proposed rules.
+
 ---
 
 ### Step 2 — Project Type Question
