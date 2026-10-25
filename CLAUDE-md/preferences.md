@@ -26,6 +26,7 @@ On a v2 install that is not bound yet, all user-level preferences are stored in 
   "worktree_path": ".worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null,
+  "review_gate_mode": "ask",
   "ci_cd_detected": null
 }
 ```
@@ -70,6 +71,7 @@ Existing preferences.json files keep the key forever; the backfill does not rein
 | `worktree_path` | `".worktrees"` | Directory where worktrees are created (`<path>/<context>/<title>`) | `skills/shared/worktree/SKILL.md` (agent-executed) |
 | `worktree_docker_isolate` | `true` | When `worktree_active` and the project uses Docker Compose, spin up an isolated compose stack per worktree. Gated: no effect unless both conditions hold | `skills/shared/worktree/SKILL.md`, `skills/shared/worktree/references/docker-isolation.md` (agent-executed) |
 | `qa_browser` | `null` | Preferred browser when the in-app Claude browser is unavailable — used by `qa-specialist` browser testing and by the Visual Check Gate. `null` = ask on first use and offer to save the choice here | `skills/shared/interaction-patterns/SKILL.md` § Visual Check Gate → Browser Choice |
+| `review_gate_mode` | `"ask"` | What the Review Next-Step Gate does when a flow that changed code finishes: `ask` (show the gate), `auto` (run the recommended review without asking), or `skip` (go straight to the commit/PR hand-off). Absent or unknown means `ask`. A review a command runs as a mandatory phase is not affected | `skills/shared/interaction-patterns/SKILL.md` § Review Next-Step Gate (agent-executed) |
 | `ci_cd_detected` | `null` | Cached result of the GitHub Actions detection (`.github/workflows/*.yml`/`.yaml` present). `null` = not yet checked; `true`/`false` once checked. A cached `true` is trusted as-is; a cached `false` is always rechecked (cheap, and workflows get added over time) | `skills/shared/github-actions/SKILL.md` (agent-executed) |
 
 > **Fallback safety**: all scripts that read `preferences.json` use hardcoded defaults for every key. If the file is missing, malformed, or a key is removed, scripts fall back to the defaults above without error. Never leave a key out — the schema above is the authoritative default set.

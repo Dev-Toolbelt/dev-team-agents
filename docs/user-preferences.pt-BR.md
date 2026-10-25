@@ -70,6 +70,7 @@ scripts/lib/preferences-defaults.json
   "worktree_path": ".worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null,
+  "review_gate_mode": "ask",
   "ci_cd_detected": null
 }
 ```
@@ -99,6 +100,7 @@ scripts/lib/preferences-defaults.json
 | `worktree_path` | `".worktrees"` | string | Diretório-raiz onde as worktrees são criadas |
 | `worktree_docker_isolate` | `true` | bool | Se Docker Compose deve ser isolado por worktree |
 | `qa_browser` | `null` | string ou null | Navegador preferido quando o browser do app não está disponível — testes de QA e a conferência visual após trabalho de UI |
+| `review_gate_mode` | `"ask"` | string | O que acontece quando um trabalho que alterou código termina: `ask` mostra a escolha de review, `auto` roda o review recomendado sem perguntar, `skip` vai direto para o hand-off de commit/PR |
 | `ci_cd_detected` | `null` | bool ou null | Estado em cache da detecção de CI/CD |
 
 ---
