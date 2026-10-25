@@ -78,6 +78,7 @@ Load contextually based on the task:
 - `skills/testing/snapshot-testing/SKILL.md` — when writing or reviewing component snapshot tests
 - `skills/testing/visual-regression/SKILL.md` — when setting up or running visual regression tests (Playwright screenshot diffing, Chromatic)
 - `skills/testing/contract-testing/SKILL.md` — when testing API contracts in the frontend context (MSW handlers, consumer-driven contracts)
+- `skills/architecture/frontend-patterns/references/webkit-motion-boot.md` § Tests — when testing a lazy runtime loader or deferred `<video>` sources (fake timers, mocked `document.readyState`)
 
 ### Component / Unit Tests
 - Test behavior triggered by user interactions (click, type, submit)

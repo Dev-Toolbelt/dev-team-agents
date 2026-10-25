@@ -113,7 +113,7 @@ When the task involves file upload (large files, progress tracking, or chunked u
 
 ## Interaction Patterns
 
-Load `skills/architecture/frontend-patterns/SKILL.md` for debounce, double-submission prevention, and error boundary patterns with framework-specific implementation guidance.
+Load `skills/architecture/frontend-patterns/SKILL.md` for debounce, double-submission prevention, error boundaries, and deferred runtime boot behind a failsafe (lazy animation chunks, WebKit `load` delay from WebM/AV1 `<source>` — Safari-only motion bugs).
 
 ---
 
