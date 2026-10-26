@@ -12,14 +12,18 @@ export interface Choices {
   readonly stack: string | null;
 }
 
-/** The provider to preselect: what the CLI suggested, else an installed one, else one the project uses. */
+/** The installed providers that answered `--version`. */
+export function usableProviders(detect: DetectReport): readonly string[] {
+  return detect.providers.installed.filter((entry) => entry.usable).map((entry) => entry.name);
+}
+
+/**
+ * The provider to preselect: the one `devteam start` would use (ADR-0030: the CLI decides, the
+ * app shows it). That is the CLI's suggestion, which is only ever a tool that starts; with none
+ * that starts, the project's own provider, else the default.
+ */
 export function defaultProvider(detect: DetectReport): string {
-  return (
-    detect.providers.suggested ??
-    detect.providers.installed[0]?.name ??
-    detect.providers.in_project[0] ??
-    PROVIDERS[0]
-  );
+  return detect.providers.suggested ?? detect.providers.in_project[0] ?? PROVIDERS[0];
 }
 
 export function defaultChoices(detect: DetectReport): Choices {
@@ -30,11 +34,15 @@ export function defaultChoices(detect: DetectReport): Choices {
   };
 }
 
-/** Every provider the app knows, with whether it is installed; detected-but-unknown names are kept too. */
-export function providerChoices(detect: DetectReport): readonly { readonly name: string; readonly installed: boolean }[] {
-  const installed = new Set(detect.providers.installed.map((entry) => entry.name));
+export type ProviderState = 'installed' | 'broken' | 'missing';
+
+/** Every provider the app knows, with its state; detected-but-unknown names are kept too. */
+export function providerChoices(detect: DetectReport): readonly { readonly name: string; readonly state: ProviderState }[] {
+  const states = new Map<string, ProviderState>(
+    detect.providers.installed.map((entry) => [entry.name, entry.usable ? 'installed' : 'broken']),
+  );
   const names = [...new Set<string>([...detect.providers.installed.map((entry) => entry.name), ...PROVIDERS])];
-  return names.map((name) => ({ name, installed: installed.has(name) }));
+  return names.map((name) => ({ name, state: states.get(name) ?? 'missing' }));
 }
 
 /** How a command is typed in each provider. Codex uses `$devteam-<name>`; the others `/devteam:<name>`. */

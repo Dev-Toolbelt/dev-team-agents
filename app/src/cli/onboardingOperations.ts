@@ -71,6 +71,9 @@ export function parseDetect(body: Record<string, unknown>): DetectReport | strin
       name: raw['name'],
       binary: typeof raw['binary'] === 'string' ? raw['binary'] : raw['name'],
       version: nullableString(raw['version']),
+      // A CLI older than the `usable` field never reported a broken binary: treat it as working.
+      // Any other non-boolean value is not trusted to mean "works".
+      usable: raw['usable'] === undefined ? true : raw['usable'] === true,
     });
   }
   const stack = body['stack'];

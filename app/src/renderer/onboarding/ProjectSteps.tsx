@@ -13,7 +13,7 @@ import { ProviderIcon, providerLabel } from '../providers/ProviderIcon.js';
 import { unreachable } from '../useOperation.js';
 import { Busy, CommandBox, useFocusOnMount } from './CopyButton.js';
 import { COPY } from './copy.js';
-import { commandLabel, firstTaskCopyText, providerChoices, type Choices } from './model.js';
+import { commandLabel, firstTaskCopyText, providerChoices, usableProviders, type Choices, type ProviderState } from './model.js';
 
 /** The folder the person chose, what was found in it and what they will start with. */
 export interface Project {
@@ -82,7 +82,15 @@ export function ConfirmStep({
   const { detect, choices } = project;
   const providers = providerChoices(detect);
   const stacks = detect.stack.all.length > 0 ? detect.stack.all : detect.stack.primary !== null ? [detect.stack.primary] : [];
-  const noneInstalled = detect.providers.installed.length === 0;
+  const noneUsable = usableProviders(detect).length === 0;
+  const chosenBroken = providers.some((entry) => entry.name === choices.provider && entry.state === 'broken');
+  const providerHint = chosenBroken
+    ? COPY.confirm.brokenProvider(providerLabel(choices.provider))
+    : !noneUsable
+      ? null
+      : detect.providers.installed.length > 0
+        ? COPY.confirm.allBroken
+        : COPY.confirm.noProvider;
 
   return (
     <section aria-labelledby="confirm-heading" className="flex flex-col gap-4">
@@ -100,18 +108,27 @@ export function ConfirmStep({
             <ProviderIcon provider={choices.provider} size="md" decorative />
             <select
               id="onboarding-provider"
+              aria-describedby={providerHint !== null ? 'onboarding-provider-hint' : undefined}
               className={cn(SELECT_CLASS, 'min-w-0 flex-1')}
               value={choices.provider}
               onChange={(event) => onChange({ ...choices, provider: event.target.value })}
             >
               {providers.map((entry) => (
                 <option key={entry.name} value={entry.name}>
-                  {entry.installed ? COPY.confirm.providerInstalled(providerLabel(entry.name)) : COPY.confirm.providerMissing(providerLabel(entry.name))}
+                  {providerOptionLabel(entry.name, entry.state)}
                 </option>
               ))}
             </select>
           </div>
-          {noneInstalled ? <p className="text-xs text-muted-foreground">{COPY.confirm.noProvider}</p> : null}
+          {/* The live region stays mounted and visible: one that was hidden or absent before a
+              change is often not announced. Only the text inside it comes and goes. */}
+          <div aria-live="polite">
+            {providerHint !== null ? (
+              <p id="onboarding-provider-hint" className="text-xs text-muted-foreground">
+                {providerHint}
+              </p>
+            ) : null}
+          </div>
         </div>
 
         <div className="grid gap-1.5">
@@ -301,4 +318,11 @@ export function DoneStep({ project, started, onFinish }: { project: Project; sta
       </div>
     </section>
   );
+}
+
+function providerOptionLabel(name: string, state: ProviderState): string {
+  const label = providerLabel(name);
+  if (state === 'installed') return COPY.confirm.providerInstalled(label);
+  if (state === 'broken') return COPY.confirm.providerBroken(label);
+  return COPY.confirm.providerMissing(label);
 }

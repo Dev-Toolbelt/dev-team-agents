@@ -1132,6 +1132,8 @@ export interface DetectedProvider {
   readonly name: string;
   readonly binary: string;
   readonly version: string | null;
+  /** Answered `--version`. False for a broken install: listed, never suggested. */
+  readonly usable: boolean;
 }
 
 export interface ProviderDetection {
