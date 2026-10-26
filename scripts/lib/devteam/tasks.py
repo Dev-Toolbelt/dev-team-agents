@@ -73,6 +73,14 @@ RESUME = {
 _CLAUDE_TOOLS = ("TodoWrite", "TaskCreate", "TaskUpdate")
 _CLAUDE_AGENT_TOOLS = ("Agent", "Task")
 _CODEX_AGENT_TOOLS = ("spawn_agent", "wait_agent", "close_agent")
+#: Codex 0.160 sends its collaboration tools as the namespace glued to the name, no separator
+#: (``collaborationspawn_agent``); older builds and the docs write ``collaboration.spawn_agent``.
+_CODEX_NAMESPACE = "collaboration"
+#: Codex's own subagent lifecycle events. Claude Code's agent spawns arrive as `Agent`/`Task` tool calls
+#: instead and opencode has no such event, so only Codex is given these (`_normalize_subagent`).
+_SUBAGENT_EVENTS = ("SubagentStart", "SubagentStop")
+#: A space-free token this long is an encrypted payload, not prose: a readable description has spaces.
+_OPAQUE_MESSAGE_RE = re.compile(r"^[A-Za-z0-9_=-]{40,}$")
 #: Longest first line of a Codex spawn message kept as a task's description.
 AGENT_TEXT = 120
 PLAN_STEP_RE = re.compile(r"^Step \d+:")
@@ -270,6 +278,17 @@ def _json_objects(value):
                 yield found
 
 
+def codex_tool(tool_name):
+    """The bare tool name of ``tool_name``: the last dotted segment, and for the one known Codex
+    namespace also the glued form (``collaborationspawn_agent`` -> ``spawn_agent``).
+
+    Any other prefix is left as it is, so ``foospawn_agent`` names no Codex tool.
+    """
+    last = tool_name.split(".")[-1] if isinstance(tool_name, str) else ""
+    rest = last[len(_CODEX_NAMESPACE):] if last.startswith(_CODEX_NAMESPACE) else ""
+    return rest if rest in _CODEX_AGENT_TOOLS else last
+
+
 def _spawned_agent_id(response):
     """The agent id a Codex ``spawn_agent`` answered with, else ``""``."""
     for found in _json_objects(response):
@@ -338,8 +357,15 @@ def _result_agent_id(payload):
 def _agent_text(provider, name, inp):
     """``<agent>: <description>``; the agent's name alone when the call has no description."""
     if provider == "codex":
-        described = _text(inp.get("message")).splitlines()
-        described = described[0].strip()[:AGENT_TEXT] if described else ""
+        described = _text(inp.get("task_name"))
+        if described.startswith("/root/"):
+            described = described[len("/root/"):]
+        if not described:
+            lines = _text(inp.get("message")).splitlines()
+            described = lines[0].strip()[:AGENT_TEXT] if lines else ""
+            # Codex encrypts a spawn's message: an opaque token is not a description.
+            if described.startswith("gAAAA") or (" " not in described and _OPAQUE_MESSAGE_RE.match(described)):
+                described = ""
     else:
         described = _text(inp.get("description"))
     return _task_text("{}: {}".format(name, described) if described else name)
@@ -388,6 +414,33 @@ def _agent_op(payload, provider, bare):
     return ("agent_end", {"id": use_id, "agent": name, "status": "completed", "failed": False, "agent_id": runtime_id})
 
 
+def _normalize_subagent(payload, provider):
+    """A Codex ``SubagentStart``/``SubagentStop`` as an agent op, else ``None``.
+
+    The payload's ``session_id`` is the parent's and ``agent_id`` the child's. Review/QA agents
+    (their window opens at the spawn) and Codex's built-in roles are not tasks. Neither event
+    creates a task: the spawn's own hooks do, and these only link and settle it.
+    """
+    if provider not in ("auto", "codex"):
+        return None
+    session_id = _first_text(payload, "session_id", "sessionID", "sessionId")
+    agent_id = _first_text(payload, "agent_id")
+    name = review_triggers.spawn_name(_first_text(payload, "agent_type"))
+    if not session_id or not agent_id or not name:
+        return None
+    if review_triggers.agent_name(name) or review_triggers.is_builtin("codex", name):
+        return None
+    kind = "agent_started" if _text(payload.get("hook_event_name")) == "SubagentStart" else "agent_stopped"
+    return {
+        "provider": "codex",
+        "session_id": session_id,
+        "cwd": _first_text(payload, "cwd"),
+        "owner": MAIN_OWNER,
+        "agent_type": None,
+        "op": (kind, {"ref": agent_id, "agent": name}),
+    }
+
+
 def normalize(payload, provider="auto"):
     """Turn a hook payload into ``{provider, session_id, cwd, owner, agent_type, op}``.
 
@@ -396,10 +449,13 @@ def normalize(payload, provider="auto"):
     """
     if not isinstance(payload, dict):
         return None
+    if _text(payload.get("hook_event_name")) in _SUBAGENT_EVENTS:
+        return _normalize_subagent(payload, provider)
     tool_name = payload.get("tool_name")
     tool_name = tool_name if isinstance(tool_name, str) else ""
     bare_tool = payload.get("tool")
     bare_tool = bare_tool if isinstance(bare_tool, str) else ""
+    codex_bare = codex_tool(tool_name)
 
     detected = None
     if tool_name in _CLAUDE_TOOLS:
@@ -410,7 +466,7 @@ def normalize(payload, provider="auto"):
         detected = "opencode"
     elif tool_name in _CLAUDE_AGENT_TOOLS:
         detected = "claude"
-    elif tool_name.split(".")[-1] in _CODEX_AGENT_TOOLS:
+    elif codex_bare in _CODEX_AGENT_TOOLS:
         detected = "codex"
     elif bare_tool.lower() == "task":
         detected = "opencode"
@@ -433,8 +489,8 @@ def normalize(payload, provider="auto"):
         "op": None,
     }
 
-    if tool_name in _CLAUDE_AGENT_TOOLS or tool_name.split(".")[-1] in _CODEX_AGENT_TOOLS or bare_tool.lower() == "task":
-        call["op"] = _agent_op(payload, detected, tool_name.split(".")[-1])
+    if tool_name in _CLAUDE_AGENT_TOOLS or codex_bare in _CODEX_AGENT_TOOLS or bare_tool.lower() == "task":
+        call["op"] = _agent_op(payload, detected, codex_bare)
     elif detected == "claude":
         tool_input = _dict(payload.get("tool_input"))
         if tool_name == "TodoWrite":
@@ -1364,14 +1420,28 @@ def _scan_codex_v2(rec, payload, now):
     open_tasks = [t for t in rec["tasks"] if _is_v2(t)]
     changed = False
     pairs = []
+    # A v2 task a `SubagentStop` already ended still owns its answer in the rollout: it takes part in
+    # the matching so that answer is not handed to an open sibling of the same path, then drops out.
+    claims = []
+    for task in rec["tasks"]:
+        if task.get("answer_claim") is not None:
+            if now - task["answer_claim"] > PENDING_MAX_AGE:
+                task.pop("answer_claim")
+                changed = True
+            elif _is_agent(task) and task["status"] != "in_progress":
+                claims.append(task)
     if open_tasks:
         from . import usage
         path = payload.get("transcript_path") if isinstance(payload, dict) else None
-        pairs, scan = usage.codex_v2_matches(open_tasks, path, rec.get("codex_scan"), "agent_ref", "created_at")
+        pairs, scan = usage.codex_v2_matches(open_tasks + claims, path, rec.get("codex_scan"), "agent_ref", "created_at")
         if scan is not None and scan is not rec.get("codex_scan"):
             rec["codex_scan"] = scan
             changed = True
     for task, answer in pairs:
+        if task.get("answer_claim") is not None:
+            task.pop("answer_claim")  # answered by the stop already: nothing left to settle
+            changed = True
+            continue
         last = task["history"][-1]["at"] if task.get("history") else task["created_at"]
         _end_agent(rec, task, "completed", False, max(last, min(now, answer["at"] or now)))
         changed = True
@@ -1415,6 +1485,55 @@ def _interrupt(record, task, now):
     _retire_owned(record, task, now)
 
 
+def _child_task(record, ref):
+    """The agent task a Codex child id belongs to, of any status: linked by ``SubagentStart``, or
+    the very id a v1 ``spawn_agent`` answered with."""
+    return next(
+        (t for t in record["tasks"] if _is_agent(t) and ref in (t.get("agent_id"), t.get("agent_ref"))), None
+    )
+
+
+def _unlinked_spawn(record, agent):
+    """The oldest open spawn of ``agent`` no child id is linked to, the main session's first.
+
+    A start names only the parent session, so a spawn the main session made is preferred over a
+    nested one of the same type. A v1 spawn already holds its own agent id (a ref that is no task
+    path): it belongs to that child, never to another.
+    """
+    open_spawns = [
+        t for t in record["tasks"]
+        if _is_agent(t) and t["status"] in ("in_progress", "pending") and t.get("agent_type") == agent
+        and not t.get("agent_id") and (not t.get("agent_ref") or str(t["agent_ref"]).startswith("/"))
+    ]
+    return next((t for t in open_spawns if t["owner"] == MAIN_OWNER), open_spawns[0] if open_spawns else None)
+
+
+def _apply_subagent(record, kind, body, now):
+    """Fold a Codex ``SubagentStart``/``SubagentStop`` into the record. True when it changed something.
+
+    Dedup against the other end signals (the rollout's ``FINAL_ANSWER`` for a v2 path, ``wait_agent``
+    for a v1 id): a start never re-links, a stop only ends a task still open, and one that does end
+    a v2 task leaves an ``answer_claim`` so its answer is never given to a sibling of the same path
+    (:func:`_scan_codex_v2`). A start or stop with no linked task changes nothing.
+    """
+    ref = body["ref"]
+    task = _child_task(record, ref)
+    if kind == "agent_started":
+        if task is not None:
+            return False  # a replayed start, or a v1 task that already holds this id
+        task = _unlinked_spawn(record, body["agent"])
+        if task is None:
+            return False
+        task["agent_id"] = ref  # `_retire_owned` then finds the child's own todo items by owner
+        return True
+    if task is None or task["status"] not in ("in_progress", "pending"):
+        return False
+    _end_agent(record, task, "completed", False, now)
+    if str(task.get("agent_ref", "")).startswith("/") and task.get("rollout_path"):
+        task["answer_claim"] = now
+    return True
+
+
 def _apply_agent(record, call, now):
     """Fold an agent event into the record. Returns True when it changed something."""
     kind, body = call["op"]
@@ -1439,6 +1558,8 @@ def _apply_agent(record, call, now):
         if body["background"]:
             _follow_background(record, task, body.get("transcript"), now)
         return True
+    if kind in ("agent_started", "agent_stopped"):
+        return _apply_subagent(record, kind, body, now)
     if kind == "agent_wait":
         changed = False
         for ident, status, failed in body:
@@ -1746,6 +1867,10 @@ def _sync_pending(window):
     window["pending"] = len(fg) + len(bg) + (1 if window.get("scan") else 0)
 
 
+#: Prefix of the synthetic launch id a ``SubagentStop`` carries (followed by the child's agent id).
+_SUBAGENT_SLOT = "anon:subagent:"
+
+
 def _synthetic(ident):
     return not ident or ident.startswith(("anon:", "off:", "legacy:"))
 
@@ -1862,7 +1987,7 @@ def review_call(payload):
     if not session_id:
         return None
     tool_name = payload.get("tool_name") if isinstance(payload.get("tool_name"), str) else ""
-    bare = tool_name.split(".")[-1]
+    bare = codex_tool(tool_name)
     tool = payload.get("tool") if isinstance(payload.get("tool"), str) else ""
     tool_input = _dict(payload.get("tool_input"))
     args = _dict(payload.get("args"))
@@ -1879,6 +2004,22 @@ def review_call(payload):
         "tool_use_id": _first_text(payload, "tool_use_id", "toolUseId"),
         "transcript_path": _first_text(payload, "transcript_path"),
     }
+
+    if event in _SUBAGENT_EVENTS:
+        # Codex's own report of a child agent. The start opens nothing (the spawn opened the
+        # window); the stop is the child's final message, the only place its marker appears. Only a
+        # known review agent's stop is a result, as for every other provider.
+        name = review_triggers.agent_name(_first_text(payload, "agent_type"))
+        agent_id = _first_text(payload, "agent_id")
+        if event != "SubagentStop" or not name or not agent_id:
+            return None
+        # No launch id here: a synthetic one takes the oldest foreground slot, and names the agent so
+        # neither a replayed stop nor the same agent's `wait_agent` report counts it twice.
+        call.update(
+            kind="result", markers=review_triggers.markers(payload.get("last_assistant_message")), agent=True,
+            source=name, subagent=True, tool_use_id="{}{}".format(_SUBAGENT_SLOT, agent_id),
+        )
+        return call
 
     if bare in ("Agent", "Task", "spawn_agent") or tool.lower() == "task":
         name = review_triggers.agent_name(
@@ -1926,7 +2067,10 @@ def review_call(payload):
             return None
         # One wait can return several agents' reports: one slot and one marker each. Its own
         # tool-use id names the wait, not a launch, so it retires no launch token by id.
-        call.update(kind="result", markers=found, per_marker=True, slot_id=None)
+        call.update(
+            kind="result", markers=found, per_marker=True, slot_id=None,
+            agent_ids=["{}{}".format(_SUBAGENT_SLOT, ident) for ident, _, _ in _wait_results(payload.get("tool_response"))],
+        )
         return call
 
     prompt = payload.get("prompt")
@@ -1955,6 +2099,9 @@ def _review_store(root, payload, now, apply):
         with _session_lock(path):
             rec = _load(path)
             if rec is None:
+                return None
+            if call.get("subagent") and rec.get("provider") != "codex":
+                # Only Codex is wired to the Subagent events (see `_normalize_subagent`).
                 return None
             outcome = apply(rec, call, now)
             if outcome is None:
@@ -2070,6 +2217,15 @@ def _apply_result(rec, call, now, observed=None):
         window.setdefault("consumed", []).append(launch)
     markers = call["markers"]
     slot = False
+    ids = call.get("agent_ids")
+    if ids:
+        # A `wait_agent` that names its agents: those a `SubagentStop` already folded count once.
+        consumed = window.setdefault("consumed", [])
+        fresh = [i for i in ids if i not in consumed]
+        if not fresh:
+            return None
+        consumed.extend(fresh)
+        markers = markers[-len(fresh):]
     if late:
         return _reread(rec, window, markers, now)
     if call.get("per_marker"):

@@ -123,7 +123,7 @@ def _write_alias(root, project_id, child, top):
 def _provider_and_tool(payload):
     tool_name = payload.get("tool_name") if isinstance(payload.get("tool_name"), str) else ""
     bare_tool = payload.get("tool") if isinstance(payload.get("tool"), str) else ""
-    bare = tool_name.split(".")[-1]
+    bare = tasks.codex_tool(tool_name)
     if tool_name in tasks.CLAUDE_AGENT_TOOLS:
         return "claude", tool_name
     if bare in tasks.CODEX_AGENT_TOOLS:

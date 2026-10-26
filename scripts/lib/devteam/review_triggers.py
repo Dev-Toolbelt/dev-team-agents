@@ -28,6 +28,8 @@ BUILTIN_AGENTS = {
     "opencode": ("general", "explore"),
 }
 
+_SPAWN_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+
 #: Slash commands (Claude Code, opencode) and the Codex skill aliases that run a review.
 COMMANDS = ("/devteam:review", "/devteam:qa", "/review", "$devteam-review", "$devteam-qa")
 
@@ -80,7 +82,8 @@ def spawn_name(value):
     if not isinstance(value, str):
         return None
     name = value.strip().rsplit(":", 1)[-1].strip()
-    return name or None
+    # A name is written to disk as-is: anything that is not a plain identifier is not one.
+    return name if _SPAWN_NAME_RE.match(name) else None
 
 
 def is_builtin(provider, name):
