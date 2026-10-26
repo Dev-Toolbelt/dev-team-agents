@@ -38,7 +38,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import jsonio, lock, paths, pr_refs, project, review_triggers
+from . import branch_overlap, jsonio, lock, paths, pr_refs, project, review_triggers
 from .errors import ConflictError, DevteamError
 
 SCHEMA = 1
@@ -825,16 +825,19 @@ def _sweep_private_dir(directory, now):
 
     The directory sits in a possibly shared ``$TMPDIR``, so it is opened without following a symlink
     and checked on the open descriptor, and every entry is removed relative to it: a directory planted
-    or swapped in by another account is left alone.
+    or swapped in by another account is left alone. Windows cannot open a directory as a descriptor
+    and its temp directory is per-user, so there the entries are checked and removed by path.
     """
+    if os.name == "nt":
+        _sweep_private_dir_by_path(directory, now)
+        return
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(directory, flags)
     except OSError:
         return
     try:
-        st = os.fstat(fd)
-        if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o022:
+        if not branch_overlap.private_dir_is_ours(os.fstat(fd)):
             return
         for name in os.listdir(fd):
             try:
@@ -847,6 +850,23 @@ def _sweep_private_dir(directory, now):
         return
     finally:
         os.close(fd)
+
+
+def _sweep_private_dir_by_path(directory, now):
+    try:
+        if os.path.islink(directory) or not branch_overlap.private_dir_is_ours(os.lstat(directory)):
+            return
+        names = os.listdir(directory)
+    except OSError:
+        return
+    for name in names:
+        path = os.path.join(directory, name)
+        try:
+            entry = os.lstat(path)
+            if stat.S_ISREG(entry.st_mode) and now - entry.st_mtime > _MARKER_MAX_AGE:
+                os.unlink(path)
+        except OSError:
+            continue
 
 
 def _prompt_path(path):

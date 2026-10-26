@@ -16,7 +16,7 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
-from devteam_support import REPO_ROOT, StoreTestCase, requires_bash
+from devteam_support import REPO_ROOT, StoreTestCase, requires_bash, requires_posix_modes, requires_shebangs
 
 from devteam import branch_overlap, providers
 
@@ -269,6 +269,7 @@ class RefreshAndMatchTest(World):
 
 
 class SafetyTest(World):
+    @requires_shebangs
     def test_refresh_changes_no_git_state_of_the_user(self):
         """[spec:branch-overlap#S1]"""
         # Arrange
@@ -335,6 +336,7 @@ class SafetyTest(World):
             # Assert
             self.assertEqual(len(list(Path(branch_overlap.sentinel_dir()).iterdir())), 1)
 
+    @requires_posix_modes
     def test_a_sentinel_directory_writable_by_others_is_not_used(self):
         # Arrange
         self.mate_branch("feature/x", {"f.txt": (40, 60)})
@@ -494,6 +496,7 @@ class EditHookTest(World):
         # Assert
         self.assertEqual(len(self.queued("two")), 2)
 
+    @requires_shebangs
     def test_the_hook_never_touches_the_network_and_works_from_the_cache(self):
         """[spec:branch-overlap#S8]"""
         # Arrange

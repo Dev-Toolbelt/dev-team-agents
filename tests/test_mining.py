@@ -93,8 +93,10 @@ class MiningCase(StoreTestCase):
         super().setUp()
         self.fakehome = self.tmp / "home"
         self.fakehome.mkdir()
-        self._env = {k: os.environ.get(k) for k in ("HOME", "CODEX_HOME", "XDG_DATA_HOME")}
+        self._env = {k: os.environ.get(k) for k in ("HOME", "USERPROFILE", "CODEX_HOME", "XDG_DATA_HOME")}
         os.environ["HOME"] = str(self.fakehome)
+        # Path.home() reads USERPROFILE, not HOME, on Windows.
+        os.environ["USERPROFILE"] = str(self.fakehome)
         os.environ["CODEX_HOME"] = str(self.fakehome / "codexhome")
         os.environ["XDG_DATA_HOME"] = str(self.fakehome / "xdg")
         self.addCleanup(self._restore)

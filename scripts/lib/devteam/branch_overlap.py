@@ -226,6 +226,19 @@ def sentinel_dir():
     return os.path.join(base, "devteam-branch-overlap")
 
 
+def private_dir_is_ours(st):
+    """True when ``st`` describes a directory this user owns that nobody else can write.
+
+    Windows has neither ``geteuid`` nor group/other mode bits: a temp directory there is per-user
+    already, so the ownership and mode checks only apply where the platform has them.
+    """
+    if not stat.S_ISDIR(st.st_mode):
+        return False
+    if not hasattr(os, "geteuid"):
+        return True
+    return st.st_uid == os.geteuid() and not st.st_mode & 0o022
+
+
 def _set_sentinel(state_dir, present):
     """One file per state directory in ``sentinel_dir``: present while its cache holds a branch.
 
@@ -241,7 +254,7 @@ def _set_sentinel(state_dir, present):
             os.makedirs(directory, mode=0o700, exist_ok=True)
             st = os.lstat(directory)
             # A directory another account planted in a shared $TMPDIR is not ours to write in.
-            if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid() or st.st_mode & 0o022:
+            if not private_dir_is_ours(st):
                 return
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
             try:

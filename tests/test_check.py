@@ -323,6 +323,7 @@ class CheckCommandTest(_Branch):
         self.assertIs(defaults["check_active"], True)
 
 
+@requires_bash()
 class PreflightParityTest(unittest.TestCase):
     """One procedure in the shared skill, a one-step pointer in each command, on every provider."""
 
