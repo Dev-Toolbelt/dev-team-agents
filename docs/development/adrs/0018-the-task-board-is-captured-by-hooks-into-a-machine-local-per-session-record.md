@@ -267,8 +267,23 @@ ends at the parent's `Stop`; the subagent events are an additional, deduplicated
 - `SubagentStop` carries no status: a Codex agent that failed settles `completed` there.
 - A stop with no linked task changes nothing: guessing the oldest unlinked spawn is unsafe when the rollout
   can already have ended it.
-- Unverified: whether a Codex build older than 0.160 accepts a `hooks.json` with the two event keys it does
-  not know. Until checked, 0.160 is the tested minimum.
+- Known limitation: two parallel spawns of the same `agent_type` are linked oldest-first, because a
+  `SubagentStart` carries no task path (the 0.160 capture has only `agent_id`, `agent_type`,
+  `session_id`, `turn_id` and paths of its own rollout). The child ids can therefore be swapped between
+  the two cards; each still ends exactly once, and the swap only mis-times the first stop by the gap
+  between the two. A start payload that names the task path would replace the oldest-first rule.
+- The board may end a Codex v2 agent at its `SubagentStop`, while the execution trace ends the same span at
+  the rollout's `FINAL_ANSWER`. That difference is intended: ADR-0041 is unchanged, and the two readings
+  stay separate sources.
+- The task record gains one field, `answer_claim` (a timestamp on a v2 task a stop ended), and a review
+  window's `consumed` list gains entries of the form `anon:subagent:<agent_id>`, one per child whose
+  report was folded, so a stop and a `wait_agent` naming the same agent count once. A wait pairs each
+  marker with its own agent; a report with no marker (a worker's) consumes nothing. Child ids are
+  accepted only as plain identifiers (`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`).
+- A `wait_agent` that reports a v1 agent as errored after its `SubagentStop` ended it marks the task
+  failed; it is not ended a second time.
+- Open point: whether a Codex build older than 0.160 accepts a `hooks.json` with the two event keys it does
+  not know. Until checked, 0.160 is the minimum build and older builds are unverified.
 
 | Alternative | Why rejected |
 |---|---|

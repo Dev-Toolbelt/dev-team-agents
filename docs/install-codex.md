@@ -22,7 +22,7 @@ If `.dev-team-agents/` already exists in the project, you can also run the bundl
 
 ## After install
 
-Restart Codex CLI. Trust the project's `.codex/` directory if prompted (Codex gates per-project config by trust). Then use the `/hooks` command to review and trust the 9 managed hooks (`SubagentStart` and `SubagentStop` fire on Codex 0.160+, the tested minimum; they are what puts Codex agents on the task board). After that, the default project-local entrypoint is:
+Restart Codex CLI. Trust the project's `.codex/` directory if prompted (Codex gates per-project config by trust). Then use the `/hooks` command to review and trust the 9 managed hooks (`SubagentStart` and `SubagentStop` fire on Codex 0.160+, the tested minimum; they link and settle Codex agents on the task board; reading the glued tool name (`collaborationspawn_agent`) is what puts them there). After that, the default project-local entrypoint is:
 
 ```
 $devteam-plan do a plan
