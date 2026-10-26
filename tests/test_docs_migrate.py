@@ -214,7 +214,8 @@ class DocsMigrateTest(StoreTestCase):
         data = json.loads(self.read(root, ".dev-team-agents/project.json"))
         self.assertEqual(data, {"schema": 1, "project_id": PROJECT_ID, "context_paths": ["docs"],
                                 "layout": 2, "docs_layout": "gated"})
-        self.assertEqual(os.stat(str(root / ".dev-team-agents/project.json")).st_mode & 0o777, 0o644)
+        if os.name == "posix":  # Windows reports 0o666 for every writable file
+            self.assertEqual(os.stat(str(root / ".dev-team-agents/project.json")).st_mode & 0o777, 0o644)
         self.assertEqual([p.name for p in (root / ".dev-team-agents").iterdir()], ["project.json"])
 
     def test_set_layout_rejects_an_unknown_value(self):

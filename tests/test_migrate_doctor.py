@@ -978,6 +978,7 @@ class DoctorTest(StoreTestCase):
         (root / ".claude" / "dev-team-agents" / "user-data").mkdir(parents=True)
         self.assertEqual(self._leftover_findings(root), [])
 
+    @unittest.skipIf(os.name == "nt", "Windows file names cannot hold control characters or newlines")
     def test_leftover_names_are_made_printable_and_capped(self):
         root = self._bound_with("bound-hostile-names")
         legacy = root / ".claude" / "dev-team-agents"
