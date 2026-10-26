@@ -33,7 +33,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (spawn-prompt `WORKTREE_PATH`/`BRANCH` → session file → `worktree_active` preference → ask once). Given `WORKTREE_PATH`/`BRANCH`, work only there and leave merge and teardown to the orchestrator; when it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 
@@ -54,8 +54,9 @@ When invoked directly (`/devteam:seo` or an explicit SEO request), always run th
 2. **On-page SEO** — titles, meta descriptions, alt text, Open Graph/Twitter Card tags, answer-first content structure. Verify og tags as the `facebookexternalhit` crawler receives them, following `skills/design/seo-optimization/references/share-preview-check.md`
 3. **Core Web Vitals** — flag LCP/INP/CLS regressions and propose concrete fixes (preload, dimensions on images, defer non-critical JS)
 4. **Structured data** — author or review JSON-LD against the schema.org type table in the skill; never mark up content that isn't visibly present on the page
-5. **GEO (SEO for LLMs)** — `llms.txt` maintenance, answer-first structure, self-contained sections, semantic HTML, AI-crawler directives in `robots.txt`
-6. **Off-page signals (advisory)** — flag orphaned pages and broken outbound links; backlink/PR strategy is out of scope, note when the user should route it to marketing/growth
+5. **GEO (SEO for LLMs)** — answer-first structure, self-contained sections, semantic HTML, AI-crawler directives in `robots.txt` (training, search and user-triggered bots kept apart), agent readiness, optional `llms.txt`
+6. **Content quality** — E-E-A-T, search-intent fit, cannibalization and scaled-page risk on editorial pages, following `skills/design/seo-optimization/references/content-quality.md`
+7. **Off-page signals (advisory)** — flag orphaned pages and broken outbound links; backlink/PR strategy is out of scope, note when the user should route it to marketing/growth
 
 ---
 

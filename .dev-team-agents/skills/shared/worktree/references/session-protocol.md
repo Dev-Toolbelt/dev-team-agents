@@ -2,10 +2,11 @@
 
 ## Decision sources (in precedence order)
 
-The worktree decision has three sources. Resolve them top-down and stop at the first that applies:
+The worktree decision has four sources. Resolve them top-down and stop at the first that applies:
 
 | # | Source | Action |
 |---|--------|--------|
+| 0 | Spawn prompt carries `WORKTREE_PATH` and `BRANCH` | Work only inside `WORKTREE_PATH` on `BRANCH`: no setup, no session file, no finalization — the orchestrator that spawned you owns the merge and the teardown |
 | 1 | `.dev-team-agents/.worktree-session` present | Follow the stored per-session decision silently |
 | 2 | `worktree_active` in `preferences.json` | Use it **without asking**; then write the session file so every later agent in the session is consistent |
 | 3 | key absent (legacy install) | Ask the user once (see below) |

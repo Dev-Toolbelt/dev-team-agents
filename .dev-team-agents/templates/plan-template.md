@@ -4,6 +4,10 @@ use that path when referencing this file from an agent, skill, or command; a bar
 `templates/…` path resolves only inside the dev-team-agents repository.
 This file is the single source of truth for the plan structure, the Par.-column
 semantics, and the approval closer. Do not restate them anywhere else.
+
+Two forms live here: the FULL FORM directly below, and the COMPACT FORM at the end
+of this file. skills/shared/plan-mode/SKILL.md § Plan Size picks one. Present only
+the form it picked — never both, and never these comments.
 -->
 ## Plan — [Task Name]
 
@@ -48,3 +52,15 @@ Awaiting your approval before proceeding.
 Reply "approved" to execute or provide feedback to adjust.
 
 After approving: steps that share the same Par. group letter can be sent as simultaneous agent prompts in a single message to run them in parallel and reduce total execution time.
+
+<!-- ===================== COMPACT FORM — small changes only ===================== -->
+
+## Plan — [Task Name]
+
+- **Change:** [what changes, in one sentence]
+- **File:** [the one file]
+- **Validation:** [how it will be checked — the test, lint, or command that proves it]
+
+---
+Awaiting your approval before proceeding.
+Reply "approved" to execute or provide feedback to adjust.

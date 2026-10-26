@@ -101,7 +101,7 @@ PROBLEMATIC: [accessibility issues, low contrast, missing focus states]
 
 ## Step 4 — Produce Design Context Document
 
-This document is capped at 80 lines — see `skills/shared/docs-sync/SKILL.md` § `docs/design/design-system.md` for the enforced schema. Condense to that schema (`UI Library / Color Tokens / Typography Scale / Component Inventory / Spacing Scale`); do not emit every sub-section below verbatim on a mature project.
+This document is capped at 80 lines — see `skills/shared/docs-sync/SKILL.md` § `design-system` for the enforced schema. Condense to that schema (`UI Library / Color Tokens / Typography Scale / Component Inventory / Spacing Scale`); do not emit every sub-section below verbatim on a mature project. In the **gated** layout (`skills/shared/doc-flow/SKILL.md` § Doc Layout) the values go to the `design-tokens` doc (`docs/design/tokens.json`, W3C Design Tokens) and `design-system.md` keeps only usage rules that reference token names plus the component inventory.
 
 When in **Design Mode** (pre-build), generate `docs/design/design-system.md`:
 
@@ -154,7 +154,7 @@ Suggest improvements when any of these are violated — but always check `projec
 
 ## Design System Creation (Design Mode)
 
-When building a design system from scratch, produce `docs/design/design-system.md` — same 80-line schema as Step 4 above. Use the detail below to derive the values, but write only the condensed tables into the doc:
+When building a design system from scratch, produce `docs/design/design-system.md` — same 80-line schema as Step 4 above (gated layout: values to `docs/design/tokens.json`, usage rules in `design-system.md`). Use the detail below to derive the values, but write only the condensed tables into the doc:
 
 ### Color System
 ```
@@ -186,7 +186,7 @@ Document every reusable component with:
 - Sizes (sm, md, lg where applicable)
 
 ### User Flows
-For each major flow: step-by-step description with screen transitions, decision points, and error paths.
+For each major flow: step-by-step description with screen transitions, decision points, and error paths. Write each flow to its own `docs/design/flows/<feature>.md` (the `design-flows` doc) from `.dev-team-agents/templates/design-flow-template.md` — never inside `design-system.md`.
 
 ---
 

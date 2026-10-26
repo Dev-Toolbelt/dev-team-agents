@@ -37,9 +37,9 @@ hook ──devteam_notify──▶ <state-dir>/notifications.jsonl ──devteam
 | `context.warning`, `context.critical` | warning / critical | `stop/04-notifier.sh` | session (expires after 2 h) |
 | `session.uncommitted` | info | `stop/04-notifier.sh` | session |
 | `tip.daily` | info | `stop/04-notifier.sh` | day |
-| `tasks.session_done` | info | `post-tool-use/01-task-board.sh`, `pre-tool-use/04-task-board.sh`, `stop/04b-task-board.sh` (a review pass releasing the last task) | session |
-| `tasks.review_findings` | warning | `post-tool-use/01-task-board.sh` (agent result), `stop/04b-task-board.sh` (command/prompt review) | review window |
-| `tasks.pr_created` | info | `stop/04b-task-board.sh` | PR/MR |
+| `tasks.session_done` | info | `post-tool-use/01-task-board.sh`, `pre-tool-use/04-task-board.sh`, `stop/00b-task-board.sh` (a review pass releasing the last task) | session |
+| `tasks.review_findings` | warning | `post-tool-use/01-task-board.sh` (agent result), `stop/00b-task-board.sh` (command/prompt review) | review window |
+| `tasks.pr_created` | info | `stop/00b-task-board.sh` | PR/MR |
 | `tasks.session_abandoned` | warning | `session-end.sh` | session |
 
 The four `tasks.*` messages name the session by its provider title, quoted and cut to 15 characters (`Sessão "Notificações do…": …`), or by the first 8 characters of its id when it has no title. `tasks.pr_created` also names the PR/MR number (e.g. `#123` for GitHub, `!456` for GitLab). Where each provider keeps the title: `docs/providers.md`.

@@ -442,6 +442,10 @@ MUTATING = {
     "in the machine-local state directory (hook-only)",
     ("tasks", "review-result"): "records a review agent's result in a session's task record "
     "in the machine-local state directory (hook-only)",
+    ("insights", "dismiss"): "writes the user's dismissal of a suggestion to "
+    "data/insights-decisions.json (ADR-0042)",
+    ("tasks", "trace-record"): "writes a session's execution trace beside its task record "
+    "in the machine-local state directory (hook-only, ADR-0041)",
     ("upgrade",): "relocates this project's memory into the store",
     ("export",): "creates an archive — durable state outside the store, and a restorable "
     "copy of shapes the declaring client just said it cannot read, which `import` on the "
@@ -491,13 +495,22 @@ READ_ONLY = {
     ("cred", "check"): "reports references with no value or an insecure backend",
     ("cred", "local", "show"): "reads credentials.local.json with every secret replaced by a "
     "marker; never a value (ADR-0024)",
+    ("cred", "local", "copy-value"): "reads one hidden value of credentials.local.json for the "
+    "app's copy button and appends to the machine-local audit log (ADR-0046)",
     ("notifications", "list"): "reads each project's queue and seen marks",
     ("notifications", "watch"): "stats each project's queue and streams new records; writes "
     "nothing — acknowledging is `notifications ack`",
     ("tasks", "list"): "reads each project's session records; writes nothing",
     ("tasks", "watch"): "stats each project's session records and streams snapshots; "
     "writes nothing",
+    ("insights", "report"): "reads every bound project's execution traces and review windows "
+    "and the decisions record; writes nothing",
+    ("tasks", "trace"): "reads one session's execution trace in the project's machine-local "
+    "state directory; writes nothing",
     ("cred", "backends"): "probes which secret stores this machine offers",
+    ("backlog", "ready"): "reads the sprint files and the machine-local claims record; writes nothing",
+    ("backlog", "lint"): "reads the sprint files; writes nothing",
+    ("backlog", "prime"): "reads the sprint files, the claims record and `git worktree list`; writes nothing",
     ("detect",): "reads a folder, `git` and `PATH`; writes nothing and creates no identity",
     ("catalog",): "read-only browse — asserted to create nothing, machine id included",
     ("catalog", "agents"): "read-only browse",
@@ -515,6 +528,9 @@ READ_ONLY = {
 #: declared client — a user must always be able to sign in and out, including from a client
 #: that has fallen behind — but they are not called read-only, because they are not.
 STORE_NEUTRAL = {
+    ("backlog", "claim"): "writes the machine-local claims record (ADR-0044), which is not a declared "
+    "store shape; the sprint files themselves are never written",
+    ("backlog", "release"): "marks claims released in the machine-local claims record (ADR-0044)",
     ("integration", "call"): "sends one request to the integration's API with the stored "
     "token; with --allow-write it can change the remote account. It writes no declared "
     "store shape (only an audit line), so a client's schema declaration has nothing to "
@@ -575,6 +591,8 @@ NEEDS_MACHINE_LAYOUT = {
     "pre-split store it would report an empty board, with exit 0",
     ("tasks", "watch"): "the same registry walk as `tasks list`, repeated for as long as "
     "it runs",
+    ("insights", "report"): "finds each project's traces through the registry — on a "
+    "pre-split store it would report no data at all, with exit 0",
 }
 
 

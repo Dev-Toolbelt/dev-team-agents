@@ -791,8 +791,8 @@ def _runtime_root(version_dir, project_root, mode, previous_paths, previous_copi
     resolved every project-relative reference. It resolved none of them: the text says
     `.dev-team-agents/scripts/new-adr.sh`, the pointer made
     `.dev-team-agents/core/scripts/new-adr.sh`, and the reuse and design-token Stop
-    gates — which look for `.dev-team-agents/scripts/<lint>.sh` and exit 0 when it is
-    absent — were silently off in every v3 project. Linking each tree at the path
+    gates — which run the lint beside the hook under `.dev-team-agents/scripts/` and
+    exit 0 when it is absent — were silently off in every v3 project. Linking each tree at the path
     the text already uses fixes all of them without rewriting a reference, and makes
     `settings.json`'s hook path the same one a v2 install used.
 

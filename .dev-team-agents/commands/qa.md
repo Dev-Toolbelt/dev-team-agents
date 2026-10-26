@@ -5,6 +5,8 @@ argument-hint: <feature to validate>
 
 Load `skills/shared/current-context/SKILL.md` and restrict all work to the active branch/worktree scope unless $ARGUMENTS requests broader. Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 
+If $ARGUMENTS links a spec or names a sprint task (`TASK-NNN`), load `skills/shared/spec-gate/SKILL.md` and resolve it per § Task Resolution, then pass them as that section says — the verdict is against those scenarios, plus the Spec Sync Gate. With no spec for an existing feature, load the same skill and make its § Retroactive Spec offer first; when declined, validate against what $ARGUMENTS describes and say so in the report.
+
 ---
 
 **MANDATORY:** Use the Task tool to spawn the agent below. Do NOT handle this task in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.

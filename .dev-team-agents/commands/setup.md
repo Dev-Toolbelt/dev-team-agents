@@ -22,6 +22,8 @@ Report the detected mode to the user before delegating, so they know whether exi
 
 On `FIRST_RUN`, also run `devteam detect --json` once and pass its `data` (providers, stack, project type, first task) to the agent: the flow uses what was detected and asks only where `project_type.confidence` is `low`. If the command is unavailable, say nothing and let the agent fall back to its own scan.
 
+The docs layout follows the project type (`skills/shared/docs-templates/SKILL.md` § Docs Layout on Setup): a **new** project on `FIRST_RUN` gets `docs_layout: gated` and the gated skeleton; every other case keeps the layout it has. Tell the user which layout the run will use.
+
 ---
 
 ## Step 2 — Spawn the agent
@@ -43,6 +45,7 @@ Pass the detected mode (`FIRST_RUN` / `REFRESH`) and `$ARGUMENTS` to the agent a
 - Never overwrite an existing `CLAUDE.md`, `README.md`, `AGENTS.md`, or project config without explicit user consent — additive changes only.
 - Any rule already present in the project takes precedence over dev-team-agents defaults.
 - Never modify files inside `.dev-team-agents/` — that directory is replaced on every update.
+- Never change an existing project's `docs_layout` — `REFRESH` keeps it; moving to `gated` is the opt-in migration (`skills/shared/doc-flow/references/migration.md`), run only when the user asks for it.
 
 ---
 

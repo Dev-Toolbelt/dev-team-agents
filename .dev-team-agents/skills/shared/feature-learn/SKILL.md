@@ -11,6 +11,13 @@ a scoped mirror of `/devteam:learn`'s mechanics (`commands/learn.md`), not a rep
 stays the manual, full-session pass; this fires every time a feature closes, so knowledge compounds
 feature-to-feature instead of aging inside `session-summary.md` until someone remembers to run `/learn`.
 
+## Triggers
+
+| Trigger | Runs |
+|---|---|
+| A feature command's Session close | This promotion pass |
+| A sprint close — `/devteam:sprint` Step 6 (`skills/shared/doc-flow/SKILL.md` § Stages, stage 7) | This pass over the sprint's integration branch (§ Scope Derivation row 1), then the learn nudge of `commands/merge.md` § Step 4 |
+
 ## Scope Derivation
 
 The canonical answer to "what did this session, branch or worktree touch". It is used here and by
@@ -33,7 +40,8 @@ the entries written since the scope began (row 1: the merge-base commit date; ro
 - Any `[SPEC-DRIFT]`, `[ARCH-DEVIATION]`, or `[BLOCKER]` finding raised during this task's review
   handoff
 - Any decision made during this task's execution that isn't yet reflected in `docs/development/*.md`,
-  `docs/wiki/`, or an ADR
+  `docs/wiki/`, or an ADR — in the `gated` layout, in the owner doc the map resolves for that fact
+  (`skills/shared/doc-flow/SKILL.md` § Owner Rule)
 
 ## Classify and Promote
 
@@ -41,7 +49,9 @@ Apply the same bucket table `/devteam:learn` Step 2 uses (Doc patch / Wiki entry
 Session summary / Nothing to update) — do not restate it here, reference `commands/learn.md`. Spawn:
 
 - `technical-writer` — only if at least one bucket has content; writes doc patches and wiki entries
-  per `skills/shared/docs-sync/SKILL.md`
+  per `skills/shared/docs-sync/SKILL.md`. In the `gated` layout every doc patch to an owner doc also
+  appends its line to that doc's Amendment Log (doc-flow § Amendment Log) — the entry is a learn output,
+  not an optional extra
 - `software-architect` — only if an ADR candidate was identified; follows `skills/shared/adr/SKILL.md`
 
 ## Anti-Dead-Log Rule (hard gate)
@@ -86,7 +96,8 @@ It asks the user nothing, so the guards below stand in for the approval it skips
 1. Before learn, record the staged paths, `T0=$(git write-tree)`, and the paths with unstaged edits (`git diff --name-only`).
 2. Stage a returned path only when it resolves (`realpath`) inside the repo, is not a symlink, is not ignored
    (`git check-ignore -q`), had no unstaged edits before learn, and is under `docs/development/`, `docs/wiki/` or
-   is `docs/project.md`.
+   is `docs/project.md` — or, in the gated layout, is (or is under) a path `bash .dev-team-agents/scripts/doc-path.sh
+   --writable` prints. A path under `doc-path.sh --readonly` is never staged.
 3. After staging, `git diff --cached --name-only "$T0"` must list only paths staged in item 2, and
    `git diff --name-only` no path absent from item 1's list; anything else means an agent touched the index or a
    file already in the commit.

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 
 from .errors import EnvError
@@ -67,6 +68,22 @@ def ensure_dir(path, mode=STORE_DIR_MODE):
     return target
 
 
+_REPLACE_ATTEMPTS = 5
+_REPLACE_DELAY = 0.02
+
+
+def _replace_with_retry(src, dst):
+    """``os.replace``, retrying a Windows sharing violation (a reader holding the target open)."""
+    for attempt in range(_REPLACE_ATTEMPTS):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == _REPLACE_ATTEMPTS - 1:
+                raise
+            time.sleep(_REPLACE_DELAY)
+
+
 def write_json_atomic(path, data, mode=STORE_FILE_MODE, dir_mode=STORE_DIR_MODE):
     """Write ``data`` as pretty JSON, atomically, creating parent directories."""
     p = Path(path)
@@ -88,7 +105,7 @@ def write_json_atomic(path, data, mode=STORE_FILE_MODE, dir_mode=STORE_DIR_MODE)
             os.fsync(handle.fileno())
         if mode is not None:
             os.chmod(tmp_name, mode)
-        os.replace(tmp_name, str(p))
+        _replace_with_retry(tmp_name, str(p))
     except OSError as exc:
         try:
             os.unlink(tmp_name)

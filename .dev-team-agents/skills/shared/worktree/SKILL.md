@@ -15,6 +15,7 @@ Resolve the worktree decision top-down; stop at the first that applies:
 
 | # | Source | Action |
 |---|--------|--------|
+| 0 | Spawn prompt carries `WORKTREE_PATH` and `BRANCH` | Work only inside `WORKTREE_PATH` on `BRANCH`: no setup, no session file, no finalization — the orchestrator that spawned you owns the merge and the teardown |
 | 1 | `.dev-team-agents/.worktree-session` present | Follow the stored per-session decision silently |
 | 2 | `worktree_active` in `preferences.json` | Use it **without asking**; write the session file so the rest of the session is consistent |
 | 3 | key absent (legacy install) | Ask the user once — see below |
@@ -107,6 +108,6 @@ docker compose -p "$COMPOSE_PROJECT_NAME" ps --format "table {{.Name}}\t{{.Statu
 - **Unified naming**: worktree directory, branch, and (when Docker isolation applies) the Docker Compose project name and its containers must all derive from the **same** `<context>/<brief-title>` slug — worktree path `<wt-path>/<context>/<brief-title>`, branch `<context>/<brief-title>`, Docker project `<base-project>-wt-<context>-<brief-title>` (see `references/docker-isolation.md` → Step 2). Never let one of these drift to a different name than the others — that is what keeps a task's worktree, branch, and containers instantly identifiable as belonging together.
 - **Never** use `git checkout -b` in the main tree — always `git worktree add`
 - **Never** hardcode `main`, `master`, or `beta` as base — resolve from `worktree_base_branch`, project config, or the auto-detected default branch
-- **Finalization is mandatory**: on merge, rebase onto the base first, then merge, then tear down **only** the worktree and its isolated Docker stack — never the main infra
+- **Finalization is mandatory** for the agent that created the worktree (a source-0 agent never finalizes): on merge, rebase onto the base first, then merge, then tear down **only** the worktree and its isolated Docker stack — never the main infra
 - **Never remove a dirty worktree**: before `git worktree remove`, run `git status --porcelain` inside it — non-empty output means uncommitted/untracked content would be destroyed. Abort and ask the user (commit / discard / keep) instead of proceeding
 - The session file is ephemeral — remove it on cleanup, keep it gitignored

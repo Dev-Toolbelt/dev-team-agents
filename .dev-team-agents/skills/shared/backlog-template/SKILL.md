@@ -7,30 +7,34 @@ description: Backlog — epics, sprints, tasks, DoD, dependencies, estimates.
 
 ## Document Structure
 
+The structure below is the `development` layout. In the `gated` layout (`bash .dev-team-agents/scripts/doc-path.sh --layout`) it is replaced where § Gated Layout says so — everything that section does not name stays as written here.
+
 Generate under `docs/backlog/`:
 
-- `overview.md` — business requirements document (the planning deliverable)
-- `epics.md` — epics
-- `dod.md` — Definition of Done
-- `sprints/` — one file per sprint plus a status index (see below)
+- `overview-<scope-slug>.md` — business requirements document, one per planned scope (the planning deliverable). `<scope-slug>` is the scope name in kebab-case, 2–4 words (`checkout-coupons`). Re-planning the same scope updates its file; a second planned scope gets its own file; it never overwrites or merges into another scope's overview.
+- `epics-<scope-slug>.md` — epics of that scope
+- `dod.md` — Definition of Done, shared by every scope
+- `sprints/` — one file per sprint, named after its scope, plus one status index for all scopes (see below)
+
+Every per-scope file carries the same `<scope-slug>` as its overview. Legacy unscoped files (`overview.md`, `epics.md`, `sprints/sprint-<n>.md`) are kept as is and read as one more scope — never renamed or deleted.
 
 **Sprint files live in the `sprints/` subfolder**, never at the backlog root:
 
 ```
 docs/backlog/
-├── overview.md
-├── epics.md
+├── overview-<scope-slug>.md
+├── epics-<scope-slug>.md
 ├── dod.md
 └── sprints/
-    ├── sprints.md        ← index: summary + status of every sprint
-    ├── sprint-1.md
-    ├── sprint-2.md
+    ├── sprints.md                  ← index: every sprint of every scope + status
+    ├── <scope-slug>-sprint-1.md
+    ├── <scope-slug>-sprint-2.md
     └── ...
 ```
 
-### `overview.md`
+### `overview-<scope-slug>.md`
 ```markdown
-# Project: [Name]
+# Scope: [Name]
 
 ## Objective
 [One paragraph: what problem this solves, for whom, and the expected outcome]
@@ -59,7 +63,7 @@ docs/backlog/
 A task is DONE when ALL of the following are true:
 
 ## Code
-- [ ] Implements the acceptance criteria completely
+- [ ] Implements the acceptance criteria completely — the `Covers` scenarios of the linked spec, or the task's own criteria when it has no spec
 - [ ] No known bugs introduced
 - [ ] Code reviewed and approved
 - [ ] Linters pass (no errors)
@@ -80,15 +84,13 @@ A task is DONE when ALL of the following are true:
 - [ ] No regressions in adjacent features
 ```
 
-### `epics.md`
+### `epics-<scope-slug>.md`
 ```markdown
 # Epics
 
 ## Epic 1 — [Name]
 **Goal**: [What this epic delivers]
-**Acceptance Criteria**:
-- [ ] ...
-- [ ] ...
+**Specs**: [`docs/specs/<feature>.md`, … — the epic's criteria live there, never restated here]
 
 **Estimated effort**: [S / M / L / XL]
 **Priority**: [High / Medium / Low]
@@ -99,9 +101,9 @@ A task is DONE when ALL of the following are true:
 ...
 ```
 
-### `sprints/sprint-<n>.md`
+### `sprints/<scope-slug>-sprint-<n>.md`
 
-**One file per sprint**, in the `sprints/` subfolder: `sprints/sprint-1.md`, `sprints/sprint-2.md`, etc. Never merge multiple sprints into one file.
+**One file per sprint**, in the `sprints/` subfolder: `sprints/<scope-slug>-sprint-1.md`, `sprints/<scope-slug>-sprint-2.md`, etc. Numbering restarts at 1 for each scope. Never merge multiple sprints into one file.
 
 ```markdown
 # Sprint <n> — [Theme]
@@ -143,14 +145,14 @@ A wave starts only after every task in the previous wave is done.
 **Wave**: A
 **Worktree branch**: [suggested `<context>/<brief-title>`, e.g. `feat/user-schema`]
 **Spec**: [`docs/specs/<feature>.md` (+ `-contract.md` if the gate fired), or "none — see spec-gate skip reason"]
+**Covers**: [scenario IDs from the spec this task delivers, e.g. `S1, S3` — omit when Spec is "none"]
 **Depends on**: [TASK-XXX or "none"]
-**Status**: [ ] Pending
+**Status**: [ ] Pending  <!-- [ ] Pending → [~] In progress → [x] Done; the executing command updates it -->
 
 **Description**:
 [What needs to be done — technical enough for a developer to start]
 
-**Acceptance Criteria**:
-- [ ] ...
+**Acceptance Criteria**: [only when Spec is "none" — a spec-linked task's criteria are its `Covers` scenarios, never a second copy]
 - [ ] ...
 
 ---
@@ -169,17 +171,19 @@ A wave starts only after every task in the previous wave is done.
 | Estimated total | Nh / N pts |
 ```
 
+**Covers rule**: every scenario of a linked spec is cited by at least one task's `Covers` — a scenario no task covers is a planning gap, not an implicit extra. Status flips are owned by the executing command (`skills/shared/spec-gate/SKILL.md` § Task Resolution).
+
 ### `sprints/sprints.md` — status index
 
-A single index at `docs/backlog/sprints/sprints.md` summarizing **every** sprint and its status. Create it when the first sprint is generated and **keep it current** — flip a sprint's status as it moves forward, and set it to `Done` in the same pass that finalizes the sprint.
+A single index at `docs/backlog/sprints/sprints.md` summarizing **every** sprint of every scope and its status. An existing index without the Scope column gets it added in place, with `legacy` on the rows already there — never a rewritten table. Create it when the first sprint is generated and **keep it current** — flip a sprint's status as it moves forward, and set it to `Done` in the same pass that finalizes the sprint.
 
 ```markdown
 # Sprints
 
-| Sprint | Theme | Goal (one line) | Status |
-|--------|-------|-----------------|--------|
-| [sprint-1](sprint-1.md) | [Theme] | [What it delivers] | Planned |
-| [sprint-2](sprint-2.md) | [Theme] | [What it delivers] | Planned |
+| Scope | Sprint | Theme | Goal (one line) | Status |
+|-------|--------|-------|-----------------|--------|
+| [scope-slug] | [sprint-1]([scope-slug]-sprint-1.md) | [Theme] | [What it delivers] | Planned |
+| [scope-slug] | [sprint-2]([scope-slug]-sprint-2.md) | [Theme] | [What it delivers] | Planned |
 ```
 
 Status values: **Planned → In progress → Done**.
@@ -203,6 +207,81 @@ When generating sprint files, use this table to assign agents to tasks. Multiple
 | Full-stack feature | `backend-developer` + `frontend-developer` | `database-specialist` (if schema) · `ui-ux-designer` (if UI) |
 
 At the top of each sprint file, list all agents that will be active in that sprint under the `**Agents**:` field.
+
+## Gated Layout
+
+Applies only when the layout is `gated` (`skills/shared/doc-flow/SKILL.md` § Doc Layout); the
+`development` layout above is unchanged. Sprint file names and the task block format stay as above,
+so the `devteam backlog` CLI reads both layouts the same way.
+
+```
+docs/
+├── backlog.md                      ← the `backlog-index` doc: global DoD + DoR + sprint index
+└── backlog/
+    ├── overview-<scope-slug>.md    ← deliveries + links only
+    ├── epics-<scope-slug>.md
+    └── sprints/
+        └── <scope-slug>-sprint-<n>.md
+```
+
+| Development file | Gated layout |
+|---|---|
+| `backlog/README.md` | Not written — `docs/backlog.md` is the single index |
+| `backlog/sprints/sprints.md` | Not written — its table is the `## Sprints` section of `docs/backlog.md` |
+| `backlog/dod.md` | Not written — the global DoD is the `## Definition of Done` section of `docs/backlog.md` |
+| `overview-<scope-slug>.md` | Reduced to deliveries + links: the rules live in `docs/prd.md`, `docs/glossary.md`, `docs/nfr.md` |
+| Sprint file (no DoD section) | Adds `## Definition of Done`: a link to `docs/backlog.md` plus only this sprint's additions |
+
+### `docs/backlog.md`
+```markdown
+# Backlog
+
+## Tracker
+[Local markdown, or the issue tracker setup-assistant configured]
+
+## Definition of Done
+[The `dod.md` checklist above, plus the items of doc-flow § Definition of Done Additions]
+
+## Definition of Ready
+A task enters a wave only when every item of `skills/shared/doc-flow/SKILL.md` § Definition of
+Ready holds — the list lives there, never copied here.
+
+### Project additions
+- [Project-specific readiness items, or "none"]
+
+## Sprints
+| Scope | Sprint | Theme | Goal (one line) | Status |
+|-------|--------|-------|-----------------|--------|
+| [scope-slug] | [sprint-1](backlog/sprints/[scope-slug]-sprint-1.md) | [Theme] | [What it delivers] | Planned |
+```
+
+Status values and the keep-it-current rule are those of the `sprints.md` index above.
+
+### `overview-<scope-slug>.md` (gated)
+```markdown
+# Scope: [Name]
+
+## Deliveries
+| Delivery | PRD rules | Specs |
+|----------|-----------|-------|
+| [What the user gets] | [PRD-<section>-R<n>, …] | [`docs/specs/<feature>.md`, …] |
+
+## Links
+- PRD: `docs/prd.md` · Glossary: `docs/glossary.md` · NFR: `docs/nfr.md`
+```
+
+### Sprint file additions (gated)
+
+Below the header fields, a `## Definition of Done` section holds `See [docs/backlog.md](../../backlog.md#definition-of-done)`
+followed by this sprint's own additions, or none. Each task block adds two fields after `**Covers**:`:
+
+```markdown
+**Flow**: [`docs/design/flows/<feature>.md`, or "none — <reason>"]
+**ADRs**: [ADR paths this task must follow, or "none"]
+```
+
+Every task cites spec, contract (when the gate fired), flow and ADRs — a path or `none` each, never
+blank — and must pass doc-flow § Definition of Ready before its wave starts.
 
 ## Time Estimation Guidelines
 
@@ -229,6 +308,8 @@ In task descriptions, always call out upstream dependencies:
 - `Depends on: TASK-003` — cannot start until TASK-003 is done
 - `Depends on: external API contract` — blocked by third party
 - `Parallel with: TASK-005` — can run concurrently
+
+`devteam backlog lint` checks this graph mechanically, and `devteam backlog ready` derives the ready frontier and the waves it implies. A prose dependency (`external API contract`) cannot be evaluated: it is reported as the task's `external_note` and never holds the task back — whoever starts the task checks it.
 
 **Design for parallelism.** Keep the dependency graph as flat as possible so
 each wave holds as many tasks as it can. A task with `Depends on: none` belongs

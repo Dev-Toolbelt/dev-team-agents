@@ -7,7 +7,7 @@ Load `skills/shared/current-context/SKILL.md` and restrict all work to the activ
 
 Load `skills/shared/spawn-classifier/SKILL.md` and apply its decision tree to $ARGUMENTS to determine which conditional agents below to spawn.
 
-If the task links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-gate/SKILL.md` — every spawned agent below treats its Given/When/Then as the implementation boundary and asks rather than assumes when something isn't covered.
+If the task links a spec (`docs/specs/<feature>.md`) or names a sprint task (`TASK-NNN`), load `skills/shared/spec-gate/SKILL.md` and resolve it per § Task Resolution before anything else — a `draft` spec stops here per § Spec Status; a resolved task is marked `[~] In progress` when its agents are spawned. Every spawned agent below treats the resolved scenarios as the implementation boundary and asks rather than assumes when something isn't covered.
 
 **Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
@@ -15,7 +15,7 @@ If the task links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-g
 
 Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
 
-**Test gate:** read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`.
+**Test gate:** resolve `TESTS_REQUIRED` per `skills/shared/auto-routing/SKILL.md` § Test Gate.
 
 **If `TESTS_REQUIRED=no`:** Phase 1 — spawn in parallel:
 - `backend-developer` — implement the backend changes
@@ -25,7 +25,7 @@ Skip straight to Phase 3.
 
 **If `TESTS_REQUIRED=yes` (or the key is absent — default to running tests) AND the task links a spec (`docs/specs/<feature>.md`):** follow the loaded spec-gate skill's § Test-First Derivation — this is test-first, not test-after:
 
-- Phase 1a — spawn `backend-test-specialist` alone: derive failing tests from the spec's Given/When/Then, commit them red.
+- Phase 1a — spawn `backend-test-specialist` alone: derive failing tests from the resolved scenarios, commit them red.
 - Phase 1b — after Phase 1a completes, spawn `backend-developer` (+ `database-specialist` if DB changes are involved) to implement until the derived tests are green plus the rest of its scope.
 
 **If `TESTS_REQUIRED=yes` but no spec is linked:** Phase 1 — spawn in parallel:
@@ -40,7 +40,7 @@ Phase 2 — spawn after Phase 1 completes:
 After Phase 1 (and Phase 2, if it ran) complete, **always** spawn the following in parallel via the Task tool — no user confirmation, this handoff is mandatory:
 
 - `code-reviewer` — scope: all files changed this session (`git diff` against the base branch)
-- `qa-specialist` — scope: validate the behavior of the changes against acceptance criteria and regression risk
+- `qa-specialist` — scope: validate the behavior of the changes against acceptance criteria and regression risk; when a spec was resolved, pass it per `spec-gate` § Task Resolution
 
 **After both complete**, synthesize their outputs into a single consolidated block of **critical findings only** and present it to the user:
 
@@ -88,11 +88,11 @@ Based on the user's choice:
 - **Não aplicar nada agora** → end the review
 - **Outro** → ask the user to describe their desired approach, then adapt accordingly
 
-**After the resolution agent(s) complete**, output a clear message indicating what was resolved:
+**After the resolution agent(s) complete**, output exactly one line naming what was resolved — the code review findings, the QA findings, or both — matching the option chosen.
 
 ## Session close (mandatory)
 
-After the phases above complete — including any resolution agents:
+After the phases above complete — including any resolution agents. When a sprint task was resolved, first set it `[x] Done` if no BLOCKER is open, per `spec-gate` § Task Resolution:
 
 1. **Session summary** — append this session's contribution to today's entry in `.dev-team-agents/user-data/session-summary.md`: one `### <agent-name>` sub-heading per agent that acted, each with **Done** / **Decisions** / **Next**. Create today's entry if none exists; never overwrite another agent's sub-heading. Skip only if no file was created or modified.
 2. **Lessons learned (automatic)** — load `skills/shared/feature-learn/SKILL.md` and run its scoped promotion pass; skip silently if it finds nothing to promote.

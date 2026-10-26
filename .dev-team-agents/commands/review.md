@@ -34,7 +34,7 @@ Once the target is resolved, load `skills/shared/spawn-classifier/SKILL.md` and 
 
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT review inline — always delegate. The only exception is if the user explicitly asks not to use agents.
 
-Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
+Every reviewer reports its findings in `skills/shared/review-result/SKILL.md` § Findings Table and closes with its marker, so the Review Loop in Step 9 can compare rounds — say so in each spawn prompt. Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
 
 Always spawn in parallel:
 - `code-reviewer` — overall code quality, routes internally to backend-reviewer and/or frontend-reviewer based on what changed
@@ -67,7 +67,7 @@ Then use `AskUserQuestion` (single-select) to ask:
 - **Apply selected findings** — ask which findings to apply and apply only those
 - **Skip, just show the summary** — do not modify any files; print the full review report
 
-If the user chooses to apply, execute the changes directly (edit files, create commits if files were modified). Do not delegate back to agents — apply the changes yourself based on the findings already collected.
+If the user chooses to apply, execute the changes directly (edit files, create commits if files were modified). Apply the changes yourself — never delegate the applying back to agents. Re-reviewing the fixes is the one exception, and it runs only through § Review Loop of the review-result skill named above; report its terminal state.
 
 If the user chooses to skip, print a one-line confirmation: "Findings noted. No files were modified."
 

@@ -23,7 +23,7 @@ Also spawn if the task includes implementation of the fixes it finds (when $ARGU
 After the phases above complete — including any resolution agents:
 
 1. **Session summary** — append this session's contribution to today's entry in `.dev-team-agents/user-data/session-summary.md`: one `### <agent-name>` sub-heading per agent that acted, each with **Done** / **Decisions** / **Next**. Create today's entry if none exists; never overwrite another agent's sub-heading. Skip only if no file was created or modified.
-2. **Next step** — if code changed, ask the **Review Next-Step Gate** from the interaction-patterns skill loaded above; never end with a plain-text review pointer.
+2. **Next step** — if code changed, run the **Review Next-Step Gate** from the interaction-patterns skill loaded above.
 3. **Hand off** — on **Don't review**, or when the gate is skipped, the working tree is left dirty on purpose. Close with one line naming the next step: `/devteam:commit` to group and commit the changes, then `/devteam:pr` when the branch is ready for review.
 
 ---

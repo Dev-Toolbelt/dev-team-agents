@@ -33,6 +33,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 - Load `skills/shared/comments-policy/SKILL.md` — applies when reviewing comments in the diff
 - Load `skills/shared/reviewer-base/SKILL.md` — canonical base review checklist shared with `code-reviewer` and `backend-reviewer`
 - Load `skills/shared/reuse-guidelines/SKILL.md` — when `docs/development/reuse-guidelines.md` exists, check `code-pattern`/`path-convention` rows mechanically and walk every `design-rule` row by hand against the diff (button placement, form structure, layout conventions); a match on any type is `[BLOCKING]`
+- Load `skills/design/third-party-design-skills/SKILL.md` — when the diff changes UI, its routing table picks the vendored third-party skill for visual critique or motion review
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 

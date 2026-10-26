@@ -29,17 +29,20 @@ understand, instead of reporting a working skill as malformed.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import shutil
 import stat
+import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from . import lock, paths, quarantine
-from .errors import ConflictError, UsageError
+from . import jsonio, lock, paths, quarantine
+from .errors import ConflictError, EnvError, UsageError
 
 ROOTS_FILE = Path(__file__).resolve().parent.parent / "global-skill-roots.json"
 
@@ -234,7 +237,239 @@ def _is_managed(path):
     return core is not None and _inside(path, core)
 
 
-def _entry(root, child):
+# ── provenance ────────────────────────────────────────────────────────────────
+
+#: Machine-local record of what ``install`` put in each root, from where, and the content
+#: hash at that moment. Absence of an entry means "unknown", never "modified".
+LOCK_FILE = "global-skills-lock.json"
+LOCK_SCHEMA = 1
+#: A lock record larger than this is not a lock record; it reads as malformed.
+LOCK_MAX_BYTES = 8 * 1024 * 1024
+_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+_NONBLOCK = getattr(os, "O_NONBLOCK", 0)
+
+
+def _lock_file(create=False):
+    """Path of the lock record; ``None`` on a read when this machine has no identity yet
+    (asking must not mint one)."""
+    base = paths.machine_dir() if create else paths.known_machine_dir()
+    return base / LOCK_FILE if base is not None else None
+
+
+def _load_lock_file(path):
+    """The parsed lock record, ``None`` when absent; ``ValueError`` when it is not a
+    regular file of valid UTF-8 JSON within ``LOCK_MAX_BYTES``.
+
+    Opened without following a symlink and without blocking, so a FIFO or a link planted
+    at the lock path can neither hang ``skills list`` nor redirect the read."""
+    try:
+        fd = os.open(str(path), os.O_RDONLY | _NOFOLLOW | _NONBLOCK)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise ValueError(str(exc))
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > LOCK_MAX_BYTES:
+            raise ValueError("not a regular lock file")
+        raw = b""
+        while True:
+            chunk = os.read(fd, 1 << 16)
+            if not chunk:
+                break
+            raw += chunk
+            if len(raw) > LOCK_MAX_BYTES:
+                raise ValueError("lock file too large")
+    finally:
+        os.close(fd)
+    return json.loads(raw.decode("utf-8"))
+
+
+def _lock_skills(data):
+    if not (isinstance(data, dict) and isinstance(data.get("skills"), dict)):
+        raise ValueError("unexpected shape")
+    return {k: v for k, v in data["skills"].items() if isinstance(v, dict)}
+
+
+def _read_lock():
+    """``{"<root>/<name>": entry}``; a missing, unreadable or malformed file reads as empty."""
+    path = _lock_file()
+    if path is None:
+        return {}
+    try:
+        data = _load_lock_file(path)
+        return {} if data is None else _lock_skills(data)
+    except ValueError:
+        return {}
+
+
+def _write_lock(mutate):
+    """Apply ``mutate(skills)`` and write atomically. A bad file is moved aside first
+    (No-Destruction Rule), never deleted. Call under the ``global-skills`` store lock."""
+    path = _lock_file(create=True)
+    skills = {}
+    if path.exists() or path.is_symlink():
+        try:
+            data = _load_lock_file(path)
+            skills = {} if data is None else _lock_skills(data)
+        except ValueError:
+            quarantine.move(path, None, group="global-skills-lock")
+            skills = {}
+    mutate(skills)
+    jsonio.write_json_atomic(path, {"schema": LOCK_SCHEMA, "skills": skills})
+
+
+def _file_digest(name, dir_fd=None):
+    """``file:<sha256>`` of a regular file, streamed, or ``special`` for anything else.
+
+    Opened without following a final symlink and without blocking, and checked on the open
+    handle, so a FIFO or symlink swapped in after the directory was listed can neither block
+    ``skills list`` nor pull in content from outside the skill."""
+    try:
+        fd = os.open(name, os.O_RDONLY | _NOFOLLOW | _NONBLOCK, dir_fd=dir_fd)
+    except OSError:
+        return b"special"
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return b"special"
+        digest = hashlib.sha256()
+        while True:
+            chunk = os.read(fd, 1 << 16)
+            if not chunk:
+                return b"file:" + digest.hexdigest().encode("ascii")
+            digest.update(chunk)
+    finally:
+        os.close(fd)
+
+
+def _link_entry(name, dir_fd=None):
+    return b"symlink:" + os.fsencode(os.readlink(name, dir_fd=dir_fd))
+
+
+#: Walk through directory descriptors where the platform allows it: every directory is
+#: opened with O_NOFOLLOW and listed through its own descriptor, so a directory swapped
+#: for a symlink between listing and descending is refused, never walked into.
+_FD_WALK = (
+    hasattr(os, "O_DIRECTORY")
+    and os.scandir in os.supports_fd
+    and os.open in os.supports_dir_fd
+    and os.readlink in os.supports_dir_fd
+)
+
+
+def _open_dir_at(base_fd, rel):
+    """A descriptor for ``base_fd/rel``, opened one component at a time with O_NOFOLLOW, so
+    no component can have been swapped for a symlink. Only this descriptor stays open."""
+    flags = os.O_RDONLY | os.O_DIRECTORY | _NOFOLLOW
+    fd = os.open(".", flags, dir_fd=base_fd)
+    for part in rel.split("/") if rel else ():
+        try:
+            child = os.open(part, flags, dir_fd=fd)
+        finally:
+            os.close(fd)
+        fd = child
+    return fd
+
+
+def _entries_by_fd(base_fd, out):
+    """Iterative, so depth is bounded by neither the recursion limit nor the open-file
+    limit: pending directories are kept as relative paths, and each is opened from the
+    base only while it is being listed."""
+    pending = [""]
+    while pending:
+        rel = pending.pop()
+        try:
+            fd = _open_dir_at(base_fd, rel)
+        except OSError:
+            out.append((rel, b"special"))
+            continue
+        try:
+            with os.scandir(fd) as listing:
+                items = sorted(listing, key=lambda e: e.name)
+            if rel and not items:
+                out.append((rel, b"empty-dir"))
+            for item in items:
+                child = item.name if not rel else rel + "/" + item.name
+                if item.is_symlink():
+                    out.append((child, _link_entry(item.name, fd)))
+                elif item.is_dir(follow_symlinks=False):
+                    pending.append(child)
+                else:
+                    out.append((child, _file_digest(item.name, fd)))
+        finally:
+            os.close(fd)
+
+
+def _entries_by_path(base, out):
+    for current, dirs, names in os.walk(str(base)):
+        dirs.sort()
+        here = Path(current)
+        rel = here.relative_to(base).as_posix()
+        rel = "" if rel == "." else rel
+        prefix = rel + "/" if rel else ""
+        for dir_name in list(dirs):
+            if (here / dir_name).is_symlink():
+                out.append((prefix + dir_name, _link_entry(str(here / dir_name))))
+                dirs.remove(dir_name)
+        if rel and not dirs and not names:
+            out.append((rel, b"empty-dir"))
+        for name in names:
+            path = here / name
+            entry = _link_entry(str(path)) if path.is_symlink() else _file_digest(str(path))
+            out.append((prefix + name, entry))
+
+
+def content_hash(skill_dir):
+    """Deterministic sha256 of a skill directory.
+
+    Every entry, sorted by relative POSIX path, contributes ``relpath NUL kind``: a regular
+    file the sha256 of its bytes (streamed, never held in memory whole), a symlink — to a
+    file or a directory — its target string, never followed, an empty directory a marker,
+    and anything else (a FIFO, a device) its type alone. Raises ``OSError`` when
+    ``skill_dir`` itself cannot be opened as a directory."""
+    entries = []
+    if _FD_WALK:
+        fd = os.open(str(skill_dir), os.O_RDONLY | os.O_DIRECTORY | _NOFOLLOW)
+        try:
+            _entries_by_fd(fd, entries)
+        finally:
+            os.close(fd)
+    else:
+        _entries_by_path(Path(skill_dir), entries)
+    digest = hashlib.sha256()
+    for rel, kind in sorted(entries):
+        digest.update(rel.encode("utf-8", "surrogateescape"))
+        digest.update(b"\0")
+        digest.update(kind)
+    return digest.hexdigest()
+
+
+def _provenance(recorded, root, child):
+    entry = recorded.get("{}/{}".format(root["id"], child.name))
+    if entry is None:
+        return None
+    digest = entry.get("sha256")
+    modified = False
+    if digest:
+        # A copy that is now a symlink or no longer a directory was replaced, not edited.
+        if child.is_symlink() or not child.is_dir():
+            modified = True
+        else:
+            try:
+                modified = content_hash(child) != digest
+            except OSError:
+                modified = True
+    return {
+        "source": entry.get("source"),
+        "kind": entry.get("kind"),
+        "link": bool(entry.get("link")),
+        "sha256": digest,
+        "installed_at": entry.get("installed_at"),
+        "modified": modified,
+    }
+
+
+def _entry(root, child, recorded=None):
     is_link = child.is_symlink()
     record = {
         "name": child.name,
@@ -248,6 +483,7 @@ def _entry(root, child):
         "managed": _is_managed(child),
         "status": "ok",
         "error": None,
+        "provenance": _provenance(recorded if recorded is not None else _read_lock(), root, child),
     }
     try:
         _name, description, _body = validate_skill_dir(child, expected_name=child.name)
@@ -282,7 +518,8 @@ def _children(root):
 def list_skills(provider=None):
     roots, install_target = load_roots()
     selected = _roots_for(provider)
-    skills = [_entry(root, child) for root in selected for child in _children(root)]
+    recorded = _read_lock()
+    skills = [_entry(root, child, recorded) for root in selected for child in _children(root)]
     return {
         "provider": provider or "all",
         "roots": [_describe_root(root, install_target) for root in selected],
@@ -686,6 +923,26 @@ def install(source, providers=None, root_ids=None, replace=False, link=False):
 
             also_present = _also_present(name, targets, {root["id"] for root in targets})
 
+            stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+            def record(skills):
+                for item in installed:
+                    skills["{}/{}".format(item["root"], name)] = {
+                        "source": str(source),
+                        "kind": kind,
+                        "link": bool(link),
+                        "sha256": None if link else content_hash(Path(item["path"])),
+                        "installed_at": stamp,
+                    }
+
+            # The skill is in place; a record that cannot be written must not turn a
+            # successful install into an error. Without an entry the skill reads as
+            # `provenance: null` — unknown, never modified.
+            try:
+                _write_lock(record)
+            except (EnvError, OSError) as exc:
+                sys.stderr.write("devteam: installed, but provenance was not recorded: {}\n".format(exc))
+
     return {
         "name": name,
         "description": description,
@@ -711,6 +968,8 @@ def remove(name, root_id=None):
             )
         link_target = os.readlink(str(child)) if child.is_symlink() else None
         quarantined = _move_aside(child, root)
+        if "{}/{}".format(root["id"], name) in _read_lock():
+            _write_lock(lambda skills: skills.pop("{}/{}".format(root["id"], name), None))
     return {
         "name": name,
         "root": root["id"],

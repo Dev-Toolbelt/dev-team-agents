@@ -501,6 +501,12 @@ def locks_dir():
 #:
 #: `command-usage.json` counts how often this machine's user ran each devteam command
 #: (ADR-0030); it decides which commands the session-start banner reveals.
+#:
+#: `global-skills-lock.json` records what `devteam skills install` put into this machine's
+#: user-level skill roots, from which source, with which content hash (ADR-0040).
+#:
+#: `backlog-claims.json` records which orchestrator on this machine is working which sprint
+#: task right now (ADR-0044). A claim expires and names an owner token minted here.
 MACHINE_LOCAL_RECORDS = (
     "state.json",
     "bind-manifest.json",
@@ -534,6 +540,13 @@ MACHINE_LOCAL_RECORDS = (
     # by signature, not a secret, but meaningless on another host.
     "entitlement.json",
     "account-session.json",
+    # What `devteam skills install` put into THIS machine's user-level skill roots, from
+    # which absolute source, with the content hash at install time. Source paths and
+    # hashes of directories under this host's home mean nothing on another host.
+    "global-skills-lock.json",
+    # Which orchestrator on THIS machine holds which sprint task, until when (ADR-0044). The
+    # sprint file in git carries the status; a claim is a live fact about this host only.
+    "backlog-claims.json",
 )
 
 #: Records that belong to the **project**, not to the user's personal memory:

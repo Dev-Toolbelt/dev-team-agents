@@ -31,6 +31,18 @@ Stages run in this order. Each stage must pass before the next begins.
 
 ---
 
+## Project Rule Lint
+
+When `docs/development/reuse-guidelines.md` exists, the `lint` stage also enforces it (`skills/shared/reuse-guidelines/SKILL.md`). Without this step the registry is enforced only by the Stop hook, i.e. only for changes an agent made.
+
+- `.dev-team-agents/scripts/reuse-lint.sh` is a bind artifact and is not committed, so a CI checkout does not have it. Commit a copy at `scripts/ci/reuse-lint.sh` — it is self-contained bash with no dependencies — and note in the copy's first comment line which dev-team-agents version it came from
+- Fetch the base branch first (`fetch-depth: 0` or equivalent) and set `REUSE_LINT_DIFF_RANGE=origin/<base>...HEAD`; a shallow clone has no merge base and the lint would only see the working tree
+- Blocking findings fail the stage (exit 1); advisory findings print and pass
+- Run `reuse-lint.sh --validate` in the same step, so a registry row that stopped compiling fails CI instead of silently matching nothing
+- A pull request controls its own head: run the step on `pull_request` (never `pull_request_target` or its equivalents), read-only permissions, no secrets; read the registry and the script from the base ref (`git show origin/<base>:docs/development/reuse-guidelines.md`) or put both under CODEOWNERS; pass the base branch through an environment variable, never interpolated into the shell command
+
+---
+
 ## Secret Management
 
 - Never hardcode secrets in pipeline config files — treat the pipeline config as public

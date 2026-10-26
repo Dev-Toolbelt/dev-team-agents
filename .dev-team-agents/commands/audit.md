@@ -128,7 +128,7 @@ Each agent receives the exploration results from Step 3 as context.
 ### Phase 4b — Test coverage (conditional)
 
 After Phase 4a completes, check the test gate:
-Read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. Spawn the test-specialist(s) below **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely**.
+Resolve `TESTS_REQUIRED` per `skills/shared/auto-routing/SKILL.md` § Test Gate. Spawn the test-specialist(s) below **only if `TESTS_REQUIRED=yes`** (or the key is absent — default to running tests). If `TESTS_REQUIRED=no`, **skip this phase entirely**.
 
 - **`backend-test-specialist`** — analyze test gaps and propose tests for the critical backend routines identified in Phase 4a. Do NOT write tests — only identify what should be tested and suggest test scenarios (including edge cases).
 - **`frontend-test-specialist`** — same for frontend code.

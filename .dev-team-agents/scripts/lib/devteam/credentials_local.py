@@ -588,6 +588,49 @@ def show(project_root):
     return _state(path, _read_raw(path))
 
 
+def copy_value(project_root, pointer, expect_hash):
+    """The raw value of one hidden field, for the desktop app's copy button (ADR-0046).
+
+    Only a value ``show`` hides and that is set is returned; everything else is refused, so
+    this can never become a way to read the file around ``show``. ``expect_hash`` ties the
+    copy to the version the caller was shown. A non-string value — a group or list marked
+    secret as a whole — is returned as JSON text.
+    """
+    tokens = _tokens(pointer)
+    path = file_path(project_root)
+    _require_contained(path, main_root(project_root))
+    if os.path.islink(str(path)):
+        raise EnvError("{} is a symlink; it is never read through a link".format(path), details={"path": str(path)})
+    raw = _read_raw(path)
+    if raw is None:
+        raise EnvError("{} does not exist".format(path), details={"path": str(path)})
+    actual = _hash(raw)
+    if expect_hash != actual:
+        raise ConflictError(
+            "credentials.local.json changed since it was read",
+            hint="Re-read it with `devteam cred local show` and copy again.",
+            details={"path": str(path), "reason": "hash-conflict"},
+        )
+    current = _state(path, raw)
+    if not current["valid"]:
+        raise EnvError("{} is not valid JSON".format(path), details={"path": str(path)})
+    shown = _lookup(current["data"], tokens, pointer)
+    value = _lookup(_loads(raw), tokens, pointer)
+    is_marker = (
+        isinstance(shown, dict)
+        and set(shown) == {"secret", "set", "marked"}
+        and shown["secret"] is True
+        and isinstance(shown["set"], bool)
+        and isinstance(shown["marked"], bool)
+    )
+    if not is_marker:
+        raise UsageError("{!r} is not a hidden value".format(pointer), hint="Only a secret field can be copied.")
+    if not shown["set"]:
+        raise UsageError("{!r} has no value to copy".format(pointer))
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+    return {"pointer": pointer, "value": text}
+
+
 # --- init --------------------------------------------------------------------------
 
 
@@ -778,7 +821,8 @@ def _apply_move(doc, source, target, op):
 
     Renaming a key whose value ``show`` hides is only possible here: the app never holds
     that value. Refuses a missing source, an existing destination (it would overwrite a
-    value the caller may not be able to see), and a move into the value's own subtree.
+    value the caller may not be able to see), and a move into the value's own subtree. A value
+    hidden by its key stays hidden where it lands.
     """
     if not source or not target:
         raise UsageError("a move takes a key, not the whole document")
@@ -790,8 +834,53 @@ def _apply_move(doc, source, target, op):
             "{!r} already exists".format(op["pointer"]),
             hint="Remove it first, or move to another name.",
         )
+    hidden = _hidden_by_key(doc, source, value)
+    keep_hidden = hidden and not _hidden_by_name(target[-1], value)
+    if hidden and target[-1] in (SECRETS_KEY, PRODUCTION_KEY):
+        raise UsageError("{!r}: a hidden value cannot become a reserved key".format(op["pointer"]))
     _apply_unset(doc, source, op["from"])
     _apply_set(doc, target, value, op["pointer"])
+    if keep_hidden:
+        _mark_moved(doc, target, op["pointer"])
+
+
+def _hidden_by_name(key, value):
+    return not isinstance(value, (dict, list)) and _secret_ish(key)
+
+
+def _hidden_by_key(doc, tokens, value):
+    """Whether ``show`` hides ``value`` at ``tokens`` because of a key on its path, not the value itself.
+
+    A mark anywhere above hides the whole subtree, so every object on the way is checked.
+    """
+    node = doc
+    for token in tokens:
+        if isinstance(node, dict):
+            marked = _marked(node)
+            if marked is not None and token in marked:
+                return True
+            node = node.get(token)
+        elif isinstance(node, list):
+            node = node[int(token)]
+    parent_is_object = isinstance(_lookup(doc, tokens[:-1], ""), dict)
+    return parent_is_object and _hidden_by_name(tokens[-1], value)
+
+
+def _mark_moved(doc, target, pointer):
+    """Mark the moved key in its new ``$secrets``, so a move never makes ``show`` reveal it."""
+    parent = _lookup(doc, target[:-1], pointer)
+    if not isinstance(parent, dict):
+        raise UsageError("{!r}: a hidden value cannot move into a list".format(pointer))
+    if SECRETS_KEY in parent and _marked(parent) is None:
+        raise UsageError(
+            "{!r}: the destination's {} list is malformed".format(pointer, SECRETS_KEY),
+            hint="Fix that list first, then move the value.",
+        )
+    names = set(parent.get(SECRETS_KEY, []))
+    names.add(target[-1])
+    if _marked({SECRETS_KEY: sorted(names)}) is None:
+        raise UsageError("{!r}: that name cannot be marked as a secret".format(pointer))
+    parent[SECRETS_KEY] = sorted(names)
 
 
 def _validate_ops(ops):

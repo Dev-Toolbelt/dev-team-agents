@@ -603,7 +603,7 @@ fi
 # `_HOOK_TEMPLATE` is that command with `@SCRIPT@` for the script name.
 # Same command as `scripts/lib/devteam/hooks.py:command_for` — keep the two equal.
 # shellcheck disable=SC2016 # the $ are literal here: the hook's own bash -c expands them
-_HOOK_TEMPLATE='env -u BASH_ENV -u ENV bash -c '"'"'for d in "$PWD" "$(pwd -P)"; do while [ -n "$d" ] && [ ! -d "$d/.dev-team-agents/scripts/hooks" ] && [ ! -f "$d/.dev-team-agents/core-dir" ]; do p=${d%/*}; [ "$p" = "$d" ] && p=; d=$p; done; [ -n "$d" ] && break; done; cd "${d:-${CLAUDE_PROJECT_DIR:-.}}" && { [ -d .dev-team-agents/scripts/hooks ] || [ ! -f .dev-team-agents/core-dir ] || { c=$(cat .dev-team-agents/core-dir) && exec bash "$c/versions/$(cat "$c/current")/scripts/hooks/lib/self-heal.sh" @SCRIPT@; }; exec bash .dev-team-agents/scripts/hooks/@SCRIPT@; }'"'"''
+_HOOK_TEMPLATE='env -u BASH_ENV -u ENV bash -c '"'"'for d in "$PWD" "$(pwd -P)"; do while [ -n "$d" ] && [ ! -d "$d/.dev-team-agents/scripts/hooks" ] && [ ! -f "$d/.dev-team-agents/core-dir" ]; do p=${d%/*}; [ "$p" = "$d" ] && p=; d=$p; done; [ -n "$d" ] && break; done; r=${CLAUDE_PROJECT_DIR:-}; if [ -n "$d" ] && [ -n "$r" ]; then v=$(unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE; dp=$(cd "$d" && pwd -P) && rp=$(cd "$r" && pwd -P) || exit; case "$rp/" in ("$dp"/*) echo ok; exit;; esac; case "$dp" in ("$rp"/*) ;; (*) exit;; esac; a=$(cd "$d" && x=$(git rev-parse --absolute-git-dir 2>/dev/null) && cd "$x" && pwd -P) || exit; t=$(cd "$d" && git rev-parse --show-toplevel 2>/dev/null) || exit; g=$(cd "$r" && x=$(git rev-parse --absolute-git-dir 2>/dev/null) && cd "$x" && pwd -P) || exit; c=$(cd "$r" && x=$(git rev-parse --git-common-dir 2>/dev/null) && cd "$x" && pwd -P) || exit; if [ "$a" = "$g" ]; then w=$(cd "$r" && git rev-parse --show-toplevel 2>/dev/null) || exit; else case "$a" in ("$c"/worktrees/*) b=$(cat "$a/gitdir") && w=$(cd "${b%/.git}" && pwd -P) || exit;; (*) exit;; esac; fi; [ -n "$w" ] && [ "$t" = "$w" ] || exit; [ "$dp" = "$w" ] || ! git -C "$w" check-ignore -q "$dp" || exit; echo ok); [ "$v" = ok ] || { echo "dev-team-agents: ignored the hooks in $d (not part of this project); running the project ones" >&2; d=; }; fi; cd "${d:-${CLAUDE_PROJECT_DIR:-.}}" && { [ -d .dev-team-agents/scripts/hooks ] || [ ! -f .dev-team-agents/core-dir ] || { c=$(cat .dev-team-agents/core-dir) && exec bash "$c/versions/$(cat "$c/current")/scripts/hooks/lib/self-heal.sh" @SCRIPT@; }; exec bash .dev-team-agents/scripts/hooks/@SCRIPT@; }'"'"''
 _hook_cmd() {
     printf '%s' "${_HOOK_TEMPLATE//@SCRIPT@/$1}"
 }
@@ -822,8 +822,8 @@ PYEOF
     _inject_hook "UserPromptSubmit" "$USER_PROMPT_HOOK" "hooks/user-prompt-submit.sh"
 
     # An entry written before the command found the project root runs from whatever directory
-    # the session is in. Rewrite an entry whose command is EXACTLY one we shipped to the current
-    # one, in place; a user's own wrapper around our script, and the matcher on ours, are kept.
+    # the session is in, and one written before ADR-0043 runs a nested checkout's hooks. Rewrite an
+    # entry whose command is EXACTLY one we shipped to the current one, in place; a user's own wrapper around our script, and the matcher on ours, are kept.
     if command -v python3 >/dev/null 2>&1; then
         python3 - "$SETTINGS_FILE" \
             "pre-tool-use.sh=$PRE_TOOL_USE_HOOK" "stop.sh=$STOP_HOOK" \
@@ -849,7 +849,11 @@ for entries in (data.get('hooks') or {}).values():
             command = hook.get('command') or ''
             for script, current in wanted.items():
                 path = ".dev-team-agents/scripts/hooks/" + script
-                if command in (path, "env -u BASH_ENV -u ENV " + path):
+                # A root-walk command an earlier release wrote (before the nested-checkout guard,
+                # ADR-0043) is ours too: same opening, same closing `exec` of this script.
+                walk = command.startswith("env -u BASH_ENV -u ENV bash -c 'for d in \"$PWD\"") and \
+                    command.endswith("exec bash " + path + "; }'")
+                if command != current and (command in (path, "env -u BASH_ENV -u ENV " + path) or walk):
                     hook['command'] = current
                     changed = True
 if changed:
@@ -1302,6 +1306,7 @@ else
   "worktree_path": ".worktrees",
   "worktree_docker_isolate": true,
   "qa_browser": null,
+  "review_gate_mode": "ask",
   "ci_cd_detected": null
 }
 EOF

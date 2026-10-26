@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "skills": {
+    "emil-design-eng": {
+      "repo": "emilkowalski/skills",
+      "commit": "2d228630ba1446365f614a108cb8252f1feda202",
+      "path": "skills/emil-design-eng",
+      "license": "MIT",
+      "license_files": [
+        "LICENSE"
+      ],
+      "sha256": "803c2200236dce939f2d142ed0e25f725dcb9c7e7405fcd12ded4dccaabe796a"
+    },
+    "impeccable": {
+      "repo": "pbakaus/impeccable",
+      "commit": "3671d50f0ac9a662ce0615e85a256110c9cd720b",
+      "path": ".claude/skills/impeccable",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE",
+        "NOTICE.md"
+      ],
+      "sha256": "b5efb0b096725a63a72c7132a49f7ebfde80be3d64d54546960a9add0245845f"
+    },
+    "ui-ux-pro-max": {
+      "repo": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "commit": "d14efff8ed1faa4187f004f79926f428c8074ec7",
+      "path": ".claude/skills/ui-ux-pro-max",
+      "license": "MIT",
+      "license_files": [
+        "LICENSE"
+      ],
+      "sha256": "5a183e517ca826c75f1fd13b476c2827a6adaefb8301bee02410a216f775f1f8"
+    }
+  }
+}

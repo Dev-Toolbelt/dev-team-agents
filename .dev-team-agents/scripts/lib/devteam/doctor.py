@@ -318,8 +318,36 @@ def check_project(project_root):
         # framework on it — but not for one carrying a shape from before this
         # command existed. Both older shapes are adapted by a dedicated command,
         # never by `bind`, which does not know how to fold either one in.
-        legacy = migrate.detect(root)
-        if legacy["is_v2"]:
+        # Pre-root first: `detect` reports a pre-root install as v2 too, and the
+        # generic message below would place its trees under `.dev-team-agents/`.
+        try:
+            legacy = migrate.detect(root)
+        except OSError:
+            # Unreadable install directory: `leftover_installs` names it.
+            unreadable = migrate.leftover_installs(root)
+            findings.append(
+                _finding(
+                    WARN,
+                    "project",
+                    "{}: {}".format(root, migrate.describe_installs(unreadable)),
+                    "Fix the directory's permissions, then run `devteam doctor` again.",
+                )
+            )
+            return findings, actions
+        if migrate.pre_root_install(root):
+            # The same words `bind` and `migrate` refuse with, so the three never
+            # disagree about what to run.
+            refusal = migrate.pre_root_error(root)
+            message = refusal.message
+            beside = [
+                item for item in migrate.leftover_installs(root) if item["install_dir"] == project.PROJECT_DIR
+            ]
+            if beside:
+                message += "; a newer v2 tree sits beside it ({}), and `migrate` moves both".format(
+                    migrate.describe_installs(beside)
+                )
+            findings.append(_finding(WARN, "project", message, refusal.hint))
+        elif legacy["is_v2"]:
             findings.append(
                 _finding(
                     WARN,
@@ -331,11 +359,6 @@ def check_project(project_root):
                     "tree into a dated quarantine rather than deleting it.",
                 )
             )
-        elif migrate.pre_root_install(root):
-            # The same words `bind` and `migrate` refuse with, so the three never
-            # disagree about what to run.
-            refusal = migrate.pre_root_error(root)
-            findings.append(_finding(WARN, "project", refusal.message, refusal.hint))
         else:
             findings.append(
                 _finding(
@@ -633,14 +656,14 @@ def check_project(project_root):
     # The unbound-v2 branch above never runs once a bind has written `project.json`,
     # so a bind over a v2 install left the vendored tree behind with nothing to say
     # so: this project reported `status: ok` with 324 framework files still in git.
-    leftover = migrate.leftover_trees(root)
+    leftover = migrate.leftover_installs(root)
     if leftover:
         findings.append(
             _finding(
                 WARN,
                 "project",
-                "a v2 vendored install is still here ({} under {}/) — nothing reads it "
-                "since the bind".format(", ".join(leftover), project.PROJECT_DIR),
+                "a v2 vendored install is still here ({}) — nothing reads it "
+                "since the bind".format(migrate.describe_installs(leftover)),
                 "Run `devteam migrate` — it shows a plan first and moves the old tree into "
                 "a dated quarantine rather than deleting it.",
             )

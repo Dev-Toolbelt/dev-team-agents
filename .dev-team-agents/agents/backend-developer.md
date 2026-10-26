@@ -63,7 +63,7 @@ Load the matching skill when the task context applies:
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (spawn-prompt `WORKTREE_PATH`/`BRANCH` → session file → `worktree_active` preference → ask once). Given `WORKTREE_PATH`/`BRANCH`, work only there and leave merge and teardown to the orchestrator; when it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 
@@ -141,7 +141,7 @@ Write code that is naturally testable:
 
 **Judge contextually**: a simple CRUD endpoint doesn't need a strategy pattern to be testable. A complex pricing engine does. Match the architecture to the complexity.
 
-If the project has a test culture (check `CLAUDE.md` or presence of a `tests/` directory), write with tests in mind. The `backend-test-specialist` will create the tests — your job is to make them easy to write.
+If the project has a test culture (`TESTS_REQUIRED` resolves to `yes` per `skills/shared/auto-routing/SKILL.md` § Test Gate), write with tests in mind. The `backend-test-specialist` will create the tests — your job is to make them easy to write.
 
 ---
 

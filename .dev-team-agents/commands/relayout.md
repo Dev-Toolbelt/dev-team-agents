@@ -29,7 +29,7 @@ This command requires **two things** to be resolvable from $ARGUMENTS before any
 
 Before proposing or writing any markup, locate this project's design context so the relayout reuses existing patterns instead of inventing new ones:
 
-- **Design system doc** — look in common locations (`docs/design-system.md`, `.claude/docs/ui/design-system.md`, a Storybook config, a Tailwind/theme config) for tokens: color palette, typography, spacing scale, component rules. If none is found, ask the user with `AskUserQuestion` whether to proceed using only inferred conventions from the existing UI code, or to point at the doc.
+- **Design system doc** — look first at `docs/design/design-system.md` (and, in the gated layout, the `design-tokens` doc `docs/design/tokens.json`, the canonical values), then other common locations (`docs/design-system.md`, `.claude/docs/ui/design-system.md`, a Storybook config, a Tailwind/theme config) for tokens: color palette, typography, spacing scale, component rules. If none is found, ask the user with `AskUserQuestion` whether to proceed using only inferred conventions from the existing UI code, or to point at the doc.
 - **Reusable component library** — locate the project's shared UI primitives directory. Load `skills/shared/reuse-guidelines/SKILL.md` and apply its gate: compose the reference layout from existing primitives first; a new shared component is justified only when nothing existing fits.
 - **Feature-local patterns** — inspect the target screen's existing code to match its structure, naming, and state conventions.
 - **Quality skills to apply before declaring done:** `skills/shared/frontend-design`, `skills/shared/design-system-audit`, `skills/shared/frontend-code-quality`, `skills/shared/component-patterns`, `skills/shared/css-quality`, `skills/shared/accessibility-patterns`, `skills/shared/mobile-design`, `skills/shared/frontend-done-checklist`.
@@ -60,7 +60,7 @@ Also spawn if the target screen has a mobile counterpart in scope:
 
 Pass to every spawned agent: the resolved reference paths, the target screen path, and the design context from section 1.
 
-Read the project's `CLAUDE.md` → `## dev-team-agents` section → `TESTS_REQUIRED`. If `TESTS_REQUIRED=yes` (default), the implementing agent(s) must run the project's existing tests for the touched screen per `skills/shared/scoped-test-execution/SKILL.md`; if `no`, skip and rely on the Phase 4 quality gate below.
+Resolve `TESTS_REQUIRED` per `skills/shared/auto-routing/SKILL.md` § Test Gate. If `TESTS_REQUIRED=yes` (default), the implementing agent(s) must run the project's existing tests for the touched screen per `skills/shared/scoped-test-execution/SKILL.md`; if `no`, skip and rely on the Phase 4 quality gate below.
 
 ---
 

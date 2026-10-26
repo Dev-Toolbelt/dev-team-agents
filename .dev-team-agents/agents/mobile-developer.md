@@ -24,7 +24,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 - Read `docs/development/architecture.md`, `tech-stack.md`, and `code-standards.md` before writing a single line of code
 - Load `skills/shared/reuse-guidelines/SKILL.md` — check `docs/development/reuse-guidelines.md` (when present) before adding a new screen/component pattern
-- When the task links a spec (`docs/specs/<feature>.md` exists for it), load `skills/shared/spec-gate/SKILL.md` and apply its Scope Lock — the spec's `Given/When/Then` blocks bound the implementation
+- When the task links a spec (`docs/specs/<feature>.md` exists for it), load `skills/shared/spec-gate/SKILL.md` and apply its Scope Lock — the spec's `Given/When/Then` blocks bound the implementation; Flutter/native tests you write follow its § Test-First Derivation and § Traceability; for a retroactive spec, tag existing tests instead (§ Retroactive Spec)
 - Read `docs/backlog/` for the current task context
 - Follow `skills/shared/comments-policy/SKILL.md` for any code you write or review
 - Run `git log --oneline -10` — reveals recent patterns and active areas of the codebase
@@ -37,7 +37,7 @@ Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial task 
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (spawn-prompt `WORKTREE_PATH`/`BRANCH` → session file → `worktree_active` preference → ask once). Given `WORKTREE_PATH`/`BRANCH`, work only there and leave merge and teardown to the orchestrator; when it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 

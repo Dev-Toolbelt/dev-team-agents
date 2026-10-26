@@ -5,7 +5,7 @@ model: haiku
 
 Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for every question with a finite set of answers — never a plain-text prompt.
 **Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
-You are running the **`/devteam:learn`** command. **Purpose:** consolidate everything that happened in this session — decisions made, patterns established, conventions updated — into the project's persistent knowledge base. Run this at the end of any session where something non-obvious was learned, decided, or changed.
+You are running the **`/devteam:learn`** command. **Purpose:** consolidate everything that happened in this session — decisions made, patterns established, conventions updated — into the project's persistent knowledge base. Run this at the end of any session where something non-obvious was learned, decided, or changed, and at every sprint close (`/devteam:sprint` Step 6 nudges it — `skills/shared/doc-flow/SKILL.md` § Stages, stage 7).
 
 ## Step 1 — Gather session evidence
 
@@ -37,7 +37,7 @@ Analyze the evidence collected in Step 1. Map each finding to one or more update
 
 | Bucket | Trigger | Target |
 |--------|---------|--------|
-| **Doc patch** | Architecture changed, new layer/module added, stack updated, standards detected or changed | `docs/development/*.md` or `docs/project.md` |
+| **Doc patch** | Architecture changed, new layer/module added, stack updated, standards detected or changed | `docs/development/*.md` or `docs/project.md`; in the gated layout the owner doc the map resolves (`bash .dev-team-agents/scripts/doc-path.sh <key>`), plus one line in its Amendment Log (doc-flow § Amendment Log) |
 | **Wiki entry** | Non-obvious flow discovered, gotcha hit, behavior that differs from what the name implies, cross-layer invariant | `docs/wiki/<domain>/` |
 | **ADR candidate** | Decision is hard to reverse, affects multiple components, has non-obvious reasoning | `docs/development/adrs/` |
 | **Reuse rule candidate** | Session standardized on a reusable component/helper, a file-location convention, or a design rule that must hold going forward | `docs/development/reuse-guidelines.md` |

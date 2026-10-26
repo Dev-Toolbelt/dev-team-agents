@@ -18,7 +18,7 @@ from pathlib import Path
 from . import auth, bind as bind_module
 from . import auth_gate as gate
 from . import detect
-from . import catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, update, upgrade, versions
+from . import backlog, catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, trace, insights, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .console import stdin_is_console as _stdin_is_console
@@ -862,6 +862,155 @@ def cmd_tasks_review_result(args, emitter):
     return result, "review result recorded" if result["recorded"] else "nothing recorded"
 
 
+def cmd_tasks_trace_record(args, emitter):
+    root = _hook_root(args)
+    if args.stop:
+        result = trace.settle(root, _hook_payload())
+        return result, "trace settled" if result["settled"] else "nothing settled"
+    result = trace.capture(root, _hook_payload())
+    return result, "span recorded" if result["recorded"] else "nothing recorded"
+
+
+def _trace_lines(node, depth, lines):
+    if node["usage_complete"]:
+        tokens = "{} tok".format(node["subtree_tokens"])
+    elif node["subtree_tokens"]:
+        tokens = "{}+ tok (partial)".format(node["subtree_tokens"])
+    else:
+        tokens = "tokens n/a"
+    lines.append("{}{} [{}] {}  {}s  {}{}".format(
+        "  " * depth, node["agent"], node["kind"], node["status"], node["duration_s"], tokens,
+        "  ({})".format(node["model"]) if node["model"] else "",
+    ))
+    for child in node["children"]:
+        _trace_lines(child, depth + 1, lines)
+
+
+def cmd_tasks_trace(args, emitter):
+    root = project.resolve_root(args.path)
+    result = trace.show(root, args.session)
+    if result is None:
+        raise EnvError(
+            "no execution trace for session {}".format(args.session),
+            hint="A trace starts with the session's first agent spawn in a bound project.",
+        )
+    lines = ["{} {}  {} span(s) · {} tokens · {}s".format(
+        result["provider"], result["session_id"], result["totals"]["spans"],
+        result["totals"]["tokens"], result["totals"]["duration_s"],
+    )]
+    for turn in result["turns"]:
+        label = "/devteam:{}".format(turn["command"]) if turn["command"] else "turn"
+        lines.append("{} @ {}  {} tokens".format(label, turn["turn_at"] if turn["turn_at"] is not None else "?", turn["tokens"]))
+        for node in turn["spans"]:
+            _trace_lines(node, 1, lines)
+    return result, "\n".join(lines)
+
+
+def _insights_lines(result):
+    lines = ["{} span(s) in {} session(s) across {} project(s)".format(
+        result["sample"]["spans"], result["sample"]["sessions"], result["sample"]["projects"])]
+    if result["agents"]:
+        lines.append("agents:")
+        for row in result["agents"]:
+            lines.append("  {} [{}] {} · {} span(s) · {} tok mean · p50 {}s · failed {:.0%} · interrupted {:.0%}".format(
+                row["agent"], row["kind"], row["provider"], row["spans"],
+                row["tokens_mean"] if row["tokens_mean"] is not None else "n/a",
+                row["duration_p50"] if row["duration_p50"] is not None else "?",
+                row["failed_rate"], row["interrupted_rate"],
+            ))
+    if result["commands"]:
+        lines.append("commands:")
+        for row in result["commands"]:
+            lines.append("  {} {} · {} run(s) · {} tok/run".format(
+                "/devteam:{}".format(row["command"]) if row["command"] else "(no command)", row["provider"],
+                row["runs"], row["tokens_per_run"] if row["tokens_per_run"] is not None else "n/a",
+            ))
+    if result["suggestions"]:
+        lines.append("suggestions:")
+        for item in result["suggestions"]:
+            lines.append("  [{}]{} {}".format(item["id"], " (dismissed)" if item["dismissed"] else "", item["title"]))
+            lines.append("      → {}".format(item["action"]))
+    else:
+        lines.append("no suggestions ({} subject(s) below a rule's minimum sample)".format(len(result["insufficient"])))
+    return lines
+
+
+def _backlog_root(args):
+    return project.resolve_root(args.path)
+
+
+def _backlog_files(root, sprint):
+    return [backlog.resolve_sprint(root, sprint)] if sprint else backlog.sprint_files(root)
+
+
+def cmd_backlog_ready(args, emitter):
+    root = _backlog_root(args)
+    claims = backlog.read_claims(root)
+    everything = backlog.load_all(root)
+    sprints = []
+    for path in _backlog_files(root, args.sprint):
+        view = backlog.analyze(root, path, everything, claims)
+        if args.sprint or view["ready"] or view["in_progress"] or view["blocked"]:
+            sprints.append(view)
+    lines = []
+    for view in sprints:
+        lines.append("{}  ready {} · in progress {} · blocked {} · done {}".format(
+            view["sprint"], len(view["ready"]), len(view["in_progress"]), len(view["blocked"]), len(view["done"])))
+        if view["ready"]:
+            lines.append("  ready: {}".format(", ".join(view["ready"])))
+        for n, layer in enumerate(view["computed_waves"], 1):
+            lines.append("  wave {}: {}".format(n, ", ".join(layer)))
+        if view["in_cycle"]:
+            lines.append("  in a dependency cycle: {}".format(", ".join(view["in_cycle"])))
+        held = [i for i in view["unlayered"] if i not in view["in_cycle"]]
+        if held:
+            lines.append("  not placeable (behind a cycle or an open dependency outside the sprint): {}".format(", ".join(held)))
+    return {"sprints": sprints}, "\n".join(lines) or "no sprint with work left"
+
+
+def cmd_backlog_lint(args, emitter):
+    root = _backlog_root(args)
+    everything = backlog.load_all(root)
+    findings = []
+    for path in _backlog_files(root, args.sprint):
+        findings.extend(backlog.lint_file(root, path, everything))
+    problems = [f for f in findings if f["level"] == "ERROR"]
+    lines = ["{} {} {}: {}".format(f["level"], f["sprint"], f["task"], f["message"]) for f in findings]
+    return {"findings": findings, "problems": problems}, "\n".join(lines) or "backlog: no findings"
+
+
+def cmd_backlog_claim(args, emitter):
+    result = backlog.claim(
+        _backlog_root(args), args.sprint, args.tasks, owner=args.owner, ttl=args.ttl, take_over=args.take_over
+    )
+    human = "claimed {} for {}".format(", ".join(c["task"] for c in result["claimed"]), result["owner"])
+    if result["taken_over"]:
+        human += " (taken over: {})".format(", ".join(c["task"] for c in result["taken_over"]))
+    return result, human
+
+
+def cmd_backlog_release(args, emitter):
+    result = backlog.release(_backlog_root(args), args.sprint, args.tasks, args.owner)
+    return result, "released {}".format(", ".join(result["released"]) or "nothing")
+
+
+def cmd_backlog_prime(args, emitter):
+    result = backlog.prime(_backlog_root(args))
+    if result is None:
+        return {"active": False, "sprints": [], "claims": []}, ""
+    return dict(result, active=True), backlog.prime_text(result)
+
+
+def cmd_insights_report(args, emitter):
+    result = insights.report(args.project or None, since=args.since, include_dismissed=args.all)
+    return result, "\n".join(_insights_lines(result))
+
+
+def cmd_insights_dismiss(args, emitter):
+    result = insights.dismiss(args.suggestion)
+    return result, "dismissed {} until its sample reaches {} span(s)".format(result["dismissed"], 2 * result["sample_spans"])
+
+
 def _tasks_filters(args):
     return dict(
         project_ids=args.project or None,
@@ -1541,6 +1690,21 @@ def cmd_cred_local_patch(args, emitter):
     return state, "patched " + _cred_local_human(state)
 
 
+def cmd_cred_local_copy_value(args, emitter):
+    # ADR-0046: the desktop app's main process writes this straight to the clipboard and
+    # never logs it or hands it to its renderer. Audited like `cred get`, never the value.
+    root, project_id = _bound_project(getattr(args, "path", None))
+    try:
+        result = credentials_local.copy_value(root, args.pointer, args.expect_hash)
+    except DevteamError:
+        creds.audit(project_id, "local-copy", args.pointer, outcome="refused")
+        raise
+    creds.audit(project_id, "local-copy", args.pointer)
+    if not emitter.as_json:
+        emitter.raw(result["value"])
+    return result, None
+
+
 def cmd_cred_import(args, emitter):
     project_id = _cred_project_id(args)
     result = creds.import_file(args.file, project_id)
@@ -1878,6 +2042,16 @@ def build_parser():
     )
     tasks_result.add_argument("--project-root", metavar="DIR")
     tasks_result.set_defaults(func=cmd_tasks_review_result)
+    tasks_trace_record = leaf(
+        tasks_parser, "trace-record", help="hook-only: fold an agent spawn or result from stdin into the session's trace"
+    )
+    tasks_trace_record.add_argument("--project-root", metavar="DIR")
+    tasks_trace_record.add_argument("--stop", action="store_true", help="settle the trace at the end of a turn")
+    tasks_trace_record.set_defaults(func=cmd_tasks_trace_record)
+    tasks_trace = leaf(tasks_parser, "trace", help="one session's agent tree with duration and tokens per node")
+    tasks_trace.add_argument("session", help="the session id")
+    tasks_trace.add_argument("--path", help="the bound project (default: the current directory)")
+    tasks_trace.set_defaults(func=cmd_tasks_trace)
     tasks_list = leaf(tasks_parser, "list", help="every bound project with tasks, with derived state")
     tasks_filters(tasks_list)
     tasks_list.set_defaults(func=cmd_tasks_list)
@@ -1891,6 +2065,45 @@ def build_parser():
         "--interval", type=_watch_interval, default=1.0, help="seconds between checks (>= 0.01)"
     )
     tasks_watch.set_defaults(func=cmd_tasks_watch)
+    backlog_parser = leaf(
+        sub, "backlog", help="the sprint backlog as a graph: ready work, computed waves, lint, claims"
+    ).add_subparsers(dest="backlog_cmd")
+    backlog_ready = leaf(backlog_parser, "ready", help="ready, in-progress and blocked tasks plus the waves the dependencies imply")
+    backlog_ready.add_argument("sprint", nargs="?", help="a sprint file stem or path (default: every sprint with work left)")
+    backlog_ready.add_argument("--path", help="the project or worktree (default: the current directory)")
+    backlog_ready.set_defaults(func=cmd_backlog_ready)
+    backlog_lint = leaf(backlog_parser, "lint", help="cycles, unknown dependencies, dependencies in a non-earlier wave")
+    backlog_lint.add_argument("sprint", nargs="?", help="a sprint file stem or path (default: every sprint file)")
+    backlog_lint.add_argument("--path", help="the project or worktree (default: the current directory)")
+    backlog_lint.set_defaults(func=cmd_backlog_lint)
+    backlog_claim = leaf(backlog_parser, "claim", help="claim tasks for one orchestrator, all or none (machine-local, expires)")
+    backlog_claim.add_argument("sprint", help="a sprint file stem or path")
+    backlog_claim.add_argument("tasks", nargs="+", metavar="TASK", help="task ids, e.g. TASK-003")
+    backlog_claim.add_argument("--owner", help="the owner token a previous claim returned (default: a new one)")
+    backlog_claim.add_argument("--ttl", type=int, default=backlog.DEFAULT_TTL, help="seconds until the claim expires (default 14400)")
+    backlog_claim.add_argument("--take-over", action="store_true", help="replace another owner's live claim (only after the user chose to)")
+    backlog_claim.add_argument("--path", help="the project or worktree (default: the current directory)")
+    backlog_claim.set_defaults(func=cmd_backlog_claim)
+    backlog_release = leaf(backlog_parser, "release", help="release an owner's claims (every task of the sprint when none is named)")
+    backlog_release.add_argument("sprint", help="a sprint file stem or path")
+    backlog_release.add_argument("tasks", nargs="*", metavar="TASK", help="task ids (default: all of the owner's)")
+    backlog_release.add_argument("--owner", required=True, help="the owner token the claim returned")
+    backlog_release.add_argument("--path", help="the project or worktree (default: the current directory)")
+    backlog_release.set_defaults(func=cmd_backlog_release)
+    backlog_prime = leaf(backlog_parser, "prime", help="hook-facing: a short block of the active sprint work, empty when idle")
+    backlog_prime.add_argument("--path", help="the project (default: the current directory)")
+    backlog_prime.set_defaults(func=cmd_backlog_prime)
+    insights_parser = leaf(
+        sub, "insights", help="optimization loop: metrics and suggestions from execution traces (never applied)"
+    ).add_subparsers(dest="insights_cmd")
+    insights_report = leaf(insights_parser, "report", help="metrics and evidence-backed suggestions for bound projects")
+    insights_report.add_argument("--project", action="append", metavar="PROJECT_ID")
+    insights_report.add_argument("--since", type=int, metavar="EPOCH", help="only traces updated since this")
+    insights_report.add_argument("--all", action="store_true", help="include dismissed suggestions, flagged")
+    insights_report.set_defaults(func=cmd_insights_report)
+    insights_dismiss = leaf(insights_parser, "dismiss", help="hide a suggestion until its sample doubles")
+    insights_dismiss.add_argument("suggestion", help="the suggestion id, as `insights report` prints it")
+    insights_dismiss.set_defaults(func=cmd_insights_dismiss)
     plugin_parser = leaf(sub, "plugin", help="per-project integrations declared by the core")
     plugin_sub = plugin_parser.add_subparsers(dest="plugin_cmd")
     plugin_list = leaf(plugin_sub, "list", help="every plugin, its state and status")
@@ -2105,6 +2318,15 @@ def build_parser():
         help="the hash `show` returned; the patch is refused if the file changed since",
     )
     cred_local_patch.set_defaults(func=cmd_cred_local_patch)
+    cred_local_copy = cred_local_leaf(
+        "copy-value", help="print the raw value of one hidden field, for the desktop app's copy button"
+    )
+    cred_local_copy.add_argument("--pointer", required=True, help="JSON pointer of the field, e.g. /app/staging/password")
+    cred_local_copy.add_argument(
+        "--expect-hash", dest="expect_hash", required=True,
+        help="the hash `show` returned; refused if the file changed since",
+    )
+    cred_local_copy.set_defaults(func=cmd_cred_local_copy_value)
 
     cred_backends = leaf(cred_parser, "backends", help="which secret stores this machine has")
     cred_backends.set_defaults(func=cmd_cred_backends)
@@ -2442,7 +2664,7 @@ def main(argv=None, stdout=None, stderr=None):
         if getattr(args, "command", None) == "notifications":
             return emitter.fail(UsageError("notifications needs a subcommand: list, ack, watch"))
         if getattr(args, "command", None) == "tasks":
-            return emitter.fail(UsageError("tasks needs a subcommand: record, mark, review-open, review-result, list, watch"))
+            return emitter.fail(UsageError("tasks needs a subcommand: record, mark, retitle, review-open, review-result, trace-record, trace, list, watch"))
         if getattr(args, "command", None) == "skills":
             return emitter.fail(UsageError("skills needs a subcommand: list, show, install, remove"))
         if getattr(args, "command", None) == "auth":

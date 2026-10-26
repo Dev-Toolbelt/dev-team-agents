@@ -22,6 +22,7 @@ Load `skills/shared/model-identity/SKILL.md` — emit this table before any othe
 **First thing**: check if tests are required for this project.
 
 Look for (in order):
+0. The `TESTS_REQUIRED` value the spawning command resolved; if none was handed over, resolve it per `skills/shared/auto-routing/SKILL.md` § Test Gate. `yes` settles it; `no` means no tests unless the user explicitly asks
 1. `CLAUDE.md` — explicit instruction about test requirements
 2. `AGENTS.md` — test-related overrides
 3. Presence of test files or test config (`jest.config.*`, `vitest.config.*`, `playwright.config.*`, `cypress.config.*`)
@@ -34,7 +35,7 @@ If none indicate tests are required:
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (spawn-prompt `WORKTREE_PATH`/`BRANCH` → session file → `worktree_active` preference → ask once). Given `WORKTREE_PATH`/`BRANCH`, work only there and leave merge and teardown to the orchestrator; when it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 
@@ -49,6 +50,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 - Read the existing test files for the patterns, helpers, and setup already in use
 - Map existing coverage first: which component paths, interactions, and states are already tested — avoid duplication, surface the real gaps
 - Read the component/page under test in full before deciding what to test
+- When the task links a spec (`docs/specs/<feature>.md`), load `skills/shared/spec-gate/SKILL.md`: derive one test per scenario (only the task's `**Covers**:` IDs when given), before the implementation when the command runs test-first, and tag each with its `[spec:<feature>#S<n>]` token (§ Traceability); for a retroactive spec, tag existing tests instead of writing new ones (§ Retroactive Spec)
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 

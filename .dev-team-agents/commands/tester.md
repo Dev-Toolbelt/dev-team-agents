@@ -7,6 +7,8 @@ Load `skills/shared/current-context/SKILL.md` and restrict all work to the activ
 
 **Agent base path:** `.claude/agents/dev-team/` — the agents named below all live there, one file per agent name; spawn each by name with the Task tool.
 
+If $ARGUMENTS links a spec or names a sprint task (`TASK-NNN`), load `skills/shared/spec-gate/SKILL.md`, resolve it per § Task Resolution, and pass the spec path and `Covers` IDs in every prompt: tests are derived from those scenarios and tagged per § Traceability.
+
 ---
 
 **MANDATORY:** Use the Task tool to spawn the agents below. Do NOT handle this task in the main context — always delegate. The only exception is if the user explicitly asks not to use agents.
@@ -24,7 +26,7 @@ Also spawn if the context includes mobile changes (ios/, android/, *.swift, *.kt
 
 ## Next step (mandatory)
 
-After the agents complete, if code changed, ask the **Review Next-Step Gate** from the interaction-patterns skill loaded above — a dynamic `AskUserQuestion` with the review as the recommended option, never a plain-text next-step line.
+After the agents complete, if code changed, run the **Review Next-Step Gate** from the interaction-patterns skill loaded above.
 
 ---
 

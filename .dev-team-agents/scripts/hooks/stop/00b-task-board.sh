@@ -17,6 +17,10 @@ devteam_task_board_init || exit 0
 # The turn is over: its next direct work is a new turn, and its prompt is no longer needed
 # (docs/specs/task-board.md § Direct work).
 devteam_task_board_clear_turn "$SESSION" prompt
+# The execution trace (ADR-0041) settles beside the record, only when this session has one.
+if [ -f "${TB_STATE_DIR}/task-board/trace/${SESSION}.json" ]; then
+    devteam_task_board_trace "$INPUT" --stop
+fi
 [ -f "${TB_STATE_DIR}/task-board/${SESSION}.json" ] || exit 0
 devteam_task_board_mark idle "$INPUT" >/dev/null 2>&1
 exit 0

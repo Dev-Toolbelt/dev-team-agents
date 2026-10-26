@@ -35,7 +35,7 @@ Follow `skills/shared/plan-mode/SKILL.md` before executing any non-trivial imple
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (spawn-prompt `WORKTREE_PATH`/`BRANCH` → session file → `worktree_active` preference → ask once). Given `WORKTREE_PATH`/`BRANCH`, work only there and leave merge and teardown to the orchestrator; when it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 
@@ -46,6 +46,8 @@ Before creating any UI, load all three:
 1. `skills/design/design-system-audit/SKILL.md` — reads and documents the project's current visual language
 2. `skills/design/frontend-design/SKILL.md` — **required**; provides component patterns, layout techniques, and visual design guidance. Installed automatically by `scripts/install.sh`. Load it at the start of every UI session.
 3. `skills/design/web-design-guidelines/SKILL.md` — **required**; audits UI code against Vercel's Web Interface Guidelines (design, accessibility, UX). Installed automatically by `scripts/install.sh`. Load it at the start of every UI session.
+
+Then load `skills/design/third-party-design-skills/SKILL.md` and follow its routing table to add the vendored third-party design skill the task calls for.
 
 **Visual consistency is non-negotiable.** New UI must match the existing visual language of the project — same spacing scale, same color tokens, same component patterns. When in doubt, consult the `ui-ux-designer`.
 

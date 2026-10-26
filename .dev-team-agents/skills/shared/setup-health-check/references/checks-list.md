@@ -28,6 +28,43 @@ case "$STATE_DIR" in "$ROOT"/*) echo "IN_STORE: no" ;; *) echo "IN_STORE: yes" ;
 On a project that is not bound, the three paths resolve to `.dev-team-agents/user-data/` and
 `IN_STORE` is `no`; every category below runs exactly as written.
 
+Then resolve the **docs root** — the write root of `context_paths` (`skills/shared/project-context/SKILL.md` § Context Loading Order). Category 11 and the reuse checks read `$DOCS_ROOT` wherever a body says `docs/`:
+
+```bash
+DOCS_OUT="$(python3 - "$ROOT" <<'DOCS'
+import json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+try:
+    data = json.loads((root / ".dev-team-agents/project.json").read_text())
+    paths = data.get("context_paths") if isinstance(data, dict) else None
+except (OSError, ValueError):
+    paths = None
+first = (paths or ["docs"])[0]
+# Same constraint project.validate() enforces: a relative path inside the project
+write_root = first if isinstance(first, str) and first and not Path(first).is_absolute() and ".." not in Path(first).parts else "docs"
+docs_root = write_root
+# Only the pre-root location is a relocation candidate. Any other context_paths entry is a
+# read-only extra folder by design and is never offered a move.
+if not (root / write_root).is_dir() and (root / ".claude/docs").is_dir():
+    docs_root = ".claude/docs"
+print("WRITE_ROOT:", write_root)
+print("DOCS_ROOT:", docs_root)
+if docs_root != write_root:
+    print("DOCS_ROOT_MISMATCH:", write_root)
+DOCS
+)"
+echo "$DOCS_OUT"
+WRITE_ROOT="$(printf '%s\n' "$DOCS_OUT" | sed -n 's/^WRITE_ROOT: //p')"
+DOCS_ROOT="$(printf '%s\n' "$DOCS_OUT" | sed -n 's/^DOCS_ROOT: //p')"
+```
+
+`DOCS_ROOT_MISMATCH` is a Category 11 finding: the write root is missing while the docs sit in
+`.claude/docs/` — where a pre-root install kept them and `devteam migrate` left them — so agents
+would write new ADRs, wiki entries and specs to a folder the project does not use. A missing write
+root with no `.claude/docs/` beside it is not a mismatch: it is the plain `WIKI: MISSING` /
+`ADRS: MISSING` of Category 11.
+
 ### When `BOUND: yes`
 
 **This table overrides the category bodies below.** Where a body names a literal
@@ -51,7 +88,7 @@ on every layout; a legacy `.dev-team-agents/user-data/graphify.json` is moved th
 | 10 Credentials | Run `devteam doctor` and report its `credentials_local` findings. Check `.dev-team-agents/credentials.local.json` only if it exists — never create it. A legacy copy in `user-data/` or in the store is relocated byte-for-byte by `devteam doctor` / `devteam sync`; a conflict between two non-blank copies is reported for the user to merge by hand |
 | 11 Memory Artifacts | Check `session-summary.md` in `MEMORY_DIR`; the missing-file fix creates it there |
 
-Categories 4, 6, 12 and 13 are unchanged.
+Categories 4, 6, 12, 13 and 14 are unchanged.
 
 ## Category 1 — Symlinks
 
@@ -425,14 +462,32 @@ If enabled, also check that every `config.targetPaths` / `config.manifestPaths` 
 and that `graphify-out/graph.json` parses (`jq empty graphify-out/graph.json`).
 
 **Generation actually works.** File presence does not prove the pipeline runs — earlier refresh
-scripts shipped with gates that silently no-op'd and exited `0`. Run it for real:
+scripts shipped with gates that silently no-op'd and exited `0`. Whether to rebuild follows from `status`:
+
+| `status` | Action |
+|----------|--------|
+| Last build recorded, at `HEAD`, and `graph.json` parses | Current — no rebuild; the recorded build is the proof |
+| No last build recorded, `HEAD` moved since it, or `graph.json` missing/invalid | Rebuild — **mandatory**, never skipped for its duration |
 
 ```bash
+stat -c %Y graphify-out/graph.json 2>/dev/null || stat -f %m graphify-out/graph.json 2>/dev/null   # GNU first: GNU `-f` succeeds with filesystem data
 devteam plugin run graphify rebuild --json   # forces a build; ok:false carries log_tail
 ```
 
-Compare `graphify-out/graph.json`'s mtime before and after: an unchanged mtime with `ok: true` is a
-silent no-op.
+A rebuild can take up to 30 minutes, so start it **in the background** when this category runs,
+carry on with Category 6 onwards, and collect its result before the summary. Use the provider's
+background command mode; where there is none, detach it and poll the plugin status instead:
+
+```bash
+mkdir -p graphify-out
+nohup devteam plugin run graphify rebuild --json > graphify-out/.health-check-rebuild.log 2>&1 &
+# later, before the summary
+devteam plugin show graphify --json        # status: last build commit and time
+```
+
+Compare the mtime before and after: an unchanged mtime with `ok: true` is a
+silent no-op. A build still running at the summary is reported as `running`, with
+`devteam plugin show graphify --json` to follow it — never as `OK`, never as "not verified".
 
 | Check | Auto-fix |
 |-------|----------|
@@ -452,16 +507,23 @@ is not a finding.
 ## Category 6 — CLAUDE.md
 
 ```bash
-grep -l "dev-team-agents" CLAUDE.md 2>/dev/null || echo "MISSING SECTION"
+[ -d .claude ] && { grep -l "dev-team-agents" CLAUDE.md 2>/dev/null || echo "MISSING SECTION"; }
 grep -qF "<!-- dev-team-agents: pre-compact-auto-summary -->" CLAUDE.md 2>/dev/null && echo "OK: pre-compact-rule" || echo "MISSING: pre-compact-rule"
 grep -qF "<!-- dev-team-agents: commit-rule -->" CLAUDE.md 2>/dev/null && echo "OK: commit-rule" || echo "MISSING: commit-rule"
+grep -lF "spawn these three agents **in parallel" CLAUDE.md AGENTS.md 2>/dev/null | sed "s/^/STALE: planning-routing in /"
+for f in CLAUDE.md AGENTS.md; do grep -qF '#### `backend-developer`' "$f" 2>/dev/null && ! grep -qF 'devteam:routing v3' "$f" && echo "STALE: verbose routing in $f"; done
+# codex/opencode in this project (same signals as providers.detect_in_project) → AGENTS.md needs the section too
+{ [ -d .codex ] || [ -d .opencode ] || [ -f opencode.json ] || [ -f opencode.jsonc ]; } && ! grep -qE "^## dev-team-agents$" AGENTS.md 2>/dev/null && echo "MISSING SECTION: AGENTS.md"
 ```
 
 | Check | Auto-fix |
 |-------|----------|
-| `## dev-team-agents` section present in `CLAUDE.md` | WARN — re-run setup (Step 5) to append the section |
+| `## dev-team-agents` section present in `CLAUDE.md` when Claude Code is in the project (`.claude/`) | WARN — re-run setup (Step 5) to append the section |
+| `## dev-team-agents` section present in `AGENTS.md` when Codex or opencode is installed (`MISSING SECTION: AGENTS.md`) | WARN — re-run setup (Step 5); Codex never reads `CLAUDE.md`, so without it plain-language requests are not routed there |
 | `<!-- dev-team-agents: pre-compact-auto-summary -->` marker present | Auto-fix: append the pre-compact auto-summary rule block (see fix-patterns.md) |
 | `<!-- dev-team-agents: commit-rule -->` marker present | Auto-fix: append the Commit Rule block (see fix-patterns.md) — without it, direct-prompt commits never load `conventional-commits` or show the Work Summary Table, since only `/devteam:commit` wires that in directly |
+| No `STALE: planning-routing in <file>` (`CLAUDE.md` or `AGENTS.md`) — the v1 `### Auto-Routing: Planning` section that spawns three planning agents in parallel | Auto-fix when the section is unedited, else WARN with the merge (see fix-patterns.md) — left alone, a plain-language planning request skips the `/devteam:plan` sequence |
+| No `STALE: verbose routing in <file>` — a pre-v3 section with per-agent `####` keyword/file lists (~100 lines loaded on every turn) instead of the compact v3 tables | Auto-fix when unedited, else WARN with the merge (see fix-patterns.md § compact routing). Run after the planning-routing fix, so a v1 section is first brought to v2 |
 
 ## Category 7 — .gitignore
 
@@ -612,31 +674,48 @@ devteam doctor
 | Legacy copies (`user-data/`, store) | WARN if `devteam doctor` reports a conflict | `devteam doctor` moves a legacy copy to the root without changing its content and quarantines blank or duplicate copies. Two different non-blank copies are left untouched — tell the user to merge them by hand. |
 | `.gitignore` entry for `.dev-team-agents/credentials.local.json` | OK if present | The managed `.gitignore` block includes this entry on both layouts — `devteam sync` fixes a missing line. |
 
+### Every other `devteam doctor` finding
+
+`devteam doctor` reports a provider's checks only when that provider is bound in the project, so
+**none of its WARNs is out of scope** — not even for a provider other than the one running the
+health check. Close each under `SKILL.md` § Resolution Rule:
+
+| `permissions` finding | Resolution |
+|-----------------------|------------|
+| Claude ask rules missing, opencode rules overridden, `.codex/rules/…` missing or out of date | Fixed — `devteam sync`, then `devteam doctor` again to confirm |
+| Codex does not trust this project | Handed over — open the project in Codex and accept the trust prompt |
+| Codex Default mode rejects the interactive chooser | Handed over — `fix-patterns.md` § Codex Default mode chooser flag; never edit `~/.codex/config.toml` |
+
+Any other finding carries a `hint`: apply it when it names a `devteam` command, otherwise hand it over as written.
+
 ## Category 11 — Memory Artifacts
 
 These files accumulate knowledge that exists nowhere else (`skills/shared/project-context/SKILL.md` § Memory Layers). Every fix here is an in-place adaptation. **Nothing in this category may create, overwrite, or delete an entry** — the check reports and patches structure, never content.
 
+`DOCS_ROOT` comes from § Before Category 1; every `docs/` path in this category means `$DOCS_ROOT/`.
+
 ```bash
 # Presence
 [ -f .dev-team-agents/user-data/session-summary.md ] && echo "SESSION: OK" || echo "SESSION: MISSING"
-[ -d docs/wiki ] && echo "WIKI: OK" || echo "WIKI: MISSING"
-[ -d docs/development/adrs ] && echo "ADRS: OK" || echo "ADRS: MISSING"
+[ -d "$DOCS_ROOT/wiki" ] && echo "WIKI: OK" || echo "WIKI: MISSING"
+{ [ -d "$DOCS_ROOT/development/adrs" ] || [ -d "$DOCS_ROOT/adr" ]; } && echo "ADRS: OK" || echo "ADRS: MISSING"
 
 # Wiki index format: does README.md carry a retrieval index, or only the legacy domain-count table?
-if [ -f docs/wiki/README.md ]; then
-  grep -q "^## Index" docs/wiki/README.md && echo "WIKI_INDEX: OK" || echo "WIKI_INDEX: LEGACY_FORMAT"
+if [ -f "$DOCS_ROOT/wiki/README.md" ]; then
+  grep -q "^## Index" "$DOCS_ROOT/wiki/README.md" && echo "WIKI_INDEX: OK" || echo "WIKI_INDEX: LEGACY_FORMAT"
   # entries on disk vs rows in the index
-  echo "WIKI_FILES: $(find docs/wiki -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l | tr -d ' ')"
-  echo "WIKI_ROWS: $(grep -c '^| `' docs/wiki/README.md 2>/dev/null || echo 0)"
+  echo "WIKI_FILES: $(find "$DOCS_ROOT/wiki" -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l | tr -d ' ')"
+  echo "WIKI_ROWS: $(grep -c '^| `' "$DOCS_ROOT/wiki/README.md" 2>/dev/null || echo 0)"
 fi
 ```
 
 | Check | Status | Auto-fix |
 |-------|--------|----------|
+| `DOCS_ROOT_MISMATCH` | Asked | `AskUserQuestion`, each description saying what changes: **Move to `docs/`** (recommended — moves the files, rewrites `.claude/docs/` links in the project's Markdown and instruction files, drops the entry from `context_paths`), **Keep `.claude/docs` as the write root** (reorders `context_paths` only; the ADR script, the index lint and the reuse lint follow it, but specs and the sprint backlog — `spec-lint`, `devteam backlog` — still read `docs/`, and docs already pointing at `docs/` keep doing so), **Not now**. Apply `fix-patterns.md` § Docs root relocation in the same run, then set `DOCS_ROOT="$WRITE_ROOT"` (Move) and run the presence block above again before the wiki rows below |
 | `session-summary.md` missing | WARN | Create empty — never regenerate one that exists |
 | `docs/wiki/` missing | WARN | `mkdir -p docs/wiki` + index-format `README.md` (see `skills/shared/docs-sync/references/wiki-format.md`) |
-| `WIKI_INDEX: LEGACY_FORMAT` | Outdated | **Adapt in place**: insert the `## Index` section above the existing `## Domains` table. Keep every domain row — the `Covers` text is authored content. Never rewrite the file |
-| `WIKI_ROWS` < `WIKI_FILES` | Outdated | Entries exist that the index cannot retrieve. Append one row per unindexed file, reading its `Tags` and callout. Report the count fixed |
+| `WIKI_INDEX: LEGACY_FORMAT` | Fixed, no question | **Adapt in place** (`fix-patterns.md` § Legacy wiki index): insert the `## Index` section above the `## Domains` table, or append it when there is none. Keep every existing line — the `Covers` text is authored content. Never rewrite the file. An empty wiki is adapted too: the index is where its first entry's row goes |
+| `WIKI_ROWS` < `WIKI_FILES` | Fixed, no question | Entries exist that the index cannot retrieve. Append one row per unindexed file, reading its `Tags` and callout. Report the count fixed |
 | `WIKI_ROWS` > `WIKI_FILES` | WARN only | A row points at a file that is gone. **Report the row; do not remove it** — a missing entry is a restore candidate, and the row is the only surviving record of what it held |
 | ADR numbering has gaps | WARN only | Report. Never renumber: ADR ids are referenced from commits, wiki entries, and other ADRs |
 
@@ -657,6 +736,31 @@ grep -rliE 'sempre us[ea]|componente (canônico|padrão|central)|padrão obrigat
 | No matches | OK | No action |
 
 Health-check stays detection-only for this category: it tells the user something is worth scanning, `/devteam:sync-rules` does the classify → propose → confirm → append work (per-candidate confirmation, never a bulk write).
+
+### Rule Registry Validity and Staleness
+
+A registry row can rot without anyone noticing: a regex that no longer compiles, a `canonical_ref` that was moved, a standards document nobody has touched in a year. The lint degrades on all of these instead of failing, so this check is where they surface.
+
+```bash
+bash .dev-team-agents/scripts/reuse-lint.sh --validate   # silent and exit 0 when the registry is absent or valid
+for f in docs/project.md docs/development/code-standards.md docs/development/architecture.md; do
+  # First five lines, either form — line 1 is canonical, but a date written lower must not read as "no date"
+  [ -f "$f" ] || continue
+  d=$(head -5 "$f" | grep -oE 'last-updated: [0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
+  [ -n "$d" ] && echo "$f: $d" || echo "$f: NO_DATE"
+done
+# name + added of every row that has an `added` date (8th cell)
+grep '^|' docs/development/reuse-guidelines.md 2>/dev/null | sed 's/\\|//g' | awk -F'|' '$9 ~ /[0-9]{4}-[0-9]{2}-[0-9]{2}/ {gsub(/ /,"",$2); gsub(/ /,"",$9); print $2, $9}'
+```
+
+| Check | Status | Action |
+|-------|--------|--------|
+| `--validate` prints `INVALID` lines | WARN | Report each line. Do not edit or delete the row — a broken rule is the user's to repair or retire (`skills/shared/reuse-guidelines/SKILL.md` § Updating the Registry) |
+| `code-standards.md` / `architecture.md` `last-updated` older than `docs_stale_after_days` (from `PREFS_FILE`, default `30`) | WARN | Report the file and date; suggest `software-architect` review it. Never bump the date without a review |
+| `project.md` `last-updated` older than `docs_stale_after_days`, or any of the three files printing `NO_DATE` | WARN | Report it; suggest `setup-assistant` in REFRESH mode for `project.md`. A date outside line 1 is adapted in place to `<!-- last-updated: … -->` on line 1 (`skills/shared/docs-sync/SKILL.md` § Core Rules) |
+| `scripts/ci/reuse-lint.sh` exists and differs from `.dev-team-agents/scripts/reuse-lint.sh` (`cmp -s`) | WARN | The committed CI copy has drifted from the shipped lint (`skills/devops/cicd-base/SKILL.md` § Project Rule Lint). Report it; never overwrite the copy |
+| Registry rows whose `added` is older than one year | INFO | List their `name`s as candidates to re-confirm — age alone never retires a rule |
+| All pass | OK | No action |
 
 ## Category 12 — Python Prerequisite
 
@@ -685,3 +789,99 @@ done
 | Any tool in the list missing | WARN only | None — report the missing tool(s) and direct the user to `/devteam:install <tool>` (or `/devteam:install all`); never install automatically |
 
 Only warn when a tool is actually missing — do not repeat the hint on every run once it is present.
+
+## Category 14 — Docs Layout
+
+Reads the project's docs layout (`skills/shared/doc-flow/SKILL.md` § Doc Layout). Run from the project root; every path comes from the map through `doc-path.sh`, never typed here.
+
+```bash
+DP() { bash .dev-team-agents/scripts/doc-path.sh "$1" 2>/dev/null; }
+LAYOUT="$(bash .dev-team-agents/scripts/doc-path.sh --layout 2>/dev/null || echo development)"
+echo "DOCS_LAYOUT: $LAYOUT"
+```
+
+### When `DOCS_LAYOUT: development`
+
+Not a finding. Report `Docs layout — development` as OK and add **one** INFO line under *Recommendations*: the gated layout is available through the opt-in migration (`fix-patterns.md` § Docs layout migration). Do not ask, do not repeat it per document, never mark it WARN.
+
+### When `DOCS_LAYOUT: gated`
+
+```bash
+DP() { bash .dev-team-agents/scripts/doc-path.sh "$1" 2>/dev/null; }   # redefined: each block may run in its own shell
+SKEL=.dev-team-agents/skills/shared/docs-templates/SKILL.md
+T=.dev-team-agents/templates
+PROJECT_MD="$(DP project)"
+HAS_UI="$(sed -n 's/^HAS_UI: *//p' "$PROJECT_MD" 2>/dev/null | head -1)"
+USES_LLM="$(sed -n 's/^USES_LLM: *//p' "$PROJECT_MD" 2>/dev/null | head -1)"
+echo "HAS_UI: ${HAS_UI:-unknown}  USES_LLM: ${USES_LLM:-unknown}"
+
+# 1. Skeleton: one row per key in docs-templates § Gated Skeleton (Key | Seed | When)
+awk -F'|' '/^### Gated Skeleton/{f=1;next} /^#/{f=0} f && $2 ~ /`[a-z-]+`/ {k=$2; w=$4; gsub(/[` ]/,"",k); gsub(/ /,"",w); print k, w}' "$SKEL" |
+while read -r key when; do
+  case "$when" in ui) [ "$HAS_UI" = yes ] || continue ;; llm) [ "$USES_LLM" = yes ] || continue ;; esac
+  p="$(DP "$key")"; [ -n "$p" ] || continue
+  case "$p" in */) [ -d "$p" ] ;; *) [ -e "$p" ] ;; esac && echo "SKELETON_OK: $key" || echo "SKELETON_MISSING: $key $p"
+done
+
+# 2. Read-only inputs: an edited, renamed or deleted file is a violation (creating one is allowed)
+DP_RO="$(bash .dev-team-agents/scripts/doc-path.sh --readonly 2>/dev/null)"
+printf '%s\n' "$DP_RO" | sed '/^$/d' | while IFS= read -r ro; do
+  git log --diff-filter=MDR --name-only --format= -- "$ro" 2>/dev/null | sort -u | sed '/^$/d; s/^/RO_EDITED: /'
+  git status --porcelain -- "$ro" 2>/dev/null | grep -E '^(.M|M.|.D|D.|R.)' | sed 's/^/RO_UNCOMMITTED: /'
+done
+
+# 3. Gate artifacts per stage reached
+fill() {  # fill <key> → missing | unfilled | filled
+  p="$(DP "$1")"; [ -e "$p" ] || { echo missing; return; }
+  [ -f "$T/$1-template.md" ] && cmp -s "$p" "$T/$1-template.md" && { echo unfilled; return; }
+  grep -qE 'TODO: [a-z-]+ to ' "$p" 2>/dev/null && { echo unfilled; return; }
+  echo filled
+}
+SPECS="$(DP specs)"; FLOWS="$(DP design-flows)"; EVALS="$(DP evals)"; ADRS="$(DP adr)"
+N_SPECS=0
+for s in "$SPECS"*.md; do
+  [ -f "$s" ] || continue
+  case "$s" in *-contract.md|*/README.md) continue ;; esac
+  N_SPECS=$((N_SPECS + 1)); f="$(basename "$s" .md)"
+  FM="$(sed -n '/^---$/,/^---$/p' "$s")"
+  printf '%s\n' "$FM" | grep -qE '^touches:.*frontend' && [ ! -f "$FLOWS$f.md" ] && echo "GATE_FE_SPEC_NO_FLOW: $f"
+  printf '%s\n' "$FM" | grep -qE '^ai: *true' && ! grep -qsE "^## +$f( |$)" "$EVALS" && echo "GATE_AI_SPEC_NO_EVALS: $f"
+done
+echo "SPECS: $N_SPECS"
+if [ "$N_SPECS" -gt 0 ]; then
+  for key in prd glossary nfr architecture data-model api-contracts threat-model; do
+    st="$(fill "$key")"; [ "$st" = filled ] || echo "GATE_STAGE_GAP: $key $st"
+  done
+  [ "$(find "$ADRS" -maxdepth 1 -name '*.md' ! -name README.md 2>/dev/null | wc -l | tr -d ' ')" -gt 0 ] || echo "GATE_STAGE_GAP: adr none"
+  if [ "$HAS_UI" = yes ]; then
+    grep -qs '"\$value"' "$(DP design-tokens)" || echo "GATE_STAGE_GAP: design-tokens unfilled"
+  fi
+fi
+for fl in "$FLOWS"*.md; do
+  [ -f "$fl" ] || continue
+  grep -E '^\|[^|]+\|[^|]+\| *`[^`[]+\.png` *\|' "$fl" | while IFS='|' read -r _ st _ png status _; do
+    png="$(printf '%s' "$png" | tr -d '` ')"; status="$(printf '%s' "$status" | tr -d ' ')"; st="$(printf '%s' "$st" | tr -d ' ')"
+    [ -f "$png" ] || echo "GATE_STATE_NO_PNG: $(basename "$fl" .md) $st $png"
+    [ "$status" = approved ] || echo "GATE_STATE_NOT_APPROVED: $(basename "$fl" .md) $st"
+  done
+done
+# Stage 5 reached without stage 4
+SPRINTS="$(DP sprints)"
+if ls "$SPRINTS"*-sprint-*.md >/dev/null 2>&1 && [ "$N_SPECS" -eq 0 ]; then
+  echo "GATE_STAGE_GAP: specs none (sprint files exist)"
+fi
+```
+
+`unfilled` means the doc is still its verbatim template or keeps a skeleton `TODO: <owner> to` marker (`skills/shared/docs-templates/SKILL.md` § Gated Skeleton). A gate artifact is never written by the health check: its content is the owner agent's work, named by the key's `owner` in the map.
+
+| Check | Status | Action |
+|-------|--------|--------|
+| `SKELETON_MISSING` | Fixed, no question | Create it from its seed in § Gated Skeleton (`fix-patterns.md` § Gated skeleton) — creates only, never overwrites |
+| `SKELETON_MISSING: process` | Fixed, no question | Same fix; the `process` doc is what carries the flow for humans, so report it by name |
+| `HAS_UI` or `USES_LLM` `unknown` | Asked | `AskUserQuestion` (Yes / No) and add the line to `docs/project.md` under `## Type & Config`; then run the skeleton block again for the `ui` / `llm` rows |
+| `RO_EDITED` / `RO_UNCOMMITTED` | Asked | `fix-patterns.md` § Read-only input edited — never revert without consent |
+| `GATE_STAGE_GAP` | Handed over | *Recommendations* row per key: the owner from the map and its entry point (`software-architect` → `/devteam:architect`, `ui-ux-designer` → `/devteam:design`, `product-analyst` → `/devteam:plan`) |
+| `GATE_FE_SPEC_NO_FLOW` | Handed over | `ui-ux-designer` writes the `design-flows` file for the feature (`/devteam:design`); no frontend task on it is ready until then (doc-flow § Definition of Ready) |
+| `GATE_STATE_NO_PNG` / `GATE_STATE_NOT_APPROVED` | Handed over | `ui-ux-designer` exports the state and the user approves the PNG; list each feature, screen state and path |
+| `GATE_AI_SPEC_NO_EVALS` | Handed over | `software-architect` adds the feature's section to the `evals` doc (`/devteam:architect`) |
+| All pass | OK | `Docs layout — gated, skeleton complete, no gate gaps` |

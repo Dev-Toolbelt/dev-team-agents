@@ -82,7 +82,7 @@ In this mode the Execution Strategy Gate quiz is **skipped entirely** — resolv
 6. **Final notification** — notify only when implementation, review, QA, and the consolidated
    summary are all complete.
 
-> **Critical**: subagents have no shell access and cannot create worktrees or branches. The
+> **Critical**: a subagent cannot ask the user, so the worktree/branch decision is not its to make. The
 > worktree/branch MUST exist in the orchestrator's context before any subagent is spawned, and the
 > path MUST be passed in every spawn prompt.
 
@@ -393,8 +393,8 @@ than one or two parallel spawns.
 
    ```
 
-   Then close with the **Review Next-Step Gate** (`skills/shared/interaction-patterns/SKILL.md`)
-   — a dynamic `AskUserQuestion`, never a plain-text "run `/devteam:review`" line. If UI changed,
+   Then run the **Review Next-Step Gate** (`skills/shared/interaction-patterns/SKILL.md`).
+   If UI changed,
    follow it with the **Visual Check Gate** from the same skill, built from the sub-agents'
    **Screens to check** lists.
 

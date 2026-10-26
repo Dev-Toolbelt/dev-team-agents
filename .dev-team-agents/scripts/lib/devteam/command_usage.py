@@ -38,6 +38,12 @@ _LIB_DIR = Path(__file__).resolve().parent.parent
 #: commands.json, not by this pattern.
 _INVOCATION_RE = re.compile(r"^\s*(?:/devteam:|\$devteam-)([a-z][a-z-]*)(?=\s|$)")
 
+
+def invocation(text):
+    """The command name a prompt opens with (``/devteam:<name>`` or ``$devteam-<name>``), else ``None``."""
+    match = _INVOCATION_RE.match(text or "")
+    return match.group(1) if match else None
+
 #: Env markers a provider's own process sets, strongest first. `DEVTEAM_PROVIDER` is the
 #: explicit override (the opencode plugin sets it); Claude Code exports `CLAUDECODE`.
 _ENV_PROVIDER = (("DEVTEAM_PROVIDER", None), ("CLAUDECODE", "claude"), ("CLAUDE_PROJECT_DIR", "claude"))

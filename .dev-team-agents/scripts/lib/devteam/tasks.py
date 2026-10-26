@@ -21,6 +21,7 @@ no-op, never an error.
 
 from __future__ import annotations
 
+import collections
 import copy
 import datetime
 import hashlib
@@ -37,7 +38,7 @@ import time
 from pathlib import Path
 
 from . import jsonio, lock, paths, pr_refs, project, review_triggers
-from .errors import DevteamError
+from .errors import ConflictError, DevteamError
 
 SCHEMA = 1
 TASKS_DIR = "task-board"
@@ -47,6 +48,9 @@ HISTORY_CAP = 50
 MAX_PRS = 20
 MAX_REFS = 50
 MAX_MERGES = 50
+#: Most tasks one session record keeps. Past it the oldest *removed* tasks go first (:func:`_cap_tasks`);
+#: an open task is never dropped, so a list that is genuinely longer than this still reads whole.
+MAX_TASKS = 200
 
 PROVIDERS = ("claude", "codex", "opencode")
 STATUSES = ("pending", "in_progress", "completed", "cancelled")
@@ -138,9 +142,17 @@ def _text(value):
 MAX_TASK_TEXT = 2000
 
 
+#: Raw characters :func:`_task_text` looks at: the kept text is cut to :data:`MAX_TASK_TEXT` after
+#: whitespace collapses, so the slack covers collapsing and a secret straddling the cut.
+_TASK_TEXT_SCAN = MAX_TASK_TEXT * 4
+
+
 def _task_text(text):
     # Every task text gets the excerpt's treatment: invisible characters dropped, secrets masked.
-    return " ".join(redact(_INVISIBLE.sub(" ", text)).split())[:MAX_TASK_TEXT].rstrip() if text else text
+    # Cut before the work (a tool payload can be megabytes), not after.
+    if not text:
+        return text
+    return " ".join(redact(_INVISIBLE.sub(" ", text[:_TASK_TEXT_SCAN])).split())[:MAX_TASK_TEXT].rstrip()
 
 
 def norm_content(text):
@@ -266,6 +278,23 @@ def _spawned_agent_id(response):
     return ""
 
 
+#: A Codex multi-agent v2 task path, as `spawn_agent` answers it and a `FINAL_ANSWER` names its author.
+_TASK_PATH = re.compile(r"^/[A-Za-z0-9_./-]{1,200}$")
+
+
+def _spawned_task_path(response):
+    """The task path a Codex multi-agent v2 ``spawn_agent`` answered with (``/root/<name>``), else ``""``.
+
+    v2 answers ``{"task_name": …}`` and no agent id; the agent's end then reaches only the parent's
+    rollout, as a ``FINAL_ANSWER`` message (:func:`_scan_codex_v2`).
+    """
+    for found in _json_objects(response):
+        name = found.get("task_name")
+        if isinstance(name, str) and _TASK_PATH.match(name) and ".." not in name:
+            return name
+    return ""
+
+
 #: Codex's final agent states (`AgentStatus`, snake_case) -> (task status, failed).
 _WAIT_FINAL = {
     "completed": ("completed", False),
@@ -294,6 +323,15 @@ def _wait_results(response):
         if out:
             break
     return out
+
+
+def _result_agent_id(payload):
+    """The runtime agent id a Claude ``Agent`` result names (``agentId``), else ``""``."""
+    for found in _json_objects(payload.get("tool_response") or payload.get("tool_output")):
+        ident = _id_text(found.get("agentId"))
+        if ident:
+            return ident
+    return ""
 
 
 def _agent_text(provider, name, inp):
@@ -338,14 +376,15 @@ def _agent_op(payload, provider, bare):
     if failed:
         return ("agent_end", {"id": use_id, "agent": name, "status": "cancelled", "failed": True})
     if bare == "spawn_agent":
-        ref = _spawned_agent_id(payload.get("tool_response"))
+        ref = _spawned_agent_id(payload.get("tool_response")) or _spawned_task_path(payload.get("tool_response"))
         if ref:
-            return ("agent_ref", {"id": use_id, "ref": ref}) if use_id else None
+            return ("agent_ref", {"id": use_id, "ref": ref, "transcript": transcript}) if use_id else None
         # The spawn answered with no agent id: no agent exists, and no wait can ever settle it.
         return ("agent_end", {"id": use_id, "agent": name, "status": "cancelled", "failed": True})
+    runtime_id = _result_agent_id(payload) if provider == "claude" else ""
     if background or _async_launch(payload):
-        return ("agent_bg", {"id": use_id, "agent": name, "transcript": transcript})
-    return ("agent_end", {"id": use_id, "agent": name, "status": "completed", "failed": False})
+        return ("agent_bg", {"id": use_id, "agent": name, "transcript": transcript, "agent_id": runtime_id})
+    return ("agent_end", {"id": use_id, "agent": name, "status": "completed", "failed": False, "agent_id": runtime_id})
 
 
 def normalize(payload, provider="auto"):
@@ -377,6 +416,9 @@ def normalize(payload, provider="auto"):
     else:
         return _normalize_direct(payload, provider, tool_name, bare_tool)
     if detected is None or provider not in ("auto", detected):
+        return None
+    if detected == "opencode" and _first_text(payload, "parent_id"):
+        # A child session's todos and spawns are its agent task's: the same rule direct work applies.
         return None
 
     session_id = _first_text(payload, "session_id", "sessionID", "sessionId")
@@ -667,27 +709,61 @@ def _normalize_direct(payload, provider, tool_name, bare_tool):
     }
 
 
+_GIT_ID = re.compile(r"[0-9a-f]{40}")
+
+
+def _long_token(match):
+    """A long run is a secret when it mixes letters and digits; a 40-hex commit id is not one."""
+    token = match.group(0)
+    if _GIT_ID.fullmatch(token.rstrip("=")) or not (re.search(r"\d", token) and re.search(r"[A-Za-z]", token)):
+        return token
+    return "[redacted]"
+
+
+def _bare_pass(match):
+    """``pass is X`` / ``pwd is X``: masked only when X looks like a credential, not a word or a path.
+
+    ``pass`` and ``pwd`` are ordinary words ("the pass is clear", "pwd is /home/me"), unlike
+    ``password``, so X must hold a digit or symbol, or mix letter cases, and contain no ``/``.
+    """
+    value = match.group(3)
+    bare = value.rstrip(".,;:!?)\"'")
+    if "/" in value or not (re.search(r"[^A-Za-z]", bare) or (bare.lower() != bare and bare.upper() != bare)):
+        return match.group(0)
+    return "{}{}[redacted]".format(match.group(1), match.group(2))
+
+
 _KEYWORD = r"(?:[A-Za-z0-9]+[-_]){0,4}(?:api[-_]?key|access[-_]key|private[-_]key|secret[-_]key|secret|token|password|passwd|pwd|pass|senha|credentials?)(?:[-_][A-Za-z0-9]+){0,4}"
 #: ``(pattern, replacement)``, applied in order. Shapes of real credentials, then a value after a
 #: secret-named key (``NAME=v``, ``"name": "v"``, ``NAME v`` for an env-style name, ``password is v``),
 #: then any long mixed token. A path is never one token (``/`` and ``.`` end it), and a 40-hex git
 #: commit id is not a secret.
 _SECRET_PATTERNS = (
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S), "[redacted]"),
     (re.compile(r"(?i)\bBearer\s+\S+"), "Bearer [redacted]"),
     (re.compile(r"(?i)\b(Authorization\s*:\s*)(Basic|Token)\s+\S+"), r"\1\2 [redacted]"),
     (re.compile(r"(?i)\b((?:mysql|mysqldump|mysqladmin|mariadb)\b[^\n]{0,200}?\s-p)(?=\S)[^\s\"',;]+"), r"\1[redacted]"),
     (re.compile(r"://[^\s/:@]+:[^\s/@]+@"), "://[redacted]@"),
     (re.compile(r"\b(?:sk|pk|rk)[-_](?:live_|test_|proj-)?[A-Za-z0-9_-]{8,}"), "[redacted]"),
     (re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr|github_pat|glpat|xox[abprs])[-_][A-Za-z0-9_-]{8,}"), "[redacted]"),
+    (re.compile(r"\bhf_[A-Za-z0-9]{30,}"), "[redacted]"),
     (re.compile(r"\bAKIA[0-9A-Z]{12,}\b"), "[redacted]"),
     (re.compile(r"\bAIza[A-Za-z0-9_-]{30,}"), "[redacted]"),
     (re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+)?"), "[redacted]"),
     (re.compile(r"(?i)\b(" + _KEYWORD + r")([\"']?\s*[=:]\s*[\"']?)[^\s\"',;]+"), r"\1\2[redacted]"),
     (re.compile(r"\b((?:[A-Z0-9]+_)+(?:KEY|TOKEN|SECRET|PASSWORD|PASS|PWD)(?:_[A-Z0-9]+)*|[a-z0-9]+(?:_[a-z0-9]+)*_(?:key|token|secret|password))\s+(?![=:])[^\s\"',;]+"), r"\1 [redacted]"),
     (re.compile(r"(?i)\b(password|passwd|senha)\s+(is|é|eh)\s+\S+"), r"\1 \2 [redacted]"),
-    (re.compile(r"(?<![\w/.-])(?![0-9a-f]{40}(?![\w/.]))(?=[A-Za-z0-9+_-]*\d)(?=[A-Za-z0-9+_-]*[A-Za-z])[A-Za-z0-9+_-]{32,}={0,2}(?![\w/.])"), "[redacted]"),
+    (re.compile(r"(?i)\b(pass|pwd)(\s+(?:is|é|eh)\s+)(\S+)"), _bare_pass),
+    (re.compile(r"\b([A-Z][A-Z0-9_]*?(?:_(?:PASS|PASSWORD|SECRET|TOKEN|PWD)|(?<![A-Z0-9])PASS|PASSWORD|SECRET|TOKEN|PWD))(=[\"']?)[^\s\"',;]+"), r"\1\2[redacted]"),
+    (re.compile(r"(?i)\b(curl\b[^\n]{0,200}?\s(?:-u\s*|--user[\s=]+)[\"']?[^\s:\"']*:)[^\s\"']+"), r"\1[redacted]"),
+    (re.compile(r"(?i)\b(sshpass\b[^\n]{0,200}?\s-p\s*)\S+"), r"\1[redacted]"),
+    (re.compile(r"(?i)\b(redis-cli\b[^\n]{0,200}?\s(?:-a|--pass)\s+)\S+"), r"\1[redacted]"),
+    (re.compile(r"(?i)\b(docker\s+login\b[^\n]{0,200}?\s(?:-p\s*|--password[\s=]+))\S+"), r"\1[redacted]"),
+    (re.compile(r"(?i)\b((?:Set-)?Cookie\s*:\s*)[^\r\n\"']+"), r"\1[redacted]"),
+    # A long run is matched plainly and judged in `_long_token`: look-aheads for "has a digit" and
+    # "has a letter" re-scan the run from every start and made a run of `+a+a…` quadratic.
+    (re.compile(r"(?<![\w/.+-])[A-Za-z0-9+_-]{32,}={0,2}(?![\w/.])"), _long_token),
 )
-#: Control and format characters (bidi overrides, zero-width): a card must read as it is stored.
 _INVISIBLE = re.compile("[\u0000-\u001f\u007f-\u009f­؜᠎​-‏‪-‮⁠-⁤⁦-⁯﻿]")
 
 
@@ -696,6 +772,33 @@ def redact(text):
     for pattern, replacement in _SECRET_PATTERNS:
         text = pattern.sub(replacement, text)
     return text
+
+
+#: A turn's marker files are removed by the hooks that end the turn; one a crashed or killed
+#: session leaves behind is swept at a later Stop once it is this old (a live turn is never that old).
+_MARKER_MAX_AGE = 24 * 3600
+_MARKER_PREFIXES = (".prompt-", ".direct-", ".directw-")
+
+
+def _sweep_turn_markers(directory, now):
+    """Remove stale ``.prompt-``, ``.direct-`` and ``.directw-`` markers beside the records.
+
+    These are this hook set's own transient turn markers, never user state or a record, so the
+    No-Destruction Rule does not cover them. Age only, exact prefixes only: nothing else is touched.
+    """
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return
+    for name in names:
+        if not name.startswith(_MARKER_PREFIXES):
+            continue
+        try:
+            path = os.path.join(directory, name)
+            if now - os.stat(path).st_mtime > _MARKER_MAX_AGE:
+                os.unlink(path)
+        except OSError:
+            continue
 
 
 def _prompt_path(path):
@@ -742,7 +845,7 @@ def _decode_prompt(raw):
 
 
 def _excerpt(text):
-    line = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")
+    line = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")[:_TASK_TEXT_SCAN]
     line = " ".join(redact(_INVISIBLE.sub(" ", line)).split())
     if len(line) > DIRECT_EXCERPT:
         line = line[: DIRECT_EXCERPT - 1].rstrip() + "\u2026"
@@ -964,9 +1067,35 @@ def _push(task, status, now):
         del task["history"][: len(task["history"]) - HISTORY_CAP]
 
 
+def _next_key(record):
+    """``t<N>`` past every key in use: tasks can be dropped (:func:`_cap_tasks`), so a count would repeat one."""
+    used = [int(t["key"][1:]) for t in record["tasks"] if t["key"][1:].isdigit()]
+    return "t{}".format(max(used + [len(record["tasks"])]) + 1)
+
+
+def _cap_tasks(record):
+    """Keep at most :data:`MAX_TASKS` tasks: drop the oldest removed ones first, never an open or reviewed task."""
+    excess = len(record["tasks"]) - MAX_TASKS
+    if excess <= 0:
+        return
+    reviewed = {key for window in _windows(record) for key in window.get("task_keys", [])}
+    for pr in record.get("prs") or []:
+        reviewed.update(k for k in (pr.get("task_keys") or []) if isinstance(k, str))
+    numbered = [t for t in record["tasks"] if t["key"][1:].isdigit()]
+    if numbered:
+        reviewed.add(max(numbered, key=lambda t: int(t["key"][1:]))["key"])
+    droppable = sorted(
+        (t for t in record["tasks"] if t["removed_at"] is not None and t["key"] not in reviewed),
+        key=lambda t: (t["removed_at"], t["created_at"]),
+    )
+    gone = {id(t) for t in droppable[:excess]}
+    if gone:
+        record["tasks"] = [t for t in record["tasks"] if id(t) not in gone]
+
+
 def _add_task(record, call, item, now):
     task = {
-        "key": "t{}".format(len(record["tasks"]) + 1),
+        "key": _next_key(record),
         "id": item.get("id"),
         "owner": call["owner"],
         "agent_type": call["agent_type"],
@@ -1137,10 +1266,85 @@ def _follow_background(record, task, path, opened_at):
         pass
 
 
-def _end_agent(task, status, failed, now):
+def _mark_rollout(task, path):
+    """Keep where the parent rollout ends at this v2 spawn (``usage.rollout_mark``), once."""
+    if task.get("rollout_path"):
+        return
+    from . import usage
+    mark = usage.rollout_mark(path)
+    if mark:
+        task.update(mark)
+
+
+def _is_open_ref(task):
+    return _is_agent(task) and task["status"] == "in_progress" and bool(task.get("agent_ref"))
+
+
+def _is_v2(task):
+    return _is_agent(task) and task["status"] == "in_progress" and str(task.get("agent_ref", "")).startswith("/")
+
+
+def _scan_codex_v2(rec, payload, now):
+    """Settle the Codex v2 agent tasks: by their ``FINAL_ANSWER`` in the parent rollout, else by age.
+
+    The matching rule is ``usage.codex_v2_matches``, shared with the execution trace. A v2
+    ``wait_agent`` names no agent, so this scan is the only end signal. A task with no answer after
+    :data:`PENDING_MAX_AGE` (an errored or killed child writes none; a resumed thread or a nested
+    spawn writes to another rollout) is cancelled as ``interrupted``; the same age cap applies to a v1
+    agent whose ``wait_agent`` never came. True when it changed something.
+    """
+    open_tasks = [t for t in rec["tasks"] if _is_v2(t)]
+    changed = False
+    pairs = []
+    if open_tasks:
+        from . import usage
+        path = payload.get("transcript_path") if isinstance(payload, dict) else None
+        pairs, scan = usage.codex_v2_matches(open_tasks, path, rec.get("codex_scan"), "agent_ref", "created_at")
+        if scan is not None and scan is not rec.get("codex_scan"):
+            rec["codex_scan"] = scan
+            changed = True
+    for task, answer in pairs:
+        last = task["history"][-1]["at"] if task.get("history") else task["created_at"]
+        _end_agent(rec, task, "completed", False, max(last, min(now, answer["at"] or now)))
+        changed = True
+    # Every open agent that has a Codex agent id, a v1 one never waited on included: the trace
+    # settles the same span after a bounded wait, and the board must not disagree with it.
+    for task in rec["tasks"]:
+        if _is_open_ref(task) and now - task["created_at"] > PENDING_MAX_AGE:
+            _interrupt(rec, task, now)
+            changed = True
+    return changed
+
+
+def _end_agent(record, task, status, failed, now):
+    """Settle an agent task, and retire what its own agent left open.
+
+    A subagent's todo list is the agent's own work: once it ends nothing will ever update it, so
+    its owner's open native tasks are marked removed (as a replaced list does) instead of holding
+    the session open forever.
+    """
     if failed:
         task["failed"] = True
     _push(task, status, now)
+    _retire_owned(record, task, now)
+
+
+def _retire_owned(record, task, now):
+    owner = task.get("agent_id") or task.get("agent_ref")
+    if not owner or owner == MAIN_OWNER:
+        return
+    for other in record["tasks"]:
+        if (
+            other["owner"] == owner and _is_native(other) and other["removed_at"] is None
+            and other["status"] in ("pending", "in_progress")
+        ):
+            other["removed_at"] = now
+
+
+def _interrupt(record, task, now):
+    task["interrupted"] = True
+    _push(task, "cancelled", now)
+    _retire_owned(record, task, now)
 
 
 def _apply_agent(record, call, now):
@@ -1162,6 +1366,8 @@ def _apply_agent(record, call, now):
             record, call, {"id": body["id"] or None, "content": body["content"], "status": "in_progress"}, now
         )
         task.update(kind="agent", agent_type=body["agent"], background=bool(body["background"]), failed=False)
+        if call["provider"] == "codex":
+            _mark_rollout(task, body.get("transcript"))
         if body["background"]:
             _follow_background(record, task, body.get("transcript"), now)
         return True
@@ -1170,7 +1376,7 @@ def _apply_agent(record, call, now):
         for ident, status, failed in body:
             task = _find_agent(record, {"id": ident})
             if task is not None:
-                _end_agent(task, status, failed, now)
+                _end_agent(record, task, status, failed, now)
                 changed = True
         return changed
     item = dict(body, owner=call["owner"])
@@ -1179,12 +1385,18 @@ def _apply_agent(record, call, now):
         return False
     if kind == "agent_ref":
         task["agent_ref"] = body["ref"]
+        if body["ref"].startswith("/"):
+            _mark_rollout(task, body.get("transcript"))  # only when the spawn carried no rollout
         return True
     if kind == "agent_bg":
         task["background"] = True
+        if body.get("agent_id"):
+            task["agent_id"] = body["agent_id"]
         _follow_background(record, task, body.get("transcript"), now)
         return True
-    _end_agent(task, body["status"], body["failed"], now)
+    if body.get("agent_id"):
+        task["agent_id"] = body["agent_id"]
+    _end_agent(record, task, body["status"], body["failed"], now)
     return True
 
 
@@ -1661,10 +1873,12 @@ def review_call(payload):
 
 def _review_store(root, payload, now, apply):
     """Run ``apply(record, call, now)`` on the session record under its lock. Never raises."""
+    session_id = None
     try:
         call = review_call(payload)
         if call is None:
             return None
+        session_id = call["session_id"]
         project_id = _bound_id(root)
         path = record_path(root, project_id, call["session_id"]) if project_id else None
         if path is None or not path.is_file():
@@ -1684,6 +1898,9 @@ def _review_store(root, payload, now, apply):
             jsonio.write_json_atomic(path, rec)
         outcome["session"] = call["session_id"]
         return outcome
+    except ConflictError as exc:
+        _warn_dropped("a review call", session_id, exc)
+        return None
     except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
         return None
 
@@ -2172,13 +2389,16 @@ def _scan_agent_tasks(rec, payload, now):
     """Complete the background agent tasks whose hand-back is in the transcript. True when it looked.
 
     A hand-back counts only for a task this record launched in the background, matched by the
-    spawn's id: a notification from any other task (a Bash job) never touches one. The cursor
-    advances every time, so a mutated record is always written.
+    spawn's id or its runtime agent id: a notification from any other task (a Bash job) never
+    touches one. The cursor advances every time, so a mutated record is always written.
     """
-    pending = {
-        t["id"]: t for t in rec["tasks"]
-        if _is_agent(t) and t.get("background") and t["status"] == "in_progress" and t.get("id")
-    }
+    pending = {}
+    for t in rec["tasks"]:
+        if _is_agent(t) and t.get("background") and t["status"] == "in_progress":
+            # A hand-back names the spawn's id or only the runtime agent id (`task-id`).
+            for ident in (t.get("id"), t.get("agent_id")):
+                if ident:
+                    pending[ident] = t
     path = payload.get("transcript_path")
     if not pending or not isinstance(path, str) or not path or not os.path.isfile(path):
         return False
@@ -2191,9 +2411,9 @@ def _scan_agent_tasks(rec, payload, now):
             last = task["history"][-1]["at"] if task.get("history") else task["created_at"]
             at = max(last, task["created_at"], min(now, report["at"]))
             if report["status"] in _HANDBACK_FAILED:
-                _end_agent(task, "cancelled", True, at)
+                _end_agent(rec, task, "cancelled", True, at)
             else:
-                _end_agent(task, "completed", False, at)
+                _end_agent(rec, task, "completed", False, at)
     return True
 
 
@@ -2339,7 +2559,8 @@ def session_title(payload, provider):
             title = _transcript_title(_first_text(payload, "transcript_path"))
         if not title and provider == "codex":
             title = _codex_title(_first_text(payload, "session_id", "sessionID", "sessionId"))
-        return title
+        # A title is third-party text that reaches the record and the board: clean like a task text.
+        return _task_text(title) or ""
     except (OSError, ValueError, TypeError):
         return ""
 
@@ -2352,8 +2573,9 @@ def _keep_transcript(rec, payload):
 
 
 #: `(kind, path) -> (stamp, value)`: a title source is re-read only when its file changed, so a
-#: `tasks watch` tick costs one `stat` per session. Bounded: cleared past :data:`_LIVE_CACHE_MAX`.
-_LIVE_CACHE = {}
+#: `tasks watch` tick costs one `stat` per session. Bounded: past :data:`_LIVE_CACHE_MAX` the least
+#: recently used entry goes, so a busy board never re-reads every transcript at once.
+_LIVE_CACHE = collections.OrderedDict()
 _LIVE_CACHE_MAX = 512
 
 
@@ -2365,12 +2587,18 @@ def _cached(kind, path, read):
     stamp = (info.st_mtime_ns, info.st_size)
     hit = _LIVE_CACHE.get((kind, path))
     if hit is not None and hit[0] == stamp:
+        _LIVE_CACHE.move_to_end((kind, path))
         return hit[1]
-    if len(_LIVE_CACHE) >= _LIVE_CACHE_MAX:
-        _LIVE_CACHE.clear()
     value = read(path)
     _LIVE_CACHE[(kind, path)] = (stamp, value)
+    _LIVE_CACHE.move_to_end((kind, path))
+    while len(_LIVE_CACHE) > _LIVE_CACHE_MAX:
+        _LIVE_CACHE.popitem(last=False)
     return value
+
+
+def _clean_transcript_title(path):
+    return _task_text(_transcript_title(path)) or ""
 
 
 def _codex_index():
@@ -2409,10 +2637,10 @@ def live_title(rec):
         provider = rec.get("provider")
         if provider == "claude":
             path = rec.get("transcript_path")
-            return (_cached("claude", path, _transcript_title) or "") if isinstance(path, str) and path else ""
+            return (_cached("claude", path, _clean_transcript_title) or "") if isinstance(path, str) and path else ""
         if provider == "codex":
             titles = _cached("codex", _codex_index(), _codex_titles) or {}
-            return titles.get(rec.get("session_id"), "")
+            return _task_text(titles.get(rec.get("session_id"), "")) or ""
     except (OSError, ValueError, TypeError, AttributeError):
         pass
     return ""
@@ -2429,7 +2657,7 @@ def retitle(root, payload, now=None):
         if not isinstance(payload, dict):
             return result
         session_id = _first_text(payload, "session_id", "sessionID", "sessionId")
-        title = _first_text(payload, "session_title")
+        title = _task_text(_first_text(payload, "session_title"))
         project_id = _bound_id(root)
         path = record_path(root, project_id, session_id) if project_id and session_id else None
         if path is None or not title or not path.is_file():
@@ -2513,6 +2741,19 @@ def _git_location(cwd):
 LOCK_TIMEOUT = 10.0
 
 
+def _warn(message):
+    """One line on stderr. The hooks' own stderr goes to the provider, never to the user's way."""
+    try:
+        sys.stderr.write("devteam: {}\n".format(message))
+        sys.stderr.flush()
+    except (OSError, ValueError):
+        pass
+
+
+def _warn_dropped(what, session_id, exc):
+    _warn("task board: {} for session {} was dropped ({})".format(what, session_id or "?", exc))
+
+
 def _session_lock(path):
     return lock.Lock(str(path)[: -len(".json")] + ".lock", timeout=LOCK_TIMEOUT, stale_after=30.0)
 
@@ -2522,6 +2763,14 @@ def _bound_id(root):
     if isinstance(data, dict) and data.get("project_id"):
         return data["project_id"]
     return None
+
+
+def _is_child_session(root, project_id, session_id):
+    """Whether the trace's alias map names ``session_id`` a child (a Codex child thread, an opencode child
+    session): it hooks under an id of its own, and its work belongs to the agent task of its parent."""
+    from . import trace
+
+    return trace.root_session(root, project_id, session_id)[1]
 
 
 def record(root, payload, provider="auto", now=None):
@@ -2535,6 +2784,7 @@ def record(root, payload, provider="auto", now=None):
         "recorded": False, "session": None, "all_done": False, "became_all_done": False,
         "title_short": None, "event": None,
     }
+    session_id = None
     try:
         call = normalize(payload, provider)
         # Direct work is taken before the call runs: a payload that carries the call's result
@@ -2542,9 +2792,12 @@ def record(root, payload, provider="auto", now=None):
         # second direct call folded in after the turn's PreToolUse already took it.
         if call is None or (call["op"][0] == "direct" and _carries_result(payload)):
             return _record_event(root, payload, now, result)
+        session_id = call["session_id"]
         project_id = _bound_id(root)
         path = record_path(root, project_id, call["session_id"]) if project_id else None
         if path is None:
+            return result
+        if _is_child_session(root, project_id, call["session_id"]):
             return result
         now = int(time.time() if now is None else now)
         # Resolved before the lock: `git` can take seconds, and holding the lock across it
@@ -2570,6 +2823,7 @@ def record(root, payload, provider="auto", now=None):
             open_before = _open_keys(rec, _review_members(rec))
             before = {t["key"]: t["status"] for t in rec["tasks"]}
             changed = _apply(rec, call, now, turn)
+            _cap_tasks(rec)
             if direct:
                 # Settled for this turn either way: the gate forks nothing more until the next prompt.
                 try:
@@ -2594,7 +2848,9 @@ def record(root, payload, provider="auto", now=None):
             if call["cwd"]:
                 rec["cwd"] = call["cwd"]
             rec["branch"] = branch or rec.get("branch")
-            if title:
+            # The title read before the lock is only a fallback: a retitle that committed since
+            # then is newer than it.
+            if title and not rec.get("title"):
                 rec["title"] = title
             _keep_transcript(rec, payload)
             rec["updated_at"] = now
@@ -2627,6 +2883,9 @@ def record(root, payload, provider="auto", now=None):
             became_all_done=done and finished and not mid_turn and clean,
             title_short=title_short(rec.get("title")),
         )
+    except ConflictError as exc:
+        _warn_dropped("a record call", session_id, exc)
+        result["recorded"] = False
     except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
         result["recorded"] = False
     return result
@@ -2639,6 +2898,7 @@ def mark(root, payload, state, now=None):
         "review_result": False, "review_window": None, "review_findings": None,
         "review_results": [], "became_all_done": False, "title_short": None, "pr_marks": [],
     }
+    session_id = None
     try:
         if state not in ("idle", "ended") or not isinstance(payload, dict):
             return result
@@ -2648,6 +2908,7 @@ def mark(root, payload, state, now=None):
         if path is None or not path.is_file():
             return result
         now = int(time.time() if now is None else now)
+        _sweep_turn_markers(path.parent, now)
         # Read before the lock, like `git` in `record`: the transcript tail is file I/O.
         stored = _load(path) or {}
         title = session_title(payload, stored.get("provider"))
@@ -2680,6 +2941,7 @@ def mark(root, payload, state, now=None):
                 for outcomes in (_scan_background(rec, payload, now), _expire(rec, now), _retire_at_stop(rec, payload, now)):
                     done.extend(o for o in outcomes if o["result"])
                 _scan_agent_tasks(rec, payload, now)
+                _scan_codex_v2(rec, payload, now)
                 _interrupt_agents(rec, now)
                 pr_marks = _fix_prs(rec, now, links) if links is not None else []
                 done_now = _cleanly_done(rec, _review_members(rec), skip_direct=True)
@@ -2702,6 +2964,9 @@ def mark(root, payload, state, now=None):
                 review_results=[{"window": o["window"], "findings": o["findings"]} for o in done],
                 became_all_done=done_now and not was_done,
             )
+    except ConflictError as exc:
+        _warn_dropped("a mark", session_id, exc)
+        result["marked"] = False
     except (DevteamError, OSError, ValueError, TypeError, KeyError, AttributeError):
         result["marked"] = False
     return result
@@ -3473,7 +3738,26 @@ def _project_records(root, project_id):
         rec = _load(directory / name)
         if rec is not None and isinstance(rec.get("session_id"), str):
             records.append(rec)
+        else:
+            _report_unreadable(directory / name)
     return records
+
+
+#: ``(path, mtime)`` of every record already reported as unreadable by this process: a watcher
+#: polls every second and must say it once, not forever.
+_REPORTED_UNREADABLE = set()
+
+
+def _report_unreadable(path):
+    """Name a record this build cannot read. It stays on disk untouched and off the board."""
+    try:
+        stamp = (str(path), os.stat(str(path)).st_mtime_ns)
+    except OSError:
+        return
+    if stamp in _REPORTED_UNREADABLE:
+        return
+    _REPORTED_UNREADABLE.add(stamp)
+    _warn("task board: {} is unreadable or of an unknown schema and is left out of the board".format(path))
 
 
 def project_view(root, project_id, now, since=None, stale_after=DEFAULT_STALE_AFTER, ended_after=DEFAULT_ENDED_AFTER):
@@ -3669,3 +3953,25 @@ def watch(
             signal.signal(signal.SIGTERM, previous)
     emit({"event": "end", "reason": stop.reason or "stopped"})
     return stop.reason
+
+
+# ── shared surface ───────────────────────────────────────────────────────────
+# What trace.py and insights.py read from this module. They use these names, never the private
+# ones, so a change here is visible as a change to a public name.
+CLAUDE_AGENT_TOOLS = _CLAUDE_AGENT_TOOLS
+CODEX_AGENT_TOOLS = _CODEX_AGENT_TOOLS
+as_dict = _dict
+as_text = _text
+first_text = _first_text
+id_text = _id_text
+json_objects = _json_objects
+async_launch = _async_launch
+agent_report = _output
+spawned_agent_id = _spawned_agent_id
+spawned_task_path = _spawned_task_path
+wait_results = _wait_results
+background_reports = _background_reports
+current_turn = _turn
+bound_id = _bound_id
+bound_projects = _bound
+project_records = _project_records

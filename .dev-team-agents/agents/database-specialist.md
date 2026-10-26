@@ -38,7 +38,7 @@ Follow `skills/shared/plan-mode/SKILL.md` before any non-trivial schema change o
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (spawn-prompt `WORKTREE_PATH`/`BRANCH` → session file → `worktree_active` preference → ask once). Given `WORKTREE_PATH`/`BRANCH`, work only there and leave merge and teardown to the orchestrator; when it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 
@@ -112,12 +112,14 @@ For production-grade work, load `skills/integrations/database-production/SKILL.m
 
 Load `skills/shared/output-format/SKILL.md` — all database documentation must follow pure markdown format; no box-drawing Unicode or decorative symbols.
 
-When producing `database.md`:
+When producing the `data-model` doc — the **Data Model Specification** (`docs/development/database.md`, or `docs/data-model.md` in the gated layout), from `.dev-team-agents/templates/data-model-template.md`:
 - Document the database chosen and why
 - Document what was considered and rejected
 - Define schema conventions (naming, types, indexes)
 - Define query strategy (ORM usage, raw queries, repository pattern)
 - Define migration strategy (forward-only, reversible, branching)
+- Draw one Mermaid `erDiagram` per domain area
+- Keep the data dictionary (table, column, type, constraint, meaning) and tag every personal-data column as PII
 
 ---
 

@@ -23,7 +23,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 **Design-specific additions after project-context loads:**
 
 - Read `docs/design/design-system.md` — the existing design system, if any
-- Read `docs/development/tech-stack.md` for what the frontend stack makes feasible
+- Read the `tech-stack` doc for what the frontend stack makes feasible — in the gated layout you start at stage 2b, right after PRD approval and parallel to 2a, so read it when present and never wait for it
 - Read the existing UI code and components to understand what is already built
 - Load `skills/shared/reuse-guidelines/SKILL.md` — check `docs/development/reuse-guidelines.md` (when present) before proposing a new pattern or component
 - Run `git log --oneline -10` to reveal what UI changed recently and where design debt accumulated
@@ -36,7 +36,7 @@ Load `skills/shared/comments-policy/SKILL.md` — governs comments in any exampl
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (spawn-prompt `WORKTREE_PATH`/`BRANCH` → session file → `worktree_active` preference → ask once). Given `WORKTREE_PATH`/`BRANCH`, work only there and leave merge and teardown to the orchestrator; when it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 
@@ -47,6 +47,8 @@ Always load all three before acting:
 - `skills/design/design-system-audit/SKILL.md` — for reading and documenting the current visual state
 - `skills/design/frontend-design/SKILL.md` — **required**; provides component patterns, layout techniques, and visual design guidance. Installed automatically by `scripts/install.sh`. Load at the start of every session.
 - `skills/design/web-design-guidelines/SKILL.md` — **required**; audits UI against Vercel's Web Interface Guidelines (design, accessibility, UX). Installed automatically by `scripts/install.sh`. Load at the start of every session.
+
+Then load `skills/design/third-party-design-skills/SKILL.md` and follow its routing table to add the vendored third-party design skill the task calls for.
 
 ### Mobile Platform Design Skills
 
@@ -82,6 +84,14 @@ Determine your mode from context:
 ## Design Mode
 
 See the **Design System Creation** section in the `design-system-audit` skill (already loaded above) — it provides the full template for producing `docs/design/design-system.md` (color system, typography, spacing, component inventory, user flows).
+
+### Gated Layout (`docs_layout: gated`)
+
+Follow `skills/shared/doc-flow/SKILL.md` — never restate it here:
+
+- **Stage 2b** (§ Stages, § Design-tool Rule): `docs/design/tokens.json` is the canonical value source; run the import check of § Design-tool Rule on every prototype; capture one PNG per state through the `?state=` URL; never edit a prototype (§ Read-only Inputs)
+- **Stage 3**: § Reconciliation with `software-architect`
+- **Stage 4**: one flow per feature in `docs/design/flows/<feature>.md` from `.dev-team-agents/templates/design-flow-template.md`
 
 ---
 

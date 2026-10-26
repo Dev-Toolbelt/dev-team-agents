@@ -386,6 +386,22 @@ if [ -f "$SESSION_SUMMARY" ]; then
     fi
 fi
 
+# ── Active sprint work after a compaction or resume (ADR-0044) ────
+# SessionStart fires again with source=compact (Claude Code, Codex) and on a resume, and the
+# context the agent was working from is gone: re-inject the sprint in progress, its claimed and
+# ready tasks. Silent when no sprint is in progress. opencode has no such event; its plugin runs
+# the same backlog-prime.sh from `experimental.session.compacting`.
+case "$_SS_SOURCE" in
+    compact|resume)
+        _ss_prime="$(bash "${SCRIPT_DIR}/backlog-prime.sh" 2>/dev/null)" || _ss_prime=""
+        if [ -n "$_ss_prime" ]; then
+            echo ""
+            printf '%s\n' "$_ss_prime"
+            echo ""
+        fi
+        ;;
+esac
+
 # ── Check: health check staleness ─────────────────────────────────
 LAST_HEALTH_CHECK="$(state_get last_health_check "$STATE_FILE")"
 if [ -n "$LAST_HEALTH_CHECK" ]; then

@@ -262,6 +262,26 @@ done
 
 `BAK_UNCONFIRMED` entries are left untouched and reported as a WARN — an empty or missing key means the value was never actually copied into `state.json`, so the `.bak` is the only remaining copy and deleting it would be data loss, not cleanup.
 
+## Auto-fix for a stale planning-routing section in CLAUDE.md or AGENTS.md
+
+The section runs from the `### Auto-Routing: Planning` heading up to the next `---` line. Rewrite it only when it is **unedited**: it still contains the v1 three-agent table — the three rows `product-analyst`, `software-architect`, `database-specialist` with their `.claude/agents/dev-team/` paths — and no line outside the v1 template (the MANDATORY sentence, the five trigger bullets, the table, the `Execution begins only after the plan is approved` line). Then:
+
+1. Copy the old section to `$QUARANTINE/<file>-planning-routing.md` (§ Quarantine in `../SKILL.md`) and report the path.
+2. Replace it in place, in one write, with the current section from `skills/shared/auto-routing/SKILL.md` (it opens with `<!-- devteam:planning-routing v2 -->`).
+
+An edited section is not rewritten: report WARN and show the current section so the user merges it by hand.
+
+## Auto-fix for a verbose routing section (compact routing)
+
+The section runs from the `## dev-team-agents` heading to the first of: the next `# ` or `## ` heading, a `<!-- dev-team-agents: … -->` marker line (the pre-compact and commit-rule blocks health-check appends start with one), or the end of the file. A section without `<!-- devteam:routing v3 -->` that still has `####` per-agent headings is the pre-v3 verbose form.
+
+Rewrite it only when it is **unedited**, judged by content, not by line type: apart from the config `KEY: value` lines, the agent `active|inactive` bullets, the `### Workflow` letter and blank lines, every line must appear verbatim in `legacy-routing-v2.md` (beside this file) — a `→ .claude/agents/dev-team/<agent>.md` suffix on a `####` heading is ignored. A project's own `**Files:**` paths, extra keywords, or a `### Language` sentence naming another language make the section edited. Then:
+
+1. Copy the old section to `$QUARANTINE/<file>-verbose-routing.md` (§ Quarantine in `../SKILL.md`) and report the path.
+2. Replace the section in place, in one write, with the current block from `skills/shared/auto-routing/SKILL.md`, carrying over every config value the old one had: agents marked `inactive` under `### Agent Activation` become `INACTIVE_AGENTS` (none → `none`); a `### Workflow` letter fills `PROJECT_TYPE` only when that key is missing (A → `new`, B → `inherited`, C → `maintenance`); `AUTO_ROUTING: disabled`, if present, is kept.
+
+An edited section is not rewritten: report WARN and show the current block so the user merges it by hand.
+
 ## Auto-fix for missing pre-compact auto-summary rule in CLAUDE.md
 
 Append the rule block to `CLAUDE.md` (idempotent — marker prevents duplicates):
@@ -430,6 +450,151 @@ mv .dev-team-agents/user-data/.auto-update "$QUARANTINE/"
 
 The flag carries no content — its existence *was* the value, and that value is now in `preferences.json`. It is still moved rather than deleted, because the No-Destruction Rule has no "this one is safe" exception: a rule with a judgment call in it gets the judgment wrong eventually, and quarantining a zero-byte marker costs nothing.
 
+## Docs root relocation
+
+Triggered by `DOCS_ROOT_MISMATCH` (Category 11), only after the user answered the `AskUserQuestion`.
+`DOCS_ROOT` (`.claude/docs`) and `WRITE_ROOT` (the first `context_paths` entry, `docs` by default)
+come from `checks-list.md` § Before Category 1 — never set them by hand. Everything here is a move
+or an in-place rewrite; the No-Destruction Rule holds.
+
+### Move to `docs/`
+
+```bash
+QUARANTINE=".dev-team-agents/user-data/legacy/$(date +%Y-%m-%d)/docs-relocation"
+python3 - "$DOCS_ROOT" "$WRITE_ROOT" "$QUARANTINE" <<'MOVE'
+import filecmp, os, shutil, sys
+from pathlib import Path
+src, dst, quarantine = (Path(a) for a in sys.argv[1:4])
+if not sys.argv[2].strip() or dst.resolve() == src.resolve() or dst.resolve() == Path.cwd().resolve():
+    sys.exit("WRITE_ROOT is unset or invalid; nothing moved")
+if os.path.lexists(dst) and not dst.is_dir():
+    sys.exit("{} exists and is not a directory; nothing moved".format(dst))
+def free(path):
+    n = 1
+    while os.path.lexists(path):
+        path = path.with_name("{}.{}".format(path.name, n)); n += 1
+    return path
+moved, conflicts = 0, []
+for f in sorted(p for p in src.rglob("*") if p.is_file() or p.is_symlink()):
+    rel = f.relative_to(src)
+    target = dst / rel
+    if not os.path.lexists(target):
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(f), str(target)); moved += 1
+        continue
+    # Both exist: the copy already in docs/ keeps its path; the other goes to quarantine
+    same = f.is_file() and target.is_file() and filecmp.cmp(f, target, shallow=False)
+    parked = free(quarantine / rel)
+    parked.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(f), str(parked))
+    if not same:
+        conflicts.append(str(rel))
+for d in sorted((p for p in src.rglob("*") if p.is_dir()), key=lambda p: -len(p.parts)) + [src]:
+    try:
+        d.rmdir()                         # empty only — never a recursive removal
+    except OSError:
+        pass
+print("MOVED:", moved)
+for c in conflicts:
+    print("CONFLICT:", c)
+MOVE
+```
+
+Each `CONFLICT` is a file that existed in both folders with different content: the `docs/` copy
+stays, the other is in the quarantine. Report each one for the user to merge by hand.
+
+Then rewrite the links. Only Markdown in the project (moved docs included — they are untracked
+until committed, hence `--untracked`) and the instruction files are rewritten; ADRs and changelogs
+are historical records (`skills/shared/docs-sync/SKILL.md` § Document Lifecycle) and are listed
+instead, as is any other file that mentions the old path:
+
+```bash
+python3 - "$DOCS_ROOT" "$WRITE_ROOT" <<'REFS'
+import re, subprocess, sys
+from pathlib import Path
+old, new = sys.argv[1].rstrip("/") + "/", sys.argv[2].rstrip("/") + "/"
+pattern = re.compile(r"(?<![\w.~/-])" + re.escape(old))
+out = subprocess.run(["git", "grep", "-lIFz", "--untracked", "--", old], capture_output=True).stdout
+names = {n.decode("utf-8", "surrogateescape") for n in out.split(b"\0") if n}
+names |= {f for f in ("CLAUDE.md", "AGENTS.md") if Path(f).is_file()}
+for name in sorted(names):
+    path = Path(name)
+    if path.is_symlink() or not path.is_file() or name.startswith(".dev-team-agents/"):
+        continue
+    historical = "/adrs/" in name or "/adr/" in name or path.name.upper().startswith("CHANGELOG")
+    if path.suffix.lower() != ".md" or historical:
+        print("LEFT:", name); continue
+    try:
+        raw = path.read_bytes(); text = raw.decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        print("LEFT:", name); continue
+    updated = pattern.sub(new, text)
+    if updated != text:
+        path.write_bytes(updated.encode("utf-8"))     # bytes in, bytes out: line endings kept
+        print("REWROTE:", name)
+REFS
+```
+
+List every `REWROTE` path under *Actions taken* and every `LEFT` path under *Recommendations*
+(handed over: the user decides whether a record or a source file should change).
+
+Finally, in a bound project (`.dev-team-agents/project.json` exists), drop `DOCS_ROOT` from
+`context_paths` through the CLI's own module, which validates the file and writes it atomically
+with its committed mode:
+
+```bash
+LIB=".dev-team-agents/scripts/lib"; [ -d "$LIB/devteam" ] || LIB="scripts/lib"
+python3 - "$LIB" "$DOCS_ROOT" "$WRITE_ROOT" <<'CTX'
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from devteam import jsonio, project
+root = Path.cwd()
+data = project.load(root)
+if data is None:
+    sys.exit(0)                           # not bound: nothing records context_paths
+drop = sys.argv[2].rstrip("/")
+paths = [p for p in data.get("context_paths", project.DEFAULT_CONTEXT_PATHS) if p.rstrip("/") != drop]
+data["context_paths"] = paths or [sys.argv[3]]
+project.validate(data)
+jsonio.write_json_atomic(project.project_file(root), data, mode=jsonio.PROJECT_FILE_MODE, dir_mode=None)
+CTX
+```
+
+Tell the user the move, the rewritten files and `project.json` are uncommitted changes — git shows
+the docs as renames once both sides are staged.
+
+### Keep `.claude/docs` as the write root
+
+Bound project: the same `CTX` snippet, with the list built as
+`[drop] + [p for p in paths if p.rstrip("/") != drop]` — `.claude/docs` first, everything else kept
+in order. Nothing moves. `new-adr.sh`, the index lint and the reuse lint resolve the write root
+from `context_paths` and follow the new order; `spec-lint` and `devteam backlog` still read
+`docs/specs/` and `docs/backlog/` — tell the user so before they choose.
+
+Not bound (no `project.json`): there is nowhere to record the choice, so this option is
+*handed over* — recommend `devteam migrate`, which records `.claude/docs` as the first `context_paths`
+entry when there is no `docs/` folder — the Keep outcome — and running the health check again afterwards.
+
+## Legacy wiki index
+
+Triggered by `WIKI_INDEX: LEGACY_FORMAT` (Category 11). Adapt `$DOCS_ROOT/wiki/README.md` in place
+with Edit — never Write the whole file:
+
+- **The file has a `## Domains` table** — insert the block below directly above that heading.
+- **It has none** (an empty or hand-written stub) — append the block at the end.
+
+```markdown
+## Index
+
+| Entry | Keywords | Read it when |
+|-------|----------|--------------|
+```
+
+Every line already in the file stays. Then, for each entry file on disk, append its row
+(`WIKI_ROWS` < `WIKI_FILES`) following `skills/shared/docs-sync/references/wiki-format.md`. An empty
+wiki ends with the header and no rows — that is the correct, current format.
+
 ## Backfill for `docs/development/reuse-guidelines.md`
 
 Triggered by the Reuse Guidelines Backfill check (Category 11). After the user confirms a proposed row for a sentence found in `code-standards.md`, `design-system.md`, or a wiki entry:
@@ -455,3 +620,35 @@ See `docs/development/reuse-guidelines.md` § <name> for the canonical rule.
 ```
 
 Keep the original heading in place even if the paragraph under it is now just the pointer — removing the heading changes anchors other docs or commits may reference. This is a content *move*, not a deletion: the rule still exists, now in one place instead of two.
+
+## Gated skeleton
+
+Triggered by `SKELETON_MISSING` (Category 14). Create the missing key exactly as `/devteam:setup` would — the seed, the `When` condition and the creation rules are `skills/shared/docs-templates/SKILL.md` § Gated Skeleton; this pattern adds nothing to them:
+
+```bash
+P="$(bash .dev-team-agents/scripts/doc-path.sh "$KEY")"
+case "$P" in
+  */) mkdir -p "$P" ;;                         # folder key — then write its seed inside, if absent
+  *)  mkdir -p "$(dirname "$P")"
+      [ -f ".dev-team-agents/templates/$KEY-template.md" ] \
+        && cp -n ".dev-team-agents/templates/$KEY-template.md" "$P" ;;   # inline seeds: write the skill's block, only when [ ! -e "$P" ]
+esac
+```
+
+Creates only: an existing path is never rewritten, even when it is still an unfilled template. Report each created path under *Actions taken*.
+
+## Read-only input edited
+
+Triggered by `RO_EDITED` / `RO_UNCOMMITTED` (Category 14). A file in a read-only folder (`skills/shared/doc-flow/SKILL.md` § Read-only Inputs) was changed, renamed or deleted after it was added. Ask with `AskUserQuestion`:
+
+| Option | What it does |
+|--------|--------------|
+| **Restore the original, keep the edit as a new file** (recommended) | Copy the current text to a new dated file beside it (`<name>--<YYYY-MM-DD>-revision.<ext>`), then write the version the file was **added** with back to its path: `git show "$(git log --diff-filter=A --format=%H -- "$F" \| tail -1)":"$F" > "$F"`. A deleted or renamed file is restored the same way; the renamed copy stays as it is. Nothing is lost — both versions exist afterwards. The edit-tool guard (`05-readonly-docs-guard.sh`) refuses this write by design, so it runs in Bash and only after this answer |
+| **Accept the change** | Leave the folder as it is; record the change in the owning working doc's `### Amendment Log` (cite the commit) so the trace chain names the version it read |
+| **Not now** | Report it as open with the restore command |
+
+Never revert with `git checkout`/`git restore` on its own — that discards the edited text.
+
+## Docs layout migration
+
+Offered, never run: Category 14 reports a `development` project with one INFO line, and the migration starts only when the user asks for it (or picks it from a `Docs layout` question they asked for). The procedure — preconditions, dry run, consent, moves, merge, link rewrite, recording `docs_layout` — is `skills/shared/doc-flow/references/migration.md`; follow it and add nothing here. It stops on a dirty tree and quarantines conflicts, so the No-Destruction Rule holds unchanged.

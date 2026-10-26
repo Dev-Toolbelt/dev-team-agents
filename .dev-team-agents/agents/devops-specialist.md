@@ -37,7 +37,7 @@ Follow `skills/shared/plan-mode/SKILL.md` before creating or modifying any infra
 
 ## Worktree Isolation
 
-Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (session file → `worktree_active` preference → ask once). When it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
+Before editing any file, resolve the worktree decision with the cascade in `skills/shared/worktree/SKILL.md` § Decision Cascade (spawn-prompt `WORKTREE_PATH`/`BRANCH` → session file → `worktree_active` preference → ask once). Given `WORKTREE_PATH`/`BRANCH`, work only there and leave merge and teardown to the orchestrator; when it resolves to `worktree=yes`, follow that skill with the recorded base branch through finalization; otherwise work on the recorded branch.
 
 ---
 
@@ -70,7 +70,7 @@ Load `skills/shared/stack-detection/SKILL.md` to identify the project's primary 
 | `bitbucket-pipelines.yml` exists | `skills/devops/cicd-bitbucket/SKILL.md` |
 | `Jenkinsfile` exists | `skills/devops/cicd-jenkins/SKILL.md` |
 | `*.tf` files or `terraform/` / `infra/` directory | `skills/devops/iac-terraform/SKILL.md` |
-| `docker-compose.yml` at root (dev context) | `skills/devops/docker-dev/SKILL.md` |
+| `docker-compose.yml` at root (dev context) | `skills/devops/docker-dev/SKILL.md`; plus `skills/devops/local-environment/SKILL.md` when starting, reusing or stopping the local environment |
 | `docker-compose.yml` with production config | `skills/devops/docker-prod/SKILL.md` |
 | `prometheus.yml`, `grafana/`, `alertmanager.yml`, `monitoring/` directory, `DD_API_KEY` env var, `datadog.yml`, `datadog` service in compose, `amazon-cloudwatch-agent.json`, or `CloudWatch` resource in Terraform | `skills/devops/monitoring/SKILL.md` |
 | `cloudflare.toml` or Wrangler config | `skills/devops/cloudflare/SKILL.md`; plus `skills/integrations/cloudflare-api/SKILL.md` when an API call (DNS, cache purge, rules, Pages rollback) is to be executed |

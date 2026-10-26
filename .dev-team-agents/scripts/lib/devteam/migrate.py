@@ -25,6 +25,10 @@ Two v2 shapes are converted:
     `devteam upgrade` then takes into the store); the docs stay where they are and
     are added to ``context_paths``.
 
+A pre-root install can also sit beside a root tree, when an update vendored the
+new layout without removing the old one. ``detect`` reports that root tree as the
+``secondary`` install and both are quarantined, each in its own group.
+
 Either shape can also carry its ``.claude/`` links as **real copies** — a tool that
 copied the project dereferencing links, or a checkout without symlink support,
 materialized them (see ``bind.v2_copy``) — and the real files a v2 Codex or
@@ -104,6 +108,7 @@ def detect(project_root):
     no later version shipped.
     """
     root = Path(project_root)
+    root_install = _root_install(root)
     if pre_root_install(root):
         install_rel = PRE_ROOT_DIR.as_posix()
         install_dir = root / PRE_ROOT_DIR
@@ -116,12 +121,40 @@ def detect(project_root):
             "install_dir": install_rel,
             "vendored_trees": trees,
             "vendored_files": files,
-            "unrecognised": [],
+            "unrecognised": root_install["unrecognised"] if root_install["vendored_trees"] else [],
             "has_user_data": (root / project.PRE_ROOT_MEMORY_DIR).is_dir()
             or (install_dir / "user-data").is_dir(),
             "already_bound": project.load(root) is not None,
+            # An update to v2.1.0+ that vendored the new tree at the root and never
+            # removed the old one leaves both. Reported, so the migration vacates both:
+            # the bind refuses any real tree at `.dev-team-agents/<name>`, and leaving
+            # the root one out made every `migrate` refuse before it moved anything.
+            "secondary": (
+                {
+                    "install_dir": project.PROJECT_DIR,
+                    "vendored_trees": root_install["vendored_trees"],
+                    "vendored_files": root_install["vendored_files"],
+                }
+                if root_install["vendored_trees"]
+                else None
+            ),
         }
-    install_dir = root / project.PROJECT_DIR
+    return {
+        "is_v2": bool(root_install["vendored_trees"]),
+        "layout": LAYOUT_ROOT,
+        "install_dir": project.PROJECT_DIR,
+        "vendored_trees": root_install["vendored_trees"],
+        "vendored_files": root_install["vendored_files"],
+        "unrecognised": root_install["unrecognised"],
+        "has_user_data": (root / project.PROJECT_DIR / "user-data").is_dir(),
+        "already_bound": project.load(root) is not None,
+        "secondary": None,
+    }
+
+
+def _root_install(root):
+    """The trees and files a v2.1.0+ install vendored at ``.dev-team-agents/``."""
+    install_dir = Path(root) / project.PROJECT_DIR
     trees = [
         name
         for name in VENDORED_TREES
@@ -134,16 +167,31 @@ def detect(project_root):
         for child in sorted(install_dir.iterdir()):
             if child.name not in known:
                 unknown.append(child.name)
-    return {
-        "is_v2": bool(trees),
-        "layout": LAYOUT_ROOT,
-        "install_dir": project.PROJECT_DIR,
-        "vendored_trees": trees,
-        "vendored_files": files,
-        "unrecognised": unknown,
-        "has_user_data": (install_dir / "user-data").is_dir(),
-        "already_bound": project.load(root) is not None,
-    }
+    return {"vendored_trees": trees, "vendored_files": files, "unrecognised": unknown}
+
+
+#: Quarantine group for the root tree that sits beside a pre-root install, kept apart
+#: from it: both carry a `scripts/`, a `skills/` and so on.
+SECONDARY_GROUP = "v2-install/root"
+
+
+def vendored_paths(found):
+    """Every vendored path the migration moves, as ``(project-relative path, group)``.
+
+    The single answer for the plan's actions, its tracked list, the bind's ``vacated``
+    set and the moves themselves, so the four can never name different paths.
+    """
+    entries = [
+        ("{}/{}".format(found["install_dir"], name), "v2-install")
+        for name in found["vendored_trees"] + found["vendored_files"]
+    ]
+    secondary = found.get("secondary")
+    if secondary:
+        entries += [
+            ("{}/{}".format(secondary["install_dir"], name), SECONDARY_GROUP)
+            for name in secondary["vendored_trees"] + secondary["vendored_files"]
+        ]
+    return entries
 
 
 def leftover_trees(project_root):
@@ -151,9 +199,8 @@ def leftover_trees(project_root):
 
     Empty for a project registered in vendored mode: a v3 `--mode vendored` bind puts
     the same trees in the same place on purpose, and reporting it as a leftover would
-    tell the user to quarantine the one layout they chose. This is the single answer
-    to "is there a v2 install here?" for `bind`'s refusal and `doctor`'s warning, so
-    the two can never disagree about the same directory.
+    tell the user to quarantine the one layout they chose. `bind`'s refusal reads it;
+    `doctor`, which also reports a pre-root install, reads `leftover_installs`.
     """
     found = detect(project_root)
     if not found["is_v2"] or found["layout"] != LAYOUT_ROOT:
@@ -164,6 +211,89 @@ def leftover_trees(project_root):
         if entry is not None and entry.get("mode") == "vendored":
             return []
     return found["vendored_trees"]
+
+
+#: Bind modes that write real trees at `.dev-team-agents/<name>` themselves.
+ROOT_TREE_MODES = ("vendored", "copy")
+
+
+def _bind_owns_root_tree(entry):
+    """Whether a registered bind wrote the real trees at the root itself."""
+    return entry is not None and entry.get("mode") in ROOT_TREE_MODES
+
+
+def leftover_installs(project_root):
+    """Every v2 install still on disk, as ``[{"install_dir", "trees"}]``.
+
+    `doctor`'s answer for a bound project, where `leftover_trees` sees only the root
+    layout: a pre-root install, and a root tree left beside one, are reported with the
+    directory each sits in. ``trees`` holds the vendored files too — `migrate` moves
+    both. The root tree of a vendored- or copy-mode bind is that bind's own.
+    """
+    root = Path(project_root)
+    pre_root_dir = root / PRE_ROOT_DIR
+    if pre_root_dir.is_symlink() or (
+        pre_root_dir.exists()
+        and os.path.commonpath([os.path.realpath(str(root)), os.path.realpath(str(pre_root_dir))])
+        != os.path.realpath(str(root))
+    ):
+        # Listing it would print the names of a directory outside the project, and
+        # `migrate` refuses to move it anyway.
+        return [{"install_dir": PRE_ROOT_DIR.as_posix(), "trees": [], "note": "a symlink, not inspected"}]
+    try:
+        found = detect(root)
+    except OSError as exc:
+        where = Path(exc.filename) if exc.filename else root
+        try:
+            where = where.relative_to(root)
+        except ValueError:
+            pass
+        return [{"install_dir": where.as_posix(), "trees": [], "note": "not readable: {}".format(exc.strerror or exc)}]
+    if not found["is_v2"]:
+        return []
+    installs = []
+    if found["layout"] == LAYOUT_PRE_ROOT:
+        pre_root = found["vendored_trees"] + found["vendored_files"]
+        if pre_root:
+            installs.append({"install_dir": found["install_dir"], "trees": pre_root})
+        secondary = found["secondary"] or {}
+        root_names = secondary.get("vendored_trees", []) + secondary.get("vendored_files", [])
+    else:
+        root_names = found["vendored_trees"] + found["vendored_files"]
+    if root_names:
+        identity = project.load(project_root)
+        entry = registry.get(identity["project_id"]) if identity is not None else None
+        if not _bind_owns_root_tree(entry):
+            installs.append({"install_dir": project.PROJECT_DIR, "trees": root_names})
+    return installs
+
+
+#: Names listed per install before the rest are counted: a pre-root install lists
+#: every child, so a hostile repository controls how many there are.
+DESCRIBE_LIMIT = 8
+
+
+def _printable(name):
+    """A name with control characters replaced: it ends up in terminal output."""
+    return "".join(char if char.isprintable() else "?" for char in name)
+
+
+def describe_installs(installs):
+    """``agents, scripts under .claude/dev-team-agents/; scripts under .dev-team-agents/``.
+
+    ``""`` for an empty list; callers only describe installs they found.
+    """
+    parts = []
+    for item in installs:
+        if item.get("note"):
+            parts.append("{}/ is {}".format(_printable(item["install_dir"]), _printable(item["note"])))
+            continue
+        names = [_printable(name) for name in item["trees"][:DESCRIBE_LIMIT]]
+        extra = len(item["trees"]) - DESCRIBE_LIMIT
+        if extra > 0:
+            names.append("and {} more".format(extra))
+        parts.append("{} under {}/".format(", ".join(names), item["install_dir"]))
+    return "; ".join(parts)
 
 
 def _tracked_v2_links(project_root):
@@ -304,6 +434,25 @@ def _context_paths_added(project_root, found):
     return [] if project.PRE_ROOT_DOCS_DIR in current else [project.PRE_ROOT_DOCS_DIR]
 
 
+def _docs_write_root(project_root, added):
+    """``.claude/docs`` when it is being added and the current write root does not exist.
+
+    Appended after a missing ``docs/``, the pre-root docs would be a read-only extra while
+    agents write to a folder the project does not have. A symlinked ``.claude/docs`` is never
+    promoted: as the write root it would send agents' writes wherever the link points.
+    """
+    if project.PRE_ROOT_DOCS_DIR not in added:
+        return None
+    if (Path(project_root) / project.PRE_ROOT_DOCS_DIR).is_symlink():
+        return None
+    return None if (Path(project_root) / _current_write_root(project_root)).is_dir() else project.PRE_ROOT_DOCS_DIR
+
+
+def _current_write_root(project_root):
+    identity = project.load(project_root)
+    return ((identity or {}).get("context_paths") or project.DEFAULT_CONTEXT_PATHS)[0]
+
+
 def _git_tracked_many(project_root, relatives):
     """The subset of ``relatives`` (files or directories) git has in the index."""
     relatives = sorted(set(relatives))
@@ -378,15 +527,15 @@ def plan(root=None, provider_names=None, mode="auto", pin=None):
                 "`devteam bind --mode link` (or --mode copy) instead."
             ),
         )
+    if _bind_owns_root_tree(entry) and found.get("secondary"):
+        # The same guard for a stale pre-root directory beside a vendored bind: the
+        # root tree is that bind's own, not a second v2 install.
+        found = dict(found, secondary=None)
 
     install_rel = found["install_dir"]
     memory = _memory_moves(project_root, found)
     added = _context_paths_added(project_root, found)
-    tracked = [
-        "{}/{}".format(install_rel, name)
-        for name in found["vendored_trees"] + found["vendored_files"]
-        if _git_tracked(project_root, "{}/{}".format(install_rel, name))
-    ]
+    tracked = [rel for rel, _group in vendored_paths(found) if _git_tracked(project_root, rel)]
     # Memory that git tracks leaves the index with the rest: its new home is
     # machine-local and excluded, so the old path would only ever show as deleted.
     tracked += [move["from"] for move in memory if _git_tracked(project_root, move["from"])]
@@ -420,10 +569,18 @@ def plan(root=None, provider_names=None, mode="auto", pin=None):
             "move the memory in {} to {} (kept, not quarantined; `devteam upgrade` then "
             "takes it into the store)".format(move["from"], move["to"])
         )
+    write_root = _docs_write_root(project_root, added)
     for path in added:
-        actions.append("add {} to context_paths (the docs stay where they are)".format(path))
-    for name in found["vendored_trees"] + found["vendored_files"]:
-        actions.append("move {}/{} into the data-store quarantine".format(install_rel, name))
+        if path == write_root:
+            actions.append(
+                "add {} to context_paths as the write root — there is no {} folder "
+                "(the docs stay where they are; /devteam:health-check can move them to "
+                "docs/ later)".format(path, _current_write_root(project_root))
+            )
+        else:
+            actions.append("add {} to context_paths (the docs stay where they are)".format(path))
+    for rel, _group in vendored_paths(found):
+        actions.append("move {} into the data-store quarantine".format(rel))
     if copies:
         # Every file by name: a file the project edited would otherwise be replaced
         # under a folder name nobody looked inside.
@@ -558,10 +715,17 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
     # The bind's own refusals, before anything moves. Checked after the moves, a
     # refusal left the tree quarantined and `project.json` written on a project that
     # neither `bind` nor `migrate` could then take further.
-    vacated = {
-        "{}/{}".format(preview["install_dir"], name)
-        for name in found["vendored_trees"] + found["vendored_files"]
-    } | set(preview["v2_copies"])
+    # A committed `.dev-team-agents` or `.claude/dev-team-agents` symlink would carry
+    # the vendored moves, the memory move or `project.json` out of the tree; each is
+    # refused here, before any of them is written.
+    for rel, _group in vendored_paths(found):
+        bind_module.require_inside(project_root / rel, project_root, what="v2 install")
+    for move in preview["memory_moves"]:
+        bind_module.require_inside(project_root / move["to"], project_root, what="memory target")
+    bind_module.require_inside(
+        project_root / project.PROJECT_DIR / "project.json", project_root, what="project identity"
+    )
+    vacated = {rel for rel, _group in vendored_paths(found)} | set(preview["v2_copies"])
     bind_module.check(
         project_root, provider_names=preview["providers"], mode=mode, pin=pin, vacated=vacated
     )
@@ -584,7 +748,12 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
         else None
     )
     identity, _created = project.ensure(
-        project_root, context_paths=context_paths, project_id=preview["restores_identity"]
+        project_root,
+        context_paths=context_paths,
+        project_id=preview["restores_identity"],
+        # Recomputed rather than carried in the preview (whose --json shape is fixed): the
+        # memory moves above never touch docs/, .claude/docs or a context path.
+        write_root=_docs_write_root(project_root, preview["context_paths_added"]),
     )
     project_id = identity["project_id"]
     if (
@@ -599,21 +768,17 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
         # would never offer to take it there.
         project.set_layout(project_root, project.LAYOUT_MEMORY_IN_PROJECT)
 
-    install_dir = project_root / preview["install_dir"]
     stamp = time.strftime("%Y-%m-%d")
     quarantined = []
     # Through a symlinked `.claude` / `.codex` a copy would be another tree's; refuse
     # before anything has moved, not halfway through.
     for rel in preview["v2_copies"]:
         bind_module.require_inside(project_root / rel, project_root, what="v2 copy")
-    for name in found["vendored_trees"] + found["vendored_files"]:
-        destination = quarantine.move(
-            install_dir / name, project_id, group="v2-install", stamp=stamp
-        )
+    for rel, group in vendored_paths(found):
+        source = bind_module.require_inside(project_root / rel, project_root, what="v2 install")
+        destination = quarantine.move(source, project_id, group=group, stamp=stamp)
         if destination is not None:
-            quarantined.append(
-                {"from": "{}/{}".format(preview["install_dir"], name), "to": str(destination)}
-            )
+            quarantined.append({"from": rel, "to": str(destination)})
     for rel in preview["v2_copies"]:
         # Checked again at the move: the plan was read before the bind's preflight,
         # and a parent swapped for a link since would carry the move out of the tree.
@@ -627,7 +792,8 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
             quarantined.append({"from": rel, "to": str(destination)})
     if preview["layout"] == LAYOUT_PRE_ROOT:
         try:
-            install_dir.rmdir()  # emptied above; a leftover keeps it, and is reported
+            # Emptied above; a leftover keeps it, and is reported.
+            (project_root / preview["install_dir"]).rmdir()
         except OSError:
             pass
 

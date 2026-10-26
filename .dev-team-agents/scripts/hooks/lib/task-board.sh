@@ -246,6 +246,26 @@ for r in json.load(sys.stdin).get("review_results") or []:
     return 0
 }
 
+# 0 when this payload's session has an execution trace, or is a child session or thread routed to
+# one (trace/aliases.json). An agent's end with no trace has no span to settle, so it forks nothing.
+devteam_task_board_has_trace() {
+    local session
+    session="$(devteam_task_board_session_id "$1")"
+    [ -n "$session" ] || return 1
+    [ -f "${TB_STATE_DIR}/task-board/trace/${session}.json" ] && return 0
+    # As a key only (`"<id>":`); the same id as a value names a top session, which has its own file.
+    [ -f "${TB_STATE_DIR}/task-board/trace/aliases.json" ] \
+        && grep -qE "\"${session//./\\.}\"[[:space:]]*:" "${TB_STATE_DIR}/task-board/trace/aliases.json"
+}
+
+# devteam_task_board_trace <payload> [--stop] — fold an agent spawn or result into the session's
+# execution trace (ADR-0041), or settle it at the end of a turn. Silent, returns 0.
+devteam_task_board_trace() {
+    [ -f "$TB_CLI" ] || return 0
+    printf '%s' "$1" | python3 "$TB_CLI" tasks trace-record --project-root "$TB_ROOT" ${2:+"$2"} --json >/dev/null 2>&1 || true
+    return 0
+}
+
 devteam_task_board_review_open() {
     [ -f "$TB_CLI" ] || return 0
     printf '%s' "$1" | python3 "$TB_CLI" tasks review-open --project-root "$TB_ROOT" --json >/dev/null 2>&1

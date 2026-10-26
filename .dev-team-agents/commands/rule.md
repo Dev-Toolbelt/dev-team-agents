@@ -20,13 +20,7 @@ If `$ARGUMENTS` is empty, ask the user for the rule description with `AskUserQue
 
 ## Step 2 — Classify `type`
 
-Follow the classification already loaded above:
-
-- Names a component, class, or helper to reuse → `code-pattern`
-- About where a kind of file must live → `path-convention`
-- Anything else (layout, positioning, structural convention not expressible as a regex) → `design-rule`
-
-If the description could plausibly fit more than one `type`, use `AskUserQuestion` (single-select, options = the plausible types with a one-line example of what each would enforce) rather than guessing.
+Classify per the skill's § Growing the Registry, step 1. If the description could plausibly fit more than one `type`, use `AskUserQuestion` (single-select, options = the plausible types with a one-line example of what each would enforce) rather than guessing.
 
 ---
 
@@ -43,8 +37,10 @@ Grep the repository for the named component/file/pattern to find its actual path
 - `detection`:
   - `code-pattern` → a regex built from the canonical file's actual markup/API (read the file; do not guess a pattern that would never match real violations)
   - `path-convention` → `path:<name-glob>=><required-dir>`
-  - `design-rule` → literal `(review-only — no regex; verify against canonical_ref)`
+  - `design-rule` / `review-rule` → literal `(review-only — no regex; verify against canonical_ref)`
+  - a literal `|` inside the regex is written `\|` so the table cell stays intact
 - `canonical_ref`: the path resolved in Step 3
+- `scope`, `severity`, `added`: per the skill's Growing the Registry step 4 — empty `scope` when the description names no area
 
 ---
 
@@ -59,9 +55,10 @@ Never append to `docs/development/reuse-guidelines.md` without this confirmation
 ## Step 6 — Append
 
 If confirmed:
-1. If `docs/development/reuse-guidelines.md` does not exist yet, create it from `.dev-team-agents/templates/reuse-guidelines-template.md`'s header (`| name | type | rule | detection | canonical_ref |` + separator row) before appending — copy the header shape, not the example row.
-2. Append the new row as the last line of the table (Edit tool, smallest possible diff — do not rewrite the file).
-3. Confirm to the user: `Catalogado em docs/development/reuse-guidelines.md — regra <name> (<type>).`
+1. If `docs/development/reuse-guidelines.md` does not exist yet, create it from `.dev-team-agents/templates/reuse-guidelines-template.md`'s header row + separator row before appending — copy the header shape, not the example row.
+2. Append the new row as the last line of the table (Edit tool, smallest possible diff — do not rewrite the file), widening a five-column header per the skill's § Updating the Registry.
+3. Run `bash .dev-team-agents/scripts/reuse-lint.sh --validate` and fix the row if it reports it.
+4. Confirm to the user: `Catalogado em docs/development/reuse-guidelines.md — regra <name> (<type>).`
 
 ---
 
