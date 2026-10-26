@@ -131,6 +131,46 @@ describe('the first-run wizard', () => {
     await waitFor(() => expect(bridge.startProject).toHaveBeenCalledWith({ path: '/work/my-app', provider: 'codex', type: 'new' }));
   });
 
+  it('labels a provider that does not start as not working, and explains it when picked', async () => {
+    const user = userEvent.setup();
+    const detect = detectReport({
+      providers: {
+        installed: [
+          { name: 'claude', binary: 'claude', version: '2.1.0', usable: true },
+          { name: 'codex', binary: 'codex', version: null, usable: false },
+        ],
+        in_project: [],
+        suggested: 'claude',
+      },
+    });
+    installBridge(freshBridge({ detectProject: vi.fn(() => Promise.resolve(ok(detect))) }));
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Choose a folder' }));
+    const select = await screen.findByLabelText('AI coding tool');
+    expect(select).toHaveValue('claude');
+    expect(screen.getByRole('option', { name: /Codex \(not working\)/ })).toBeInTheDocument();
+    expect(screen.queryByText(/does not start/)).not.toBeInTheDocument();
+
+    await user.selectOptions(select, 'codex');
+    const hint = await screen.findByText(/Codex is installed but does not start/);
+    expect(select).toHaveAttribute('aria-describedby', hint.id);
+  });
+
+  it('says the installed tools do not start, not that none was found, when every one is broken', async () => {
+    const user = userEvent.setup();
+    const detect = detectReport({
+      providers: { installed: [{ name: 'codex', binary: 'codex', version: null, usable: false }], in_project: [], suggested: null },
+    });
+    installBridge(freshBridge({ detectProject: vi.fn(() => Promise.resolve(ok(detect))) }));
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Choose a folder' }));
+    expect(await screen.findByLabelText('AI coding tool')).toHaveValue('claude');
+    expect(screen.getByText(/The AI coding tools on this computer do not start/)).toBeInTheDocument();
+    expect(screen.queryByText(/No AI coding tool was found/)).not.toBeInTheDocument();
+  });
+
   it('shows the command to copy, and does not claim the terminal opened, when a provider has no launch', async () => {
     const user = userEvent.setup();
     const detect = detectReport({

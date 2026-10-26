@@ -275,7 +275,7 @@ export function detectReport(overrides: Partial<DetectReport> = {}): DetectRepor
   return {
     path: '/work/my-app',
     providers: {
-      installed: [{ name: 'claude', binary: '/usr/local/bin/claude', version: '2.1.0' }],
+      installed: [{ name: 'claude', binary: '/usr/local/bin/claude', version: '2.1.0', usable: true }],
       in_project: [],
       suggested: 'claude',
     },

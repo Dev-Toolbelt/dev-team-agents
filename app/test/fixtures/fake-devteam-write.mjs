@@ -157,7 +157,7 @@ switch (command) {
   case 'start': {
     const detect = {
       path: flagValue('--path') ?? PROJECT_PATH,
-      providers: { installed: [{ name: 'claude', binary: 'claude', version: '2.1.0' }], in_project: [], suggested: flagValue('--provider') ?? 'claude' },
+      providers: { installed: [{ name: 'claude', binary: 'claude', version: '2.1.0', usable: true }], in_project: [], suggested: flagValue('--provider') ?? 'claude' },
       stack: { primary: 'node', all: ['node'], signals: ['package.json'] },
       project_type: { suggested: flagValue('--type') ?? 'maintenance', confidence: 'high', reasons: ['has a git history'] },
       first_task: {

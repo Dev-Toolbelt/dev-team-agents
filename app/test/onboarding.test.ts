@@ -139,20 +139,84 @@ describe('the first-run operations', () => {
     expect(typeof parseDetect({ ...full, first_task: { ...full.first_task, kind: 'delete' } })).toBe('string');
     expect(typeof parseDetect({ ...full, providers: undefined })).toBe('string');
   });
+
+  it('reads `usable`, and treats a CLI that predates it as reporting a working provider', () => {
+    const base = {
+      path: '/work/app',
+      stack: { primary: null, all: [], signals: [] },
+      project_type: { suggested: 'new', confidence: 'high', reasons: [] },
+      first_task: null,
+    };
+    const withField = parseDetect({
+      ...base,
+      providers: { installed: [{ name: 'codex', binary: 'codex', version: null, usable: false }], in_project: [], suggested: null },
+    });
+    expect(withField).toMatchObject({ providers: { installed: [{ name: 'codex', usable: false }] } });
+    const older = parseDetect({
+      ...base,
+      providers: { installed: [{ name: 'claude', binary: 'claude', version: '2.0' }], in_project: [], suggested: 'claude' },
+    });
+    expect(older).toMatchObject({ providers: { installed: [{ name: 'claude', usable: true }] } });
+    for (const odd of ['false', 0, null, 1]) {
+      const parsed = parseDetect({
+        ...base,
+        providers: { installed: [{ name: 'codex', binary: 'codex', version: null, usable: odd }], in_project: [], suggested: null },
+      });
+      expect(parsed).toMatchObject({ providers: { installed: [{ usable: false }] } });
+    }
+  });
 });
 
 describe('the confirm-screen model', () => {
-  it('preselects what was detected, and a provider that is installed', () => {
+  it('preselects what was detected', () => {
     const report = detectReport();
     expect(defaultChoices(report)).toEqual({ provider: 'claude', type: 'maintenance', stack: 'node' });
-    const noSuggestion = detectReport({ providers: { installed: [{ name: 'codex', binary: 'codex', version: null }], in_project: [], suggested: null } });
-    expect(defaultChoices(noSuggestion).provider).toBe('codex');
+    const codex = detectReport({
+      providers: { installed: [{ name: 'codex', binary: 'codex', version: '1.0', usable: true }], in_project: [], suggested: 'codex' },
+    });
+    expect(defaultChoices(codex).provider).toBe('codex');
   });
 
-  it('lists every provider, marking the installed ones', () => {
-    const choices = providerChoices(detectReport());
-    expect(choices.find((c) => c.name === 'claude')?.installed).toBe(true);
-    expect(choices.find((c) => c.name === 'codex')?.installed).toBe(false);
+  it('preselects what `devteam start` would use: the suggestion, else the project\'s own, else the default', () => {
+    // The CLI suggests only tools that start, so a working one wins over the project's broken one.
+    const brokenAndWorking = detectReport({
+      providers: {
+        installed: [
+          { name: 'codex', binary: 'codex', version: null, usable: false },
+          { name: 'opencode', binary: 'opencode', version: '1.0', usable: true },
+        ],
+        in_project: ['codex'],
+        suggested: 'opencode',
+      },
+    });
+    expect(defaultChoices(brokenAndWorking).provider).toBe('opencode');
+    // Nothing starts: the CLI suggests nothing and `start` keeps the project's provider.
+    const onlyBroken = detectReport({
+      providers: { installed: [{ name: 'codex', binary: 'codex', version: null, usable: false }], in_project: ['codex'], suggested: null },
+    });
+    expect(defaultChoices(onlyBroken).provider).toBe('codex');
+    const nothing = detectReport({
+      providers: { installed: [{ name: 'codex', binary: 'codex', version: null, usable: false }], in_project: [], suggested: null },
+    });
+    expect(defaultChoices(nothing).provider).toBe('claude');
+  });
+
+  it('lists every provider as installed, not working or missing', () => {
+    const choices = providerChoices(
+      detectReport({
+        providers: {
+          installed: [
+            { name: 'claude', binary: 'claude', version: '2.1.0', usable: true },
+            { name: 'codex', binary: 'codex', version: null, usable: false },
+          ],
+          in_project: [],
+          suggested: 'claude',
+        },
+      }),
+    );
+    expect(choices.find((c) => c.name === 'claude')?.state).toBe('installed');
+    expect(choices.find((c) => c.name === 'codex')?.state).toBe('broken');
+    expect(choices.find((c) => c.name === 'opencode')?.state).toBe('missing');
   });
 
   it('types commands the way each provider does', () => {
