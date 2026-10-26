@@ -600,12 +600,19 @@ def cmd_start(args, emitter):
     """Detect, then set the project up with the defaults. The user never sees how."""
     root = project.resolve_root(args.path)
     found = detect.run(str(root), provider=args.provider, project_type=args.type)
-    chosen = args.provider
-    if chosen is None and not found["providers"]["in_project"] and found["providers"]["suggested"]:
-        chosen = found["providers"]["suggested"]
+    # Without `--provider`: every provider the project already uses that starts (a project set
+    # up for several keeps all of them), else detect's `suggested` (only ever a tool that
+    # starts), else nothing — and the bind falls back to the project's own providers or the
+    # default. The app preselects the first of the same order.
+    info = found["providers"]
+    usable = {entry["name"] for entry in info["installed"] if entry["usable"]}
+    chosen = [args.provider] if args.provider else (
+        [name for name in info["in_project"] if name in usable]
+        or ([info["suggested"]] if info["suggested"] else None)
+    )
     bound, _human = cmd_bind(
         argparse.Namespace(
-            path=str(root), provider=[chosen] if chosen else None, mode="auto", pin=None
+            path=str(root), provider=chosen, mode="auto", pin=None
         ),
         emitter,
     )
@@ -616,6 +623,11 @@ def cmd_start(args, emitter):
             ", ".join("/devteam:{}".format(name) for name in featured)
         )
     ]
+    if not any(entry["usable"] for entry in found["providers"]["installed"]):
+        lines.append("")
+        lines.append(
+            "No AI coding tool on this computer starts. Run `devteam doctor --machine` to see how to fix it."
+        )
     if task:
         lines.append("")
         lines.append("Suggested first task, read-only: {}".format(task["label"]))

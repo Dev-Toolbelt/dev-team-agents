@@ -868,13 +868,17 @@ def _python_fix(platform, which):
     return None, False
 
 
-def check_prerequisites(platform=None, which=None, version_of=None, python_version=None):
+def check_prerequisites(platform=None, which=None, version_of=None, python_version=None, probe_of=None):
     """Git, Python and each provider CLI. Reports only; nothing here installs anything.
 
-    ``platform``, ``which``, ``version_of`` and ``python_version`` are seams for tests.
+    ``platform``, ``which``, ``version_of``, ``python_version`` and ``probe_of`` are seams for
+    tests; ``probe_of`` defaults to ``detect.probe``, the rule ``devteam detect`` uses for ``usable``.
     """
     platform = platform or sys.platform
     which = which or shutil.which
+    if probe_of is None:
+        # A test that seams only `version_of` keeps its old meaning: no version, no answer.
+        probe_of = (lambda name: (version_of(name) is not None, version_of(name))) if version_of else detect_module.probe
     version_of = version_of or detect_module.binary_version
     python_version = python_version or sys.version_info[:3]
     findings = []
@@ -925,9 +929,10 @@ def check_prerequisites(platform=None, which=None, version_of=None, python_versi
             )
             continue
         found_any = True
-        version = version_of(name)
-        if version:
-            findings.append(_machine_finding(OK, "provider", "{} {}".format(name, version)))
+        # The same rule `devteam detect` uses for `usable` (detect.probe).
+        answered, version = probe_of(name)
+        if answered:
+            findings.append(_machine_finding(OK, "provider", "{} {}".format(name, version or "(version unknown)")))
         else:
             findings.append(
                 _machine_finding(
