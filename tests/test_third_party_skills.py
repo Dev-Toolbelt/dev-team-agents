@@ -189,6 +189,7 @@ class ThirdPartyExtractionTest(unittest.TestCase):
             helper.fetch(entry, dest)
         return dest
 
+    @unittest.skipIf(os.name == "nt", "Windows has no POSIX executable bit: chmod only toggles read-only and os.access(X_OK) is true for every file")
     def test_extracts_the_subset_with_modes_and_licenses_and_honors_excludes(self):
         dest = self._fetch([
             ("skills/demo/SKILL.md", SKILL, "file"),
@@ -201,6 +202,7 @@ class ThirdPartyExtractionTest(unittest.TestCase):
         self.assertTrue(os.access(dest / "tool.sh", os.X_OK))
         self.assertFalse(os.access(dest / "SKILL.md", os.X_OK))
 
+    @unittest.skipIf(os.name == "nt", "Windows has no POSIX executable bit: chmod only toggles read-only and os.access(X_OK) is true for every file")
     def test_mode_change_changes_the_hash(self):
         dest = self._fetch([("skills/demo/SKILL.md", SKILL, "file"), ("LICENSE", b"MIT", "file")])
         before = helper.tree_hash(dest)
