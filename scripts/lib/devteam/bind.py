@@ -422,6 +422,15 @@ def _frontmatter_name(skill_file):
     return None
 
 
+#: Frontmatter `name` values a framework skill shipped under before `name` had to
+#: equal its directory. A v2 copy made then still carries the old value
+#: (`shadcn` was `shadcn-ui` from v1.0.0 to v2.18.x). A project's own skill under an
+#: alias at that exact path is quarantined, not refused: moved, never deleted.
+V2_SKILL_NAME_ALIASES = {
+    "shadcn": ("shadcn-ui",),
+}
+
+
 def v2_copy(rel, dest, version_dir, project_root):
     """True when ``dest`` is a v2 install's ``rel`` link, materialized as real content.
 
@@ -431,8 +440,8 @@ def v2_copy(rel, dest, version_dir, project_root):
     which `_is_managed_path` cannot vouch for. Only content that is recognisably the
     framework's counts — the agents or commands directory holding nothing but `.md`
     files, at least one named like the framework's own; a skill whose frontmatter
-    `name` is the framework skill's — so a project's own directory at the same path is
-    still refused as foreign.
+    `name` is the framework skill's, or one it shipped under (`V2_SKILL_NAME_ALIASES`)
+    — so a project's own directory at the same path is still refused as foreign.
     """
     dest = Path(dest)
     if dest.is_symlink() or not dest.exists():
@@ -453,7 +462,8 @@ def v2_copy(rel, dest, version_dir, project_root):
             and any(item.name in known for item in entries)
         )
     if parts[1] == "skills":
-        return _frontmatter_name(dest / "SKILL.md") == parts[2]
+        name = _frontmatter_name(dest / "SKILL.md")
+        return name == parts[2] or name in V2_SKILL_NAME_ALIASES.get(parts[2], ())
     return False
 
 

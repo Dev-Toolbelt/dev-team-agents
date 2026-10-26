@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from devteam_support import REPO_ROOT, StoreTestCase, requires_bash
 
@@ -742,6 +743,42 @@ class V2CopiesTest(StoreTestCase):
         skill = root / ".claude" / "skills" / "unit" / "SKILL.md"
         skill.write_text("---\nname: something-else\n---\n", encoding="utf-8")
         self.assertFalse(bind.v2_copy(".claude/skills/unit", skill.parent, version_dir, root))
+
+    def test_v2_copy_recognises_a_skill_under_a_name_it_shipped_under(self):
+        # v2.17.1 shipped `shadcn` as `name: shadcn-ui`; its copy was refused as foreign.
+        root, _ = self._copies_project()
+        version_dir = versions.require(versions.resolve(None))
+        skill = root / ".claude" / "skills" / "unit"
+        (skill / "SKILL.md").write_text("---\nname: unit-old\n---\n", encoding="utf-8")
+        with mock.patch.dict(bind.V2_SKILL_NAME_ALIASES, {"unit": ("unit-old",)}):
+            self.assertTrue(bind.v2_copy(".claude/skills/unit", skill, version_dir, root))
+            # The `.claude/` copies are quarantined whichever providers the migrate binds;
+            # the delegated providers' own renders are covered by their installer tests.
+            with mock.patch.object(bind, "v2_delegated_copies", return_value=[]):
+                for provider in providers.ALL_PROVIDERS:
+                    with self.subTest(provider=provider):
+                        preview = migrate.plan(root, provider_names=[provider], mode="link")
+                        self.assertIn(".claude/skills/unit", preview["v2_copies"])
+        (skill / "SKILL.md").write_text("---\nname: unit-other\n---\n", encoding="utf-8")
+        with mock.patch.dict(bind.V2_SKILL_NAME_ALIASES, {"unit": ("unit-old",)}):
+            self.assertFalse(bind.v2_copy(".claude/skills/unit", skill, version_dir, root))
+
+    def test_a_shadcn_copy_under_its_v2_name_is_a_v2_copy(self):
+        root, _ = self._copies_project()
+        version_dir = versions.require(versions.resolve(None))
+        skill = root / ".claude" / "skills" / "shadcn"
+        skill.mkdir(parents=True, exist_ok=True)
+        (skill / "SKILL.md").write_text("---\nname: shadcn-ui\n---\n", encoding="utf-8")
+        self.assertTrue(bind.v2_copy(".claude/skills/shadcn", skill, version_dir, root))
+
+    def test_every_v2_skill_name_alias_names_a_framework_skill(self):
+        skills = {path.parent.name for path in (REPO_ROOT / "skills").glob("*/*/SKILL.md")}
+        for directory, aliases in bind.V2_SKILL_NAME_ALIASES.items():
+            self.assertIn(directory, skills)
+            self.assertFalse((REPO_ROOT / "skills" / "third-party" / directory).exists())
+            for alias in aliases:
+                # An alias that is a current skill's name would claim that skill's copy.
+                self.assertNotIn(alias, skills)
 
     def test_bind_refuses_copies_with_the_v2_reason_and_writes_nothing(self):
         root, copied = self._interrupted()
