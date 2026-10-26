@@ -357,14 +357,14 @@ class OtherBoundProjectTest(PrCase):
         self.begin()
         self.create(command="gh pr create --head feat/x")
         self.stop_idle()
-        self.rec(claude_bash("s1", "cd {} && git merge feat/x".format(self.other), "Fast-forward\n", cwd=str(self.root)), now=T0 + 50)
+        self.rec(claude_bash("s1", "cd {} && git merge feat/x".format(shlex.quote(str(self.other))), "Fast-forward\n", cwd=str(self.root)), now=T0 + 50)
         self.assertNotIn("merges", self.load("s1"))
 
     def test_every_provider_records_the_other_projects_pr(self):
         for provider in providers.ALL_PROVIDERS:
             session = ProviderPayloadTest.SESSIONS[provider]
             self.rec(ProviderPayloadTest.RECORDS[provider](session), now=T0)
-            command = "cd {} && gh pr create --fill".format(self.other)
+            command = "cd {} && gh pr create --fill".format(shlex.quote(str(self.other)))
             out = self.rec(ProviderPayloadTest.BASH[provider](session, command, OTHER + "\n", cwd=str(self.root)), now=T0 + 20)
             self.assertEqual(out["event"], "pr_created", provider)
             self.assertEqual(self.load(session)["prs"][0]["via"], "other-id", provider)
