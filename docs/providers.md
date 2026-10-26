@@ -100,7 +100,7 @@ There is also a silent-fallback case: if the org restricts models via an `availa
    .claude/agents/dev-team/  .opencode/agents/   .codex/agents/<name>.toml
    .claude/commands/devteam/ .opencode/opencode.json    .codex/skills/devteam-*/SKILL.md
    (symlink — install.sh)    (deep-merge into .opencode/opencode.json)
-                                                  .codex/hooks.json (7 managed events)
+                                                  .codex/hooks.json (9 managed events)
                               .opencode/plugins/dev-team-agents.ts (event ↔ bash hooks)
 ```
 
@@ -126,7 +126,10 @@ There is also a silent-fallback case: if the org restricts models via an `availa
 | **Claude Code** | `SessionEnd` | — | Marks session ended | Raises `tasks.session_abandoned` if tasks remain |
 | **Codex** | `SessionEnd` (`codex-rs/hooks/src/events/session_end.rs`: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `reason`) | — | Marks session ended | Raises `tasks.session_abandoned` if tasks remain |
 | **Codex** | Existing `PreToolUse` | `update_plan` | Replace | Matched by normalized content |
+| **Codex** | `SubagentStart` / `SubagentStop` (0.160+) | — | Links agent ids, settles task, reads review-result marker | Codex-only; Claude Code and opencode have no such event |
 | **opencode** | Plugin `tool.execute.before` | `todowrite` | Replace | `args.todos[].id` |
+
+**Codex task board note.** The `update_plan` tool ships **off by default** in Codex 0.160+. Without it, approved plans cannot reach the task board. Enable with `[tools.update_plan] enabled = true` in `~/.codex/config.toml` or a trusted project's `.codex/config.toml`. `devteam doctor` warns when the setting is off (category `task-board`). `devteam` does not write Codex config (ADR-0033).
 
 **In Review capture per provider** (spec `docs/specs/task-board.md` § In Review; payload shapes verified from source — Claude Code hooks reference, openai/codex @ `92bc601`, `@opencode-ai/plugin` 1.18.33):
 

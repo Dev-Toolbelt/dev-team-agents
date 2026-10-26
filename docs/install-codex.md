@@ -12,7 +12,7 @@ From your **project root**, run:
 bash <(curl -sSL https://raw.githubusercontent.com/Dev-Toolbelt/dev-team-agents/main/scripts/install-provider.sh) codex
 ```
 
-This downloads the latest source, renders 18 agents as `.codex/agents/<name>.toml`, renders matching command skills as `.codex/skills/devteam-<name>/SKILL.md`, symlinks the shared skill library into `.codex/skills/dev-team-agents/`, writes 7 managed lifecycle events to `.codex/hooks.json`, materialises the hook dispatchers at `.dev-team-agents/scripts/hooks/`, and injects a small managed rule into `AGENTS.md` so the SessionStart banner is actually echoed in Codex's first visible reply.
+This downloads the latest source, renders 18 agents as `.codex/agents/<name>.toml`, renders matching command skills as `.codex/skills/devteam-<name>/SKILL.md`, symlinks the shared skill library into `.codex/skills/dev-team-agents/`, writes 9 managed lifecycle events to `.codex/hooks.json`, materialises the hook dispatchers at `.dev-team-agents/scripts/hooks/`, and injects a small managed rule into `AGENTS.md` so the SessionStart banner is actually echoed in Codex's first visible reply.
 
 If `.dev-team-agents/` already exists in the project, you can also run the bundled installer directly:
 
@@ -22,13 +22,24 @@ If `.dev-team-agents/` already exists in the project, you can also run the bundl
 
 ## After install
 
-Restart Codex CLI. Trust the project's `.codex/` directory if prompted (Codex gates per-project config by trust). Then use the `/hooks` command to review and trust the 7 managed hooks. After that, the default project-local entrypoint is:
+Restart Codex CLI. Trust the project's `.codex/` directory if prompted (Codex gates per-project config by trust). Then use the `/hooks` command to review and trust the 9 managed hooks (`SubagentStart` and `SubagentStop` fire on Codex 0.160+, the tested minimum; they are what puts Codex agents on the task board). After that, the default project-local entrypoint is:
 
 ```
 $devteam-plan do a plan
 ```
 
 You can also open `/skills` and select `devteam-plan`.
+
+## Task board and approved plans
+
+Codex ships with the `update_plan` tool **off by default**. Without it, approved plans cannot reach the task board. To enable it, add the following to your `~/.codex/config.toml` (or to `.codex/config.toml` in a trusted project):
+
+```toml
+[tools.update_plan]
+enabled = true
+```
+
+When the setting is off, `devteam doctor` warns (category `task-board`) and `plan-mode` documents that the plan cannot be mirrored. `devteam` does not write Codex config — you set this yourself per ADR-0033.
 
 ## Interactive choices in Default mode
 

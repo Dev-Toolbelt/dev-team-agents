@@ -37,13 +37,25 @@ task by the hooks, with no agent cooperation:
 | Moment | Claude Code | Codex | opencode | Task |
 |---|---|---|---|---|
 | Spawn | `PreToolUse` `Agent`/`Task` | `PreToolUse` `spawn_agent` | `tool.execute.before` `task` | created `in_progress`, `kind: "agent"` |
-| Result | `PostToolUse` (foreground); transcript hand-back at `Stop` (background) | `PostToolUse` `wait_agent`, matched by the agent id `spawn_agent` returned | `tool.execute.after` `task` (same `callID`) | `completed` |
+| Result | `PostToolUse` (foreground); transcript hand-back at `Stop` (background) | `PostToolUse` `wait_agent`, matched by the agent id `spawn_agent` returned; a v2 task at `Stop` by its `FINAL_ANSWER`; or, sooner, `SubagentStop` of the child linked to it (Codex 0.160+) | `tool.execute.after` `task` (same `callID`) | `completed` |
 | Failure | `PostToolUseFailure`; a background hand-back whose `<status>` is `failed`/`killed`/`error` | `wait_agent` reporting `errored`/`not_found`; a `spawn_agent` `PostToolUse` with no agent id | — | `cancelled`, `failed: true` |
 | Closed | — | `close_agent` | — | `cancelled` (not failed) |
 | Interrupt | settled at `Stop` | settled at `Stop` (an agent that never got an id) | settled at `Stop` (a thrown `task` fires no `after`) | `cancelled`, `interrupted: true` |
 
 - **Identity** — the spawn's own id (`tool_use_id`; opencode `callID`; Codex the spawned agent id),
-  never the text, so a task cannot duplicate. **Text** — `<agent>: <description>`.
+  never the text, so a task cannot duplicate. **Text** — `<agent>: <description>`; a Codex card's
+  description is the spawn's `task_name` without `/root/` (its `message` is encrypted on 0.160).
+  Codex 0.160 sends the `collaboration` tools glued to the name (`collaborationspawn_agent`) as well as
+  dotted; the board, the review window and the trace all read both.
+- **Codex child events** — `SubagentStart` (parent `session_id`, child `agent_id`, `agent_type`) links
+  the child's id (`agent_id`) to the oldest open spawn of that type that has none, the main session's
+  first, so the child's own todo items are retired when it ends. `SubagentStop` then ends that task at
+  that moment. Neither creates a task or a session (the spawn's hooks do) and neither feeds the
+  execution trace. A task ended by one of `SubagentStop`, the parent rollout's `FINAL_ANSWER` or a
+  `wait_agent` is never ended again by another: a stop only ends a task still open, and a v2 task it
+  ended keeps an `answer_claim` so its `FINAL_ANSWER` still pairs with it instead of reaching an open
+  sibling of the same path (dropped after `PENDING_MAX_AGE`). Two agents of one type spawned side by
+  side may swap child ids; both still settle.
 - **Owner** — the spawning agent (`main`, or the subagent id for nested spawns).
 - **Excluded** — provider built-ins (one list, `BUILTIN_AGENTS` in `review_triggers.py`) and the
   review/QA agents (their effect is the In Review column; a task of their own would count as finished
@@ -183,6 +195,7 @@ JSON (additive): task `kind` gains `"direct"`; every task carries `turns` (empty
 | Claude Code | same | `TaskCreate` / `TaskUpdate` (the **default** since TodoWrite was disabled in favour of them; `CLAUDE_CODE_ENABLE_TASKS=0` restores TodoWrite) | Incremental | `TaskUpdate.tool_input.taskId`; for `TaskCreate`, parsed from the tool output (`tool_response` or `tool_output`, object or string, e.g. `Task #3 created`), falling back to the next sequential id the session would assign |
 | Claude Code | `SessionEnd` → `session-end.sh` | — | marks the session ended | — |
 | Codex | existing `PreToolUse` (`*`) → `pre-tool-use.sh` | `update_plan` | Replace | none — matched by content |
+| Codex | `SubagentStart` / `SubagentStop` → `subagent-start.sh` / `subagent-stop.sh` (0.160+) | child agent lifecycle (agent ids and ends, not todos) | — | links `agent_id`; settles |
 | opencode | plugin `tool.execute.before` → `pre-tool-use.sh` (payload gains `sessionID`) | `todowrite` | Replace | `todos[].id` |
 
 Claude Code hook input carries `agent_id` / `agent_type` when the call comes from a subagent
@@ -192,7 +205,12 @@ cannot be read is a no-op, and both `tool_response` and `tool_output` are accept
 
 Codex fires `PreToolUse` for `update_plan`: confirmed in the Codex source (openai/codex @ `92bc601`)
 and pinned by a test that replays that exact payload, including a subagent's `agent_id`. It has not
-yet been observed in a live Codex session.
+yet been observed in a live Codex session. Observed live on Codex 0.160 (2026-10-04,
+`tests/fixtures/codex-0.160-hook-payloads.json`), where the tool is off by default
+(`[tools.update_plan] enabled = true` restores it; `devteam doctor` warns). 0.160 also fires
+`SubagentStart` / `SubagentStop` around each child agent. They are Codex-only: Claude Code's
+`Agent`/`Task` calls already reach Pre/PostToolUse (a second source would settle every spawn twice) and
+opencode has no such event.
 
 #### The record — `<state-dir>/task-board/<session-key>.json`
 
@@ -608,9 +626,10 @@ Implementation details:
   per session lists the turns instead).
 - An opt-out for prompt excerpts and a retention limit on them (open product decision; needs a
   preference key and a No-Destruction exception).
-- In Review windows for Codex multi-agent v2 reviewers: the reviewer's report arrives only as a
-  `FINAL_ANSWER` in the parent rollout, which no review window reads yet, so such a window is settled
-  as unread at `Stop`. Follow-up: feed the window from the same `FINAL_ANSWER` scan the agent tasks use.
+- In Review windows for Codex multi-agent v2 reviewers fed from the parent rollout's `FINAL_ANSWER`:
+  the window is fed by the reviewer's `SubagentStop` (its `last_assistant_message`) when that hook ran;
+  without it the window is settled as unread at `Stop`. Follow-up: feed the window from the same
+  `FINAL_ANSWER` scan the agent tasks use.
 
 ### Dependencies
 - ADR-0013 (machine-local records), ADR-0015/0011 (app as CLI client, JSON contract),
@@ -665,3 +684,4 @@ Implementation details:
 | 2026-10-20 | A payload from a child session is never a board session: an opencode todo or spawn carrying `parent_id` is skipped, as direct work already was, and a session the trace's `aliases.json` names as a child (Codex child threads) is skipped by `record` | Each subagent appeared as a phantom session with its own cards (audit 2026-10-20, issues 2, 3) |
 | 2026-10-20 | A record keeps at most 200 tasks: past that, the oldest removed tasks are dropped first; open tasks and tasks tied to a review window are never dropped, and new keys are `max + 1`. Session titles pass through the same sanitizer as task text (invisible characters stripped, secrets redacted, capped), at write time and when read live. Turn markers (`.prompt-`, `.direct-`, `.directw-`) older than 24 h are swept at `mark` | Unbounded record growth; titles were the one text field stored verbatim; markers from turns that never reached Stop stayed on disk with the raw prompt line (audit 2026-10-20, issue 13, S5, S6) |
 | 2026-10-20 | The Stop sub-script is `stop/00b-task-board.sh` (was `04b`), so it runs before the lint and check sub-scripts. The task JSON's `interrupted` flag is shown in the app as an "Interrupted" badge next to Failed | A provider hook timeout during the lints left the session unmarked idle and its direct card unsettled; an interrupted agent looked like a successful Done card (audit 2026-10-20, issues 5, 8) |
+| 2026-10-26 | Codex subagent events reconciled with the v2 path of 2026-10-19 (which stays authoritative: task path as `agent_ref`, end at the rollout's `FINAL_ANSWER`, age cap). Kept from the 0.160 live capture (`tests/fixtures/codex-0.160-hook-payloads.json`): the `collaboration` namespace may arrive glued to the tool name (`collaborationspawn_agent`) as well as dotted, in the board, the review window and the trace; a Codex card's text is `<agent_type>: <task_name>` (the spawn's message is encrypted); `SubagentStart` links its `agent_id` to the oldest open spawn of that type with no child id (the main session's first; a v1 spawn that already holds its id is never given another) so the child's own todo items retire when it ends; `SubagentStop` settles the linked task at that moment, instead of at the parent's `Stop`. A `SubagentStop` of a review/QA agent folds the marker of its `last_assistant_message` into the window (a synthetic launch id names the agent, so a replayed stop and a `wait_agent` report naming the same agent count once, in either order) — v2 reviewers are no longer out of scope. Dedup: a stop only ends a task still open; a v2 task it ended keeps an `answer_claim` that makes its `FINAL_ANSWER` still match it, so that answer is never handed to an open sibling of the same path (claims expire after 6 h); a task the rollout ended is left as it is by a later stop. A start or stop with no linked task records and settles nothing: no task or session is created from them, and the old guess that a stop with a lost start settles the oldest unlinked spawn is dropped, because the rollout path can already have ended that one. Dropped as superseded by v2: the "accepted spawn" state and its 15-minute window (a task path is already an `agent_ref`). The events are wired for Codex only, never feed the execution trace, and Claude Code (its `Agent`/`Task` calls already reach Pre/PostToolUse) and opencode (no such event) are not given them | Codex 0.160 live capture: child id and end arrived only as `SubagentStart`/`SubagentStop`; the glued names kept the v2 path from ever seeing a real 0.160 spawn |

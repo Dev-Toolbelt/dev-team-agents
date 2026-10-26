@@ -223,6 +223,60 @@ same redaction.
 
 **Reference implementation:** ADR-0025: The desktop app opens allow-listed tracker links from the main process.
 
+## Amendment — 2026-10-26: Codex subagent events, reconciled with the multi-agent v2 path
+
+**Context.** A payload-dumping hook on Codex CLI 0.160.0 (2026-10-04, pinned by
+`tests/fixtures/codex-0.160-hook-payloads.json`) showed that Codex sessions of a bound project never
+put an agent on the board:
+
+| Observed | Effect on the board |
+|---|---|
+| Collaboration tools reach the hooks with the namespace glued on: `collaborationspawn_agent`, `collaborationwait_agent` | The gates and normalizers expected `spawn_agent` or `x.spawn_agent`: no Codex agent was ever recorded, so the multi-agent v2 path (task path as `agent_ref`, end at the rollout's `FINAL_ANSWER`) never saw a real 0.160 spawn |
+| The spawn's `message` is encrypted (`gAAAA…`); `task_name` is plain | The card text would have been unreadable |
+| `SubagentStart` (parent `session_id`, child `agent_id`, `agent_type`) and `SubagentStop` (the same plus `last_assistant_message`) fire for the parent session | The child's id, its end at the moment it happens, and the review marker of a reviewer, none of which another Codex hook carries |
+| `update_plan` is off by default (`[tools.update_plan] enabled = true` restores it) | Plan mirroring cannot happen on a default install |
+
+**Decision.** The v2 path of 2026-10-19 stays authoritative for how a Codex spawn becomes a task and how it
+ends at the parent's `Stop`; the subagent events are an additional, deduplicated source.
+
+1. **The `collaboration` namespace is read dotted or glued** on the board, the review window and the
+   execution trace; the card text is `<agent_type>: <task_name>`, never the encrypted message.
+2. **`SubagentStart` links, `SubagentStop` settles.** The start sets `agent_id` on the oldest open spawn
+   of that type with no child id (the main session's first; a v1 spawn that already holds its id is never
+   given another), so the child's own todo items retire when it ends. The stop ends the linked task at
+   that moment instead of at the parent's `Stop`. Neither creates a task or a session, and neither feeds
+   the execution trace (ADR-0041): the spawn's hooks make its span, so a child is never a second one.
+3. **A task is ended once, whichever source comes first.** A stop only ends a task still open. A v2 task
+   it ended keeps an `answer_claim`, so its `FINAL_ANSWER` still pairs with it and is never handed to an
+   open sibling of the same path; a task the rollout (or a wait) ended is left as it is by a later stop.
+4. **A reviewer's `SubagentStop` folds the marker of its `last_assistant_message` into its review
+   window**, so v2 reviewers resolve a window. Its synthetic launch id names the agent, so a replayed stop
+   and a `wait_agent` report naming the same agent count once, in either order. Only a known review/QA
+   agent's stop is a result.
+5. **Codex only.** Claude Code's `Agent`/`Task` calls already reach Pre/PostToolUse (a second source would
+   settle every spawn twice) and opencode has no such event; `tests/test_codex_subagent_capture.py` iterates
+   `ALL_PROVIDERS` and fails on a provider with no decision.
+6. **`update_plan` off is reported, not fixed.** `devteam doctor` warns (category `task-board`); plan-mode
+   tells the agent to say once that the plan cannot be mirrored. devteam does not write Codex config
+   (ADR-0033).
+
+**Consequences.**
+
+- Two new Codex hooks need a one-time re-trust in Codex after `devteam sync` (a per-hook `trusted_hash`);
+  until then they do not run, and the v2 path alone settles the task at the parent's `Stop`.
+- `SubagentStop` carries no status: a Codex agent that failed settles `completed` there.
+- A stop with no linked task changes nothing: guessing the oldest unlinked spawn is unsafe when the rollout
+  can already have ended it.
+- Unverified: whether a Codex build older than 0.160 accepts a `hooks.json` with the two event keys it does
+  not know. Until checked, 0.160 is the tested minimum.
+
+| Alternative | Why rejected |
+|---|---|
+| Keep an "accepted spawn" state until the start links it | A `task_name` path is already an `agent_ref`, which `Stop` spares |
+| Create a task from a start whose spawn never reached a hook | Nothing names the agent for the board, and it would be recorded twice if the spawn's hooks arrive late |
+| Settle a stop with a lost start on the oldest unlinked spawn of its type | The rollout may already have ended that task: it would settle a sibling still running |
+| Feed the execution trace from the subagent events | Its spans already come from the spawn's hooks: a second source duplicates each span |
+
 ## Alternatives Considered
 
 | Alternative | Why rejected |
