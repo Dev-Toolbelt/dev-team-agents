@@ -39,14 +39,14 @@ print(f'opencode fixture: commands={len(d[\"command\"])}')
     done
     ;;
   codex)
-    # .codex/hooks.json parses, has all 7 managed events, each hook command path resolves
+    # .codex/hooks.json parses, has all 9 managed events, each hook command path resolves
     python3 - <<PY
 import json, os, re
 fpath = "$FIXTURE/.codex/hooks.json"
 d = json.load(open(fpath))
 hooks_obj = d.get("hooks")
 assert isinstance(hooks_obj, dict), f"codex hooks.json 'hooks' must be an object keyed by event (got {type(hooks_obj).__name__})"
-required = {"SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "PreCompact", "Stop", "SessionEnd"}
+required = {"SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "PreCompact", "Stop", "SessionEnd", "SubagentStart", "SubagentStop"}
 missing = required - set(hooks_obj.keys())
 assert not missing, f"codex hooks.json missing events: {sorted(missing)}"
 missing_paths = []

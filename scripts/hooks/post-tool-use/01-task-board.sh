@@ -28,8 +28,9 @@ if [[ "$HEAD" =~ $FIRST_TOOL_RE ]]; then
 fi
 TODO_RE='"tool_name"[[:space:]]*:[[:space:]]*"(TodoWrite|TaskCreate|TaskUpdate)"'
 SUBAGENT_RE='"(tool_name|tool)"[[:space:]]*:[[:space:]]*"(Agent|Task|task)"'
-SPAWN_RE='"tool_name"[[:space:]]*:[[:space:]]*"([A-Za-z_]+\.)?spawn_agent"'
-WAIT_RE='"tool_name"[[:space:]]*:[[:space:]]*"([A-Za-z_]+\.)?(wait_agent|close_agent)"'
+# Codex 0.160 glues its one known namespace to the tool name with no separator (`collaborationspawn_agent`).
+SPAWN_RE='"tool_name"[[:space:]]*:[[:space:]]*"(([A-Za-z_]+\.)?spawn_agent|collaborationspawn_agent)"'
+WAIT_RE='"tool_name"[[:space:]]*:[[:space:]]*"(([A-Za-z_]+\.)?(wait_agent|close_agent)|collaboration(wait|close)_agent)"'
 REVIEW_TYPE_RE='"(subagent_type|agent_type)"[[:space:]]*:[[:space:]]*"([^"]*:)?(qa-specialist|code-reviewer|backend-reviewer|frontend-reviewer)"'
 
 MODE=""

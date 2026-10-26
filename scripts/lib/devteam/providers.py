@@ -517,19 +517,25 @@ def unwire_codex_hooks(project_root):
         groups = hooks[event]
         if not isinstance(groups, list):
             continue
-        kept = [
-            group
-            for group in groups
-            if not (
-                isinstance(group, dict)
-                and any(
-                    isinstance(hook, dict)
-                    and CODEX_HOOKS_MARKER in (hook.get("statusMessage") or "")
-                    for hook in group.get("hooks", [])
-                )
-            )
-        ]
-        if len(kept) != len(groups):
+        kept, dropped = [], False
+        for group in groups:
+            hook_list = group.get("hooks") if isinstance(group, dict) else None
+            if not isinstance(hook_list, list):
+                kept.append(group)
+                continue
+            # Ours are dropped hook by hook: a hook the user added to the same group survives.
+            theirs = [
+                hook for hook in hook_list
+                if not (isinstance(hook, dict) and isinstance(hook.get("statusMessage"), str)
+                        and CODEX_HOOKS_MARKER in hook["statusMessage"])
+            ]
+            if len(theirs) == len(hook_list):
+                kept.append(group)
+                continue
+            dropped = True
+            if theirs:
+                kept.append(dict(group, hooks=theirs))
+        if dropped:
             removed.append(event)
         if kept:
             hooks[event] = kept
@@ -542,7 +548,10 @@ def unwire_codex_hooks(project_root):
     return sorted(removed)
 
 
-#: Mirrors ``MANAGED_EVENTS`` in `install-codex.sh`.
+#: Mirrors ``MANAGED_EVENTS`` in `scripts/lib/codex_hooks_merge.py` (run by `install-codex.sh`).
+#: ``SubagentStart``/``SubagentStop`` are Codex-only on purpose: Claude Code's `Agent`/`Task` calls
+#: already reach PreToolUse/PostToolUse (a second source would record every spawn twice), and
+#: opencode has no such event.
 CODEX_MANAGED_EVENTS = (
     "SessionStart",
     "PreToolUse",
@@ -551,6 +560,8 @@ CODEX_MANAGED_EVENTS = (
     "PreCompact",
     "Stop",
     "SessionEnd",
+    "SubagentStart",
+    "SubagentStop",
 )
 # "subagent" is what earlier renders wrote (migrate must still take them over); "all" is current.
 _OPENCODE_AGENT_MODES = ("subagent", "all")
