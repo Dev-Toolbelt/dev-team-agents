@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import unittest
@@ -11,6 +12,7 @@ from unittest import mock
 
 from devteam_support import StoreTestCase, requires_shebangs
 
+from devteam import cli as devteam_cli
 from devteam import detect, doctor, providers
 
 #: One minimal project per row of `stack-signals.json`. The guard below fails the moment a
@@ -65,15 +67,25 @@ def _make_repo(root, files, commits=1, tags=0, branch=None):
 
 
 def _stub_dir(parent, versions):
-    """A directory of executables that print a version; None means one that exits non-zero."""
+    """Executables that print a version; ``""`` answers with no output, None exits non-zero."""
     bin_dir = Path(parent) / "fakebin"
     bin_dir.mkdir()
     for name, version in versions.items():
         path = bin_dir / name
-        body = "#!/bin/sh\necho '{}'\n".format(version) if version else "#!/bin/sh\nexit 1\n"
+        if version is None:
+            body = "#!/bin/sh\nexit 1\n"
+        elif version == "":
+            body = "#!/bin/sh\nexit 0\n"
+        else:
+            body = "#!/bin/sh\necho '{}'\n".format(version)
         path.write_text(body, encoding="utf-8")
         path.chmod(path.stat().st_mode | stat.S_IXUSR)
     return bin_dir
+
+
+#: The directory that makes ``providers.detect_in_project`` report each provider. A provider
+#: added to ``ALL_PROVIDERS`` without a row here fails ``test_every_provider_has_a_project_marker_case``.
+PROJECT_MARKERS = {"claude": ".claude", "opencode": ".opencode", "codex": ".codex"}
 
 
 class StackFixtureParityTest(unittest.TestCase):
@@ -185,22 +197,52 @@ class DetectFirstTaskTest(StoreTestCase):
 @requires_shebangs
 class DetectProvidersTest(StoreTestCase):
     def _providers(self, stubs, project_dirs=()):
-        root = self.tmp / "proj"
+        # A fresh project and bin directory per call, so one test can ask more than once.
+        self._calls = getattr(self, "_calls", 0) + 1
+        root = self.tmp / "proj-{}".format(self._calls)
         for rel in project_dirs:
             (root / rel).mkdir(parents=True)
         root.mkdir(exist_ok=True)
-        bin_dir = _stub_dir(self.tmp, stubs)
+        stub_parent = self.tmp / "stubs-{}".format(self._calls)
+        stub_parent.mkdir()
+        bin_dir = _stub_dir(stub_parent, stubs)
         with mock.patch.dict(os.environ, {"PATH": str(bin_dir)}):
             return detect.detect_providers(root)
 
     def test_installed_providers_report_binary_and_version_in_all_providers_order(self):
         info = self._providers({"codex": "codex 9.1", "claude": "claude 2.0"})
         self.assertEqual([p["name"] for p in info["installed"]], ["claude", "codex"])
-        self.assertEqual(info["installed"][0], {"name": "claude", "binary": "claude", "version": "claude 2.0"})
+        self.assertEqual(
+            info["installed"][0], {"name": "claude", "binary": "claude", "version": "claude 2.0", "usable": True}
+        )
 
-    def test_a_binary_that_does_not_answer_has_a_null_version(self):
+    def test_a_binary_that_does_not_answer_is_listed_but_not_usable(self):
         info = self._providers({"opencode": None})
-        self.assertEqual(info["installed"], [{"name": "opencode", "binary": "opencode", "version": None}])
+        self.assertEqual(
+            info["installed"], [{"name": "opencode", "binary": "opencode", "version": None, "usable": False}]
+        )
+
+    def test_a_binary_that_answers_without_output_is_usable(self):
+        info = self._providers({"claude": ""})
+        self.assertEqual(
+            info["installed"], [{"name": "claude", "binary": "claude", "version": None, "usable": True}]
+        )
+        self.assertEqual(info["suggested"], "claude")
+
+    def test_every_provider_has_a_project_marker_case(self):
+        self.assertEqual(set(PROJECT_MARKERS), set(providers.ALL_PROVIDERS))
+
+    def test_a_broken_provider_is_never_suggested_for_any_provider(self):
+        # One case per provider: a broken binary loses to a working one even when the project
+        # already uses it, and alone it suggests nothing.
+        for broken in providers.ALL_PROVIDERS:
+            working = next(name for name in providers.ALL_PROVIDERS if name != broken)
+            with self.subTest(broken=broken):
+                info = self._providers({broken: None, working: "1"}, project_dirs=[PROJECT_MARKERS[broken]])
+                self.assertEqual(info["suggested"], working)
+                alone = self._providers({broken: None}, project_dirs=[PROJECT_MARKERS[broken]])
+                self.assertIsNone(alone["suggested"])
+                self.assertEqual([p["usable"] for p in alone["installed"]], [False])
 
     def test_suggested_prefers_a_provider_both_installed_and_in_the_project(self):
         info = self._providers({"claude": "1", "codex": "2"}, project_dirs=[".codex"])
@@ -238,6 +280,18 @@ class DoctorMachineTest(unittest.TestCase):
         for item in self._findings("linux"):
             self.assertIn("fix", item)
             self.assertIsInstance(item["auto_fixable"], bool)
+
+    def test_a_provider_that_answers_without_a_version_is_ok_by_the_detect_rule(self):
+        findings = doctor.check_prerequisites(
+            platform="darwin",
+            which=lambda name: "/bin/" + name if name in ("git", "codex") else None,
+            version_of=lambda name: "git 2" if name == "git" else None,
+            python_version=(3, 12, 0),
+            probe_of=lambda name: (True, None),
+        )
+        codex = self._by(findings, "provider", "codex")
+        self.assertEqual(codex["level"], doctor.OK)
+        self.assertIn("version unknown", codex["message"])
 
     def test_healthy_machine_is_ok_without_fixes(self):
         result = self._findings("darwin", present=("git", "claude"))
@@ -377,6 +431,84 @@ class StartCliTest(StoreTestCase):
         self.assertTrue(out.startswith("Project ready. Start with one of these:"))
         for word in ("bind", "layout", "store", "preference"):
             self.assertNotIn(word, out.lower())
+
+    def _isolated_path(self, stubs):
+        """The provider stubs, then git/bash/jq and the system bin dirs: no real provider leaks in.
+
+        The system dirs carry the coreutils the provider installers call (`dirname`, …); a
+        provider CLI installed there would leak in, which none of the supported ones does.
+        """
+        stub_parent = self.tmp / "stub-{}".format(len(list(self.tmp.glob("stub-*"))))
+        stub_parent.mkdir()
+        bin_dir = _stub_dir(stub_parent, stubs)
+        tools = stub_parent / "tools"
+        tools.mkdir()
+        for tool in ("git", "bash", "jq"):
+            if shutil.which(tool):
+                (tools / tool).symlink_to(shutil.which(tool))
+        return os.pathsep.join([str(bin_dir), str(tools), "/usr/bin", "/bin"])
+
+    @requires_shebangs
+    def test_start_with_only_a_broken_provider_warns_and_launches_nothing(self):
+        root = _make_repo(self.tmp / "app6", files={"src/a.py": "x\n"})
+        with mock.patch.dict(os.environ, {"PATH": self._isolated_path({"codex": None})}):
+            code, out, err = self.run_cli("start", "--path", str(root), "--json")
+            human = self.run_cli("start", "--path", str(root))[1]
+        self.assertEqual(code, 0, err)
+        payload = json.loads(out)
+        self.assertTrue(payload["bound"])
+        self.assertIsNone(payload["detect"]["providers"]["suggested"])
+        self.assertIsNone(payload["first_task"]["launch"])
+        self.assertIn("No AI coding tool on this computer starts", human)
+        self.assertIn("devteam doctor --machine", human)
+
+    @requires_shebangs
+    def test_start_prefers_a_working_provider_over_the_projects_broken_one(self):
+        root = _make_repo(self.tmp / "app7", files={"src/a.py": "x\n"})
+        (root / ".codex").mkdir()
+        with mock.patch.dict(os.environ, {"PATH": self._isolated_path({"codex": None, "claude": "claude 2"})}):
+            code, out, err = self.run_cli("start", "--path", str(root), "--json")
+        self.assertEqual(code, 0, err)
+        payload = json.loads(out)
+        self.assertEqual(payload["detect"]["providers"]["suggested"], "claude")
+        self.assertEqual(payload["first_task"]["launch"]["provider"], "claude")
+        self.assertTrue((root / ".claude").is_dir())
+
+    def _start_binds(self, installed, in_project, suggested, provider=None):
+        """The provider list `start` hands to the bind, for a given detect answer."""
+        found = {
+            "providers": {"installed": installed, "in_project": in_project, "suggested": suggested},
+            "first_task": None,
+        }
+        seen = {}
+
+        def fake_bind(args, _emitter):
+            seen["provider"] = args.provider
+            return {"project_id": "p1"}, ""
+
+        args = mock.Mock(path=str(self.tmp), provider=provider, type=None)
+        with mock.patch.object(devteam_cli.detect, "run", return_value=found), \
+                mock.patch.object(devteam_cli, "cmd_bind", side_effect=fake_bind):
+            devteam_cli.cmd_start(args, None)
+        return seen["provider"]
+
+    def test_start_keeps_every_working_provider_a_project_already_uses(self):
+        def ok(name):
+            return {"name": name, "binary": name, "version": "1", "usable": True}
+
+        def broken(name):
+            return {"name": name, "binary": name, "version": None, "usable": False}
+
+        self.assertEqual(
+            self._start_binds([ok("claude"), ok("opencode")], ["claude", "opencode"], "claude"),
+            ["claude", "opencode"],
+        )
+        # The project's broken provider is dropped in favour of the one that starts.
+        self.assertEqual(self._start_binds([broken("codex"), ok("claude")], ["codex"], "claude"), ["claude"])
+        # Nothing starts: no choice, so the bind keeps the project's own providers (or the default).
+        self.assertIsNone(self._start_binds([broken("codex")], ["codex"], None))
+        # An explicit --provider always wins.
+        self.assertEqual(self._start_binds([ok("claude")], ["claude"], "claude", provider="codex"), ["codex"])
 
     def test_start_is_idempotent(self):
         root = _make_repo(self.tmp / "app4", files={"src/a.py": "x\n"})

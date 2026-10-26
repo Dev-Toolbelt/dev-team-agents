@@ -25,6 +25,7 @@ import subprocess
 import sys
 import time
 import unittest
+import unittest.mock
 
 from devteam_support import CLI, StoreTestCase, make_git_project
 
@@ -696,6 +697,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
         # ADR-0030: additive documents behind the first-run screens.
         "detect": {"path", "providers", "stack", "project_type", "first_task"},
         "detect.providers": {"installed", "in_project", "suggested"},
+        "detect.installed": {"name", "binary", "version", "usable"},
         "detect.stack": {"primary", "all", "signals"},
         "detect.project_type": {"suggested", "confidence", "reasons"},
         "detect.first_task": {"kind", "target", "label", "read_only", "launch"},
@@ -1035,6 +1037,22 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "detect.project_type", payload["project_type"], self.EXPECTED["detect.project_type"]
         )
         self.assertIsNone(payload["first_task"], "no source files, so nothing to suggest")
+
+    @unittest.skipUnless(os.name == "posix", "the provider stub is a #! script")
+    def test_detect_installed_record_keys(self):
+        # A stub provider on PATH, so the record is checked even on a runner with no provider.
+        bin_dir = self.tmp / "provider-stub"
+        bin_dir.mkdir()
+        stub = bin_dir / "claude"
+        stub.write_text("#!/bin/sh\necho 'claude 0.0'\n", encoding="utf-8")
+        stub.chmod(0o755)
+        path = "{}{}{}".format(bin_dir, os.pathsep, os.environ.get("PATH", ""))
+        with unittest.mock.patch.dict(os.environ, {"PATH": path}):
+            payload = self._run_ok("detect", "--path", str(self.project_root), "--json")
+        installed = payload["providers"]["installed"]
+        self.assertTrue(installed, "the stub provider must be listed")
+        for entry in installed:
+            self._assert_record_keys("detect.installed", entry, self.EXPECTED["detect.installed"])
 
     def test_detect_first_task_and_launch_shapes(self):
         src = self.project_root / "src"
