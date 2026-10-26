@@ -37,7 +37,7 @@ describe('preload bridge — setBoardSettings', () => {
 describe('preload bridge — credentialsLocalPatch', () => {
   it('keeps `from` on a move, and main accepts the payload', async () => {
     const hash = 'a'.repeat(64);
-    await exposed!.credentialsLocalPatch('p1' as never, hash, [
+    await exposed!.credentialsLocalPatch('p1', hash, [
       { op: 'move', from: '/example', pointer: '/api' },
       { op: 'set', pointer: '/api/url', value: 'https://staging.test' },
       { op: 'unset', pointer: '/api/username' },
