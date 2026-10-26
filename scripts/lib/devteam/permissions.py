@@ -265,8 +265,14 @@ def _toml_sections(text):
     value, never a header.
     """
     simple = re.compile(r"^[ \t]*\[[ \t]*([A-Za-z0-9_-]+(?:[ \t]*\.[ \t]*[A-Za-z0-9_-]+)*)[ \t]*\][ \t]*(?:#.*)?$")
-    sections, table, body, depth = [], "", [], 0
+    sections, table, body, depth, fence = [], "", [], 0, None
     for line in text.splitlines(True):
+        if fence:
+            # Inside a multi-line string nothing is a header or a bracket, until its closing quotes.
+            body.append(line)
+            if fence in line:
+                fence = None
+            continue
         if depth == 0 and line.lstrip(" \t").startswith("["):
             sections.append((table, "".join(body)))
             name = simple.match(line.rstrip("\r\n"))
@@ -274,6 +280,9 @@ def _toml_sections(text):
             body = []
             continue
         body.append(line)
+        opened = next((d for d in ('"""', "'''") if line.count(d) % 2), None)
+        if opened:
+            line, fence = line[:line.index(opened)], opened
         bare = _TOML_NOISE.sub("", line)
         depth = max(0, depth + bare.count("[") - bare.count("]"))
     sections.append((table, "".join(body)))

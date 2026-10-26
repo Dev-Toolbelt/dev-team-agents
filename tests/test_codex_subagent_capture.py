@@ -497,6 +497,11 @@ class SubagentRecoveryTest(BoardCase):
         self.assertIsNotNone(tasks.normalize(steps["start"]))
         wait = dict(steps["wait_post"], tool_response={"status": {"a" * 100000 + "\u202e": {"completed": "x"}, "ok-1": "errored"}})
         self.assertEqual([i for i, _, _ in tasks.wait_results(wait["tool_response"])], ["ok-1"])
+        bad = "a" * 100000 + "\u202e"
+        self.assertEqual(tasks._spawned_agent_id(json.dumps({"agent_id": bad})), "")
+        self.assertEqual(tasks._spawned_agent_id(json.dumps({"agent_id": "0199-ok"})), "0199-ok")
+        stop = dict(steps["stop"], agent_type="code-reviewer", agent_id=bad, last_assistant_message=REVIEW_MARKER)
+        self.assertIsNone(tasks.review_call(stop))
 
     def test_spawn_names_accept_a_plain_or_namespaced_name_and_refuse_the_rest(self):
         from devteam import review_triggers

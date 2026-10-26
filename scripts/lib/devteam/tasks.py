@@ -294,7 +294,7 @@ def _spawned_agent_id(response):
     for found in _json_objects(response):
         ident = _id_text(found.get("agent_id") or found.get("agentId"))
         if ident:
-            return ident
+            return ident if _SAFE_KEY.fullmatch(ident) else ""
     return ""
 
 
@@ -499,6 +499,8 @@ def normalize(payload, provider="auto"):
 
     session_id = _first_text(payload, "session_id", "sessionID", "sessionId")
     agent_id = _first_text(payload, "agent_id")
+    if agent_id and not _SAFE_KEY.fullmatch(agent_id):
+        agent_id = ""
     call = {
         "provider": detected,
         "session_id": session_id,
@@ -2037,7 +2039,7 @@ def review_call(payload):
         # known review agent's stop is a result, as for every other provider.
         name = review_triggers.agent_name(_first_text(payload, "agent_type"))
         agent_id = _first_text(payload, "agent_id")
-        if event != "SubagentStop" or not name or not agent_id:
+        if event != "SubagentStop" or not name or not agent_id or not _SAFE_KEY.fullmatch(agent_id):
             return None
         # No launch id here: a synthetic one takes the oldest foreground slot, and names the agent so
         # neither a replayed stop nor the same agent's `wait_agent` report counts it twice.

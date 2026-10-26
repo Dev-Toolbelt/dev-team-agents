@@ -105,6 +105,11 @@ class CodexUpdatePlanFlagTest(unittest.TestCase):
         self.assertTrue(self.user('[tools.update_plan]\nlist = [\n  [1, 2],\n]\nenabled = true\n'))
         self.assertTrue(self.user('matrix = [\n  ["a", "b"], # [x]\n  [3]\n]\ntools.update_plan.enabled = true\n'))
 
+    def test_a_bracket_inside_a_multi_line_string_hides_no_later_header(self):
+        self.assertFalse(self.user("[tools.update_plan]\nnote='''\nsee [docs\n'''\n[tools.other]\nenabled = true\n"))
+        self.assertTrue(self.user('[tools.update_plan]\nnote = """\n[not a header\n"""\nenabled = true\n'))
+        self.assertTrue(self.user('[tools.update_plan]\nnote = """one line"""\nenabled = true\n'))
+
     def test_every_config_read_honors_codex_home(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "proj"
