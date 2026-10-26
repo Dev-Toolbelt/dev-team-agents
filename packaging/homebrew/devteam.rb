@@ -81,6 +81,12 @@ class Devteam < Formula
     (libexec/"scripts/lib/devteam/integrations").install Dir["scripts/lib/devteam/integrations/*.py"]
     # The compiled account identity; entitlement.py resolves it as a sibling of the package.
     (libexec/"scripts/lib").install "scripts/lib/auth-config.json"
+    # Modules and data `devteam check` imports as top-level siblings of the package
+    # (check.py appends its own parent to sys.path): the docs layout resolver, its
+    # layout map, and the index lint's ADR filename rule.
+    (libexec/"scripts/lib").install "scripts/lib/docs_root.py"
+    (libexec/"scripts/lib").install "scripts/lib/index_lint.py"
+    (libexec/"scripts/lib").install "scripts/lib/doc-layouts.json"
 
     inreplace libexec/"scripts/cli/devteam",
               "#!/usr/bin/env python3",

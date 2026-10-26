@@ -92,6 +92,10 @@ main() {
     cp -R "$source/scripts/lib/devteam" "$stage/lib/devteam"
     # The compiled account identity (entitlement.py reads it as a sibling of the package).
     cp "$source/scripts/lib/auth-config.json" "$stage/lib/auth-config.json"
+    # Top-level siblings of the package that `devteam check` imports (docs layout resolver,
+    # its layout map, and the index lint's ADR filename rule).
+    cp "$source/scripts/lib/docs_root.py" "$source/scripts/lib/index_lint.py" \
+        "$source/scripts/lib/doc-layouts.json" "$stage/lib/"
     find "$stage" -name '__pycache__' -type d -prune -exec rm -rf {} +
     rm -rf "$cli_home/scripts"
     mv "$stage" "$cli_home/scripts"

@@ -18,7 +18,7 @@ from pathlib import Path
 from . import auth, bind as bind_module
 from . import auth_gate as gate
 from . import detect
-from . import backlog, catalog, check as check_module, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, trace, insights, mining, update, upgrade, versions
+from . import backlog, catalog, check as check_module, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, repairs, store, tasks, trace, insights, mining, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .console import stdin_is_console as _stdin_is_console
