@@ -228,6 +228,11 @@ def codex_project_trusted(project_root, home=None):
         text = config.read_text(encoding="utf-8")
     except OSError:
         return None
+    return _trusted_in(text, project_root)
+
+
+def _trusted_in(text, project_root):
+    """Whether one Codex config's text marks ``project_root`` as trusted."""
     root = str(Path(project_root).resolve())
     header = re.compile(r'^\[projects\.(?:"([^"]+)"|\'([^\']+)\')\]\s*$', re.M)
     for match in header.finditer(text):
@@ -242,12 +247,56 @@ def codex_project_trusted(project_root, home=None):
     return False
 
 
+def _toml_sections(text):
+    """``[(table, body)]`` of a TOML text: ``""`` for the lines before the first header.
+
+    An array of tables or a quoted header is listed as ``None``: no key looked up here lives there.
+    """
+    header = re.compile(r"^[ \t]*\[.*$", re.M)
+    simple = re.compile(r"^[ \t]*\[[ \t]*([A-Za-z0-9_-]+(?:[ \t]*\.[ \t]*[A-Za-z0-9_-]+)*)[ \t]*\][ \t]*(?:#.*)?$")
+    sections, table, last = [], "", 0
+    for match in header.finditer(text):
+        sections.append((table, text[last:match.start()]))
+        name = simple.match(match.group(0))
+        table = re.sub(r"[ \t]", "", name.group(1)) if name else None
+        last = match.end()
+    sections.append((table, text[last:]))
+    return sections
+
+
+def _toml_bool(text, dotted):
+    """True when the TOML ``text`` sets the boolean at ``dotted`` (``a.b.c``) to true, else False.
+
+    Finds it in a ``[a.b]`` table, as a dotted key (``b.c = true`` under ``[a]``, ``a.b.c`` at the
+    top), or in an inline table (``b = { c = true }``). Regex-based: ``tomllib`` is not in the
+    Python 3.9 this CLI supports.
+    """
+    parts = dotted.split(".")
+    for table, body in _toml_sections(text):
+        if table is None:
+            continue
+        prefix = table.split(".") if table else []
+        rest = parts[len(prefix):]
+        if parts[:len(prefix)] != prefix or not rest:
+            continue
+        key = r"\s*\.\s*".join(re.escape(p) for p in rest)
+        found = re.search(r"^\s*{}\s*=\s*(true|false)\b".format(key), body, re.M)
+        if found:
+            return found.group(1) == "true"
+        if len(rest) > 1:
+            owner = r"\s*\.\s*".join(re.escape(p) for p in rest[:-1])
+            inline = re.search(r"^\s*{}\s*=\s*\{{([^}}]*)\}}".format(owner), body, re.M)
+            value = inline and re.search(r"(?:^|[\s,]){}\s*=\s*(true|false)\b".format(re.escape(rest[-1])), inline.group(1))
+            if value:
+                return value.group(1) == "true"
+    return False
+
+
 def codex_default_mode_questions_enabled(home=None):
     """Whether ``[features] default_mode_request_user_input = true`` is set in ``~/.codex/config.toml``.
 
     True when enabled, False when the file is readable but the key is absent or false,
-    ``None`` when the file cannot be read. Regex-based for the same reason as
-    ``codex_project_trusted``. devteam only reads this file; it never writes it.
+    ``None`` when the file cannot be read. devteam only reads this file; it never writes it.
     """
     home = Path(home) if home else Path(os.path.expanduser("~"))
     config = home / ".codex" / "config.toml"
@@ -255,15 +304,33 @@ def codex_default_mode_questions_enabled(home=None):
         text = config.read_text(encoding="utf-8")
     except OSError:
         return None
-    key = "default_mode_request_user_input"
-    dotted = re.search(r"^\s*features\.{}\s*=\s*(true|false)\b".format(key), text, re.M)
-    if dotted and dotted.group(1) == "true":
+    return _toml_bool(text, "features.default_mode_request_user_input")
+
+
+def codex_update_plan_enabled(project_root=None, home=None):
+    """Whether Codex's ``update_plan`` tool is switched on (``[tools.update_plan] enabled = true``).
+
+    Looks in the user config (``<home>/.codex``, else ``$CODEX_HOME``, else ``~/.codex``) and in
+    ``<project_root>/.codex/config.toml`` when Codex trusts the project (it ignores the file
+    otherwise). True when either enables it, False when at least one is
+    readable and none does, ``None`` when neither can be read. Codex 0.160 ships with the tool off,
+    and without it an approved plan cannot reach the task board. devteam only reads these files.
+    """
+    if home:
+        user_dir = Path(home) / ".codex"
+    else:
+        user_dir = Path(os.environ.get("CODEX_HOME") or os.path.join(os.path.expanduser("~"), ".codex"))
+    try:
+        user_text = (user_dir / "config.toml").read_text(encoding="utf-8")
+    except OSError:
+        user_text = None
+    texts = [user_text]
+    if project_root and user_text is not None and _trusted_in(user_text, project_root):
+        try:
+            texts.append((Path(project_root) / ".codex" / "config.toml").read_text(encoding="utf-8"))
+        except OSError:
+            pass
+    readable = [t for t in texts if t is not None]
+    if any(_toml_bool(t, "tools.update_plan.enabled") for t in readable):
         return True
-    header = re.search(r"^\[features\]\s*(?:#.*)?$", text, re.M)
-    if not header:
-        return False
-    body = text[header.end():]
-    nxt = re.search(r"^\s*\[", body, re.M)
-    body = body[: nxt.start()] if nxt else body
-    value = re.search(r"^\s*{}\s*=\s*(true|false)\b".format(key), body, re.M)
-    return bool(value) and value.group(1) == "true"
+    return False if readable else None

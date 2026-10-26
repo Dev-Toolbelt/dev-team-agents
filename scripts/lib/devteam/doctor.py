@@ -101,6 +101,23 @@ def _ask_rule_findings(root, bound, manifest):
     return findings
 
 
+def _task_board_findings(root, bound):
+    """Whether each bound provider can bring an approved plan to the task board."""
+    findings = []
+    if "codex" in bound:
+        if permissions.codex_update_plan_enabled(root) is True:
+            findings.append(_finding(OK, "task-board", "Codex update_plan tool is on (plans reach the task board)"))
+        else:
+            findings.append(_finding(
+                WARN, "task-board",
+                "Codex's `update_plan` tool is off, so approved plans cannot reach the task board as steps; "
+                "devteam does not write Codex config",
+                "Add `[tools.update_plan]` / `enabled = true` to `~/.codex/config.toml` "
+                "(or to the project's `.codex/config.toml` in a trusted project).",
+            ))
+    return findings
+
+
 def _finding(level, category, message, hint=None):
     item = {"level": level, "category": category, "message": message}
     if hint:
@@ -640,6 +657,7 @@ def check_project(project_root):
             )
 
     findings.extend(_ask_rule_findings(root, bound, manifest))
+    findings.extend(_task_board_findings(root, bound))
 
     if manifest.get("mode") and entry.get("mode") and manifest["mode"] != entry["mode"]:
         findings.append(
