@@ -137,13 +137,14 @@ class CodexUpdatePlanFlagTest(unittest.TestCase):
 
 class DoctorUpdatePlanTest(unittest.TestCase):
     def run_doctor(self, bound, user_text, project_text=None):
-        old = {k: os.environ.get(k) for k in ("HOME", "CODEX_HOME")}
+        old = {k: os.environ.get(k) for k in ("HOME", "USERPROFILE", "CODEX_HOME")}
         with tempfile.TemporaryDirectory() as tmp:
             root = _project_with(tmp, project_text) if project_text else Path(tmp) / "proj"
             if user_text is not None and "{}" in user_text:
                 user_text = user_text.format(root.resolve())
             home = _home_with(tmp, user_text)
-            os.environ["HOME"] = str(home)
+            # Path.home() reads USERPROFILE on Windows, HOME elsewhere.
+            os.environ["HOME"] = os.environ["USERPROFILE"] = str(home)
             os.environ.pop("CODEX_HOME", None)
             root.mkdir(exist_ok=True)
             snapshot = sorted(p.name for p in (home / ".codex").iterdir())
