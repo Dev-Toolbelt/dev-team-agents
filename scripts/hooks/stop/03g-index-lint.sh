@@ -14,9 +14,9 @@ set -euo pipefail
 [ "${DEVTEAM_NO_CHANGES:-0}" = "1" ] && exit 0
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-# shellcheck source=scripts/lib/docs-root.sh
 DOCS_ROOT_SH="$(dirname "${BASH_SOURCE[0]}")/../../lib/docs-root.sh"
 [ -f "$DOCS_ROOT_SH" ] || exit 0
+# shellcheck source=scripts/lib/docs-root.sh
 . "$DOCS_ROOT_SH"
 DOCS_ROOT="$(devteam_docs_root "$REPO_ROOT")"
 [ -d "$REPO_ROOT/$DOCS_ROOT" ] || exit 0

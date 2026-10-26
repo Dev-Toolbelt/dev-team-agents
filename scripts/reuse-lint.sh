@@ -37,8 +37,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 # <docs>/development/reuse-guidelines.md in the development layout, <docs>/reuse-guidelines.md
 # in the gated one. Empty means the layout has no registry.
 REGISTRY_REL="docs/development/reuse-guidelines.md"
-# shellcheck source=scripts/lib/docs-root.sh
 DOCS_ROOT_SH="$(dirname "${BASH_SOURCE[0]}")/lib/docs-root.sh"
+# shellcheck source=scripts/lib/docs-root.sh
 if [ -f "$DOCS_ROOT_SH" ] && . "$DOCS_ROOT_SH"; then
     REGISTRY_REL="$(devteam_doc_path "$REPO_ROOT" reuse-guidelines)" || exit 0
 fi

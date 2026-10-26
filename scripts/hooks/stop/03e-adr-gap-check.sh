@@ -100,7 +100,7 @@ if [ "$NEW_DEP" = 1 ] || [ "$NEW_MIGRATION" = 1 ] || [ "$NEW_PROVIDER_CONFIG" = 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  This session touched a signal that often warrants an ADR
  (new dependency, schema migration, or provider config)
- but added no new ADR file (in the directory `new-adr.sh --dir` prints).
+ but added no new ADR file (in the directory \`new-adr.sh --dir\` prints).
 
  This is a heuristic, not a rule — false positives are
  expected. If this decision is hard to reverse, affects
