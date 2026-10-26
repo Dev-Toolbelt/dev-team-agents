@@ -19,6 +19,7 @@ from devteam import backlog, bind, paths, providers  # noqa: E402
 from devteam.errors import ConflictError, EnvError, UsageError  # noqa: E402
 
 T0 = 1_800_000_000.0
+GIT_IDENTITY_ENV = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@e", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@e")
 SESSION_START = REPO_ROOT / "scripts" / "hooks" / "session-start.sh"
 BACKLOG_PRIME = REPO_ROOT / "scripts" / "hooks" / "backlog-prime.sh"
 
@@ -381,7 +382,7 @@ class ClaimTest(BoundCase):
 
     def test_a_worktree_shares_the_main_checkouts_record(self):
         subprocess.run(["git", "add", "-A"], cwd=str(self.root), check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-qm", "plan"], cwd=str(self.root), check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "plan"], cwd=str(self.root), check=True, capture_output=True, env=GIT_IDENTITY_ENV)
         tree = self.tmp / "wt"
         subprocess.run(["git", "worktree", "add", "-q", str(tree), "-b", "sprint/auth-1"], cwd=str(self.root), check=True, capture_output=True)
         backlog.claim(tree, "auth-sprint-1", ["TASK-004"], owner="own-a", now=T0)
@@ -431,7 +432,7 @@ class PrimeTest(BoundCase):
     def test_a_sprint_in_progress_only_in_its_worktree_index_primes_without_a_claim(self):
         write_sprint(self.root, index=INDEX.replace("In progress", "Planned"))
         subprocess.run(["git", "add", "-A"], cwd=str(self.root), check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-qm", "plan"], cwd=str(self.root), check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "plan"], cwd=str(self.root), check=True, capture_output=True, env=GIT_IDENTITY_ENV)
         tree = self.tmp / "wt"
         subprocess.run(["git", "worktree", "add", "-q", str(tree), "-b", "sprint/auth-1"], cwd=str(self.root), check=True, capture_output=True)
         write_sprint(tree, index=INDEX)
@@ -479,7 +480,7 @@ class PrimeTest(BoundCase):
 
     def test_a_claimed_sprint_is_read_from_the_worktree_where_it_moved_on(self):
         subprocess.run(["git", "add", "-A"], cwd=str(self.root), check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-qm", "plan"], cwd=str(self.root), check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "plan"], cwd=str(self.root), check=True, capture_output=True, env=GIT_IDENTITY_ENV)
         write_sprint(self.root, index=INDEX.replace("In progress", "Planned"))
         tree = self.tmp / "wt"
         subprocess.run(["git", "worktree", "add", "-q", str(tree), "-b", "sprint/auth-1"], cwd=str(self.root), check=True, capture_output=True)
