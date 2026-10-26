@@ -259,7 +259,8 @@ def _set_sentinel(state_dir, present):
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
             try:
                 # A re-assert refreshes the age the 24 h sweep reads, so a live sentinel is kept.
-                os.utime(fd)
+                # Windows cannot touch a file through its descriptor; there the path is used.
+                os.utime(fd if os.utime in os.supports_fd else path)
             except (NotImplementedError, OSError):
                 pass
             finally:
