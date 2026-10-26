@@ -18,12 +18,12 @@ _dta_py="$(dirname "${BASH_SOURCE[0]}")/../lib/python.sh"
 [ -f "$_dta_py" ] && . "$_dta_py"
 
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/subagent-start" 2>/dev/null && pwd)" || exit 0
-INPUT=$(cat)
 # The payload is fed to each sub-script from a file, never through a pipe: a sub-script that
-# exits without reading stdin would otherwise kill the writer with SIGPIPE.
-INPUT_FILE=$(mktemp "${TMPDIR:-/tmp}/devteam-hook-input.XXXXXX")
+# exits without reading stdin would otherwise kill the writer with SIGPIPE. Fail open: with no
+# temp file the hook does nothing, and stdin is bounded (4 MiB) so a huge payload cannot balloon it.
+INPUT_FILE=$(mktemp "${TMPDIR:-/tmp}/devteam-hook-input.XXXXXX" 2>/dev/null) || exit 0
 trap 'rm -f "$INPUT_FILE"' EXIT
-printf '%s\n' "$INPUT" > "$INPUT_FILE"
+head -c 4194304 > "$INPUT_FILE" || exit 0
 EXIT_CODE=0
 
 # Same filename convention as the other dispatchers.

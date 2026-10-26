@@ -42,8 +42,9 @@ SETTLE_BYTES = 256 * 1024 * 1024
 RUNNING_MAX_AGE = tasks.PENDING_MAX_AGE
 
 ENDED = ("completed", "failed", "cancelled", "interrupted")
-#: An agent name a span may carry; the same charset `insights` reads back (ADR-0042).
-_AGENT_NAME = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+#: An agent name a span may carry; the same charset `insights` reads back (ADR-0042) and the board's
+#: spawn names use (`review_triggers.AGENT_NAME_RE`).
+_AGENT_NAME = review_triggers.AGENT_NAME_RE
 #: The public name of that charset: insights.py reads trace content back through it.
 SAFE_NAME = _AGENT_NAME
 #: A semver version a trace may carry (a pre-release suffix allowed).

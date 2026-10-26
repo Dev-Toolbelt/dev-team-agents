@@ -317,6 +317,20 @@ class ProviderAskRulesTest(StoreTestCase):
                 warned = [f for f in findings if f["category"] == "permissions" and f["level"] == "warn"]
                 self.assertTrue(warned, "doctor said nothing for {}".format(provider))
 
+    def test_doctor_reports_the_update_plan_tool_for_a_codex_binding_only(self):
+        os.environ.pop("CODEX_HOME", None)
+        for provider in self._providers():
+            with self.subTest(provider=provider):
+                root = self.new_project("plan-{}".format(provider))
+                bind.bind(root, provider_names=[provider])
+                found = [f for f in doctor.run(root)["findings"] if f["category"] == "task-board"]
+                if provider == "codex":
+                    self.assertEqual([f["level"] for f in found], ["warn"])
+                    self.assertIn("not confirmed", found[0]["message"])  # no Codex config on this machine
+                    self.assertIn("update_plan", found[0]["hint"])
+                else:
+                    self.assertEqual(found, [])
+
 
 if __name__ == "__main__":
     unittest.main()

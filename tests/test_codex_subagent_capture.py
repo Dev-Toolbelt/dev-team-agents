@@ -143,6 +143,31 @@ class SubagentLifecycleTest(BoardCase):
         by = {t["id"]: t["status"] for t in self.agents(session)}
         self.assertEqual(by, {steps["spawn_pre"]["tool_use_id"]: "completed", "call_other": "in_progress"})
 
+    def v1_stopped(self):
+        steps = cycle()
+        session = steps["spawn_pre"]["session_id"]
+        agent = steps["start"]["agent_id"]
+        tasks.record(self.root, steps["spawn_pre"], now=T0)
+        tasks.record(self.root, dict(steps["spawn_post"], tool_response=json.dumps({"agent_id": agent})), now=T0 + 1)
+        tasks.record(self.root, steps["stop"], now=T0 + 4)
+        return steps, session, agent
+
+    def test_a_wait_reporting_an_errored_agent_a_stop_already_ended_marks_it_failed_without_ending_it_again(self):
+        steps, session, agent = self.v1_stopped()
+        (task,) = self.agents(session)
+        self.assertEqual((task["status"], task["failed"], len(task["history"])), ("completed", False, 2))
+        wait = dict(steps["wait_post"], tool_response={"status": {agent: "errored"}})
+        tasks.record(self.root, wait, now=T0 + 6)
+        (task,) = self.agents(session)
+        self.assertEqual((task["status"], task["failed"], len(task["history"])), ("completed", True, 2))
+
+    def test_a_wait_reporting_a_completed_agent_a_stop_already_ended_changes_nothing(self):
+        steps, session, agent = self.v1_stopped()
+        before = json.dumps(self.load(session), sort_keys=True)
+        tasks.record(self.root, dict(steps["wait_post"], tool_response={"status": {agent: {"completed": "x"}}}), now=T0 + 6)
+        self.assertEqual([t["failed"] for t in self.agents(session)], [False])
+        self.assertEqual(json.dumps(self.load(session)["tasks"], sort_keys=True), json.dumps(json.loads(before)["tasks"], sort_keys=True))
+
     def test_a_spawn_that_never_answered_is_still_cancelled_by_stop(self):
         steps = cycle()
         session = steps["spawn_pre"]["session_id"]
@@ -273,6 +298,39 @@ class SubagentLifecycleTest(BoardCase):
     def test_a_wait_then_a_stop_naming_the_same_agent_counts_it_once(self):
         self.twice("wait", "stop")
 
+    def mixed_wait(self, order):
+        """A reviewer a stop already folded, a QA agent still open and a worker, in one wait."""
+        steps, session, _ = self.review_agent("code-reviewer")
+        second = dict(steps["spawn_pre"], tool_use_id="call_second")
+        second["tool_input"] = dict(second["tool_input"], agent_type="qa-specialist")
+        tasks.review_open(self.root, second, now=T0 + 2)
+        reviewer = steps["stop"]["agent_id"]
+        stop = dict(steps["stop"], agent_type="code-reviewer", last_assistant_message=REVIEW_MARKER)
+        self.assertTrue(tasks.review_result(self.root, stop, now=T0 + 5)["recorded"])
+        reports = {
+            "reviewer": {"completed": REVIEW_MARKER},
+            "qa-1": {"completed": "found three\n<!-- review-result: findings=3 -->"},
+            "worker-1": {"completed": "built it"},
+        }
+        statuses = {(reviewer if key == "reviewer" else key): reports[key] for key in order}
+        wait = dict(steps["wait_post"], tool_response={"status": statuses})
+        tasks.review_result(self.root, wait, now=T0 + 6)
+        (window,) = self.load(session)["reviews"]
+        return window, reviewer
+
+    def test_a_wait_listing_the_folded_reviewer_after_the_open_one_keeps_its_findings(self):
+        window, _ = self.mixed_wait(["qa-1", "worker-1", "reviewer"])
+        self.assertEqual((window["found"], window["markers"], window["findings"]), (3, 2, 3))
+        self.assertNotIn("anon:subagent:worker-1", window["consumed"])
+
+    def test_a_wait_of_the_open_reviewer_then_the_folded_one_keeps_the_open_ones_findings(self):
+        window, _ = self.mixed_wait(["qa-1", "reviewer"])
+        self.assertEqual((window["found"], window["markers"], window["findings"]), (3, 2, 3))
+
+    def test_the_same_wait_in_the_opposite_order_gives_the_same_result(self):
+        window, _ = self.mixed_wait(["reviewer", "worker-1", "qa-1"])
+        self.assertEqual((window["found"], window["markers"], window["findings"]), (3, 2, 3))
+
 
 #: What each provider does with the subagent lifecycle events. A provider added to
 #: `providers.ALL_PROVIDERS` without a case fails `test_every_provider_has_its_capture_decided`.
@@ -364,10 +422,37 @@ class SubagentHookReplayTest(tt.HookTest):
         self.feed(dict(steps["start"], agent_type="code-reviewer"))
         self.assertEqual(self.python_calls(), 0)
 
-    def test_a_built_in_roles_start_forks_no_python(self):
+    def test_a_start_with_no_record_forks_no_python(self):
         steps = cycle(str(self.root))
-        self.feed(dict(steps["start"], agent_type="worker"))
+        self.feed(steps["start"])
         self.assertEqual(self.python_calls(), 0)
+
+    def test_a_built_in_roles_start_and_stop_record_no_task(self):
+        steps = cycle(str(self.root))
+        session = steps["spawn_pre"]["session_id"]
+        self.feed(steps["spawn_pre"])
+        before = json.dumps(self.load(session)["tasks"], sort_keys=True)
+        for key in ("start", "stop"):
+            self.feed(dict(steps[key], agent_type="worker"))
+        self.assertEqual(json.dumps(self.load(session)["tasks"], sort_keys=True), before)
+
+    def test_the_dispatchers_fail_open_without_a_temp_directory(self):
+        steps = cycle(str(self.root))
+        for key, script in (("start", SUBAGENT_START), ("stop", SUBAGENT_STOP)):
+            proc = self.run_script(script, steps[key], extra_env={"TMPDIR": "/nonexistent/devteam"})
+            self.assertEqual((proc.stdout, proc.stderr), (b"", b""))
+
+    def test_a_stop_sub_script_failure_never_keeps_the_child_running(self):
+        steps = cycle(str(self.root))
+        hooks_dir = self.tmp / "hooks"
+        (hooks_dir / "subagent-stop").mkdir(parents=True)
+        (hooks_dir / "lib").mkdir()
+        (hooks_dir / "subagent-stop" / "01-fail.sh").write_text("#!/usr/bin/env bash\nexit 2\n", encoding="utf-8")
+        (hooks_dir / "lib" / "python.sh").write_text("", encoding="utf-8")
+        copy_path = hooks_dir / "subagent-stop.sh"
+        copy_path.write_text(SUBAGENT_STOP.read_text(encoding="utf-8"), encoding="utf-8")
+        proc = self.run_script(copy_path, steps["stop"])  # check=True: it must exit 0
+        self.assertEqual(proc.returncode, 0)
 
     def test_a_stop_with_no_record_forks_no_python(self):
         steps = cycle(str(self.root))
@@ -403,6 +488,23 @@ class SubagentRecoveryTest(BoardCase):
         steps = cycle()
         for bad in ("x" * 129, "a b", "../etc", "w$(id)"):
             self.assertIsNone(tasks.normalize(dict(steps["start"], agent_type=bad)), bad)
+
+    def test_a_child_id_that_is_no_plain_identifier_is_dropped(self):
+        steps = cycle()
+        for bad in ("a" * 100000 + "\u202e", "x" * 129, "a\u202eb", "../etc", "a b", "-lead"):
+            for key in ("start", "stop"):
+                self.assertIsNone(tasks.normalize(dict(steps[key], agent_id=bad)), (key, bad[:12]))
+        self.assertIsNotNone(tasks.normalize(steps["start"]))
+        wait = dict(steps["wait_post"], tool_response={"status": {"a" * 100000 + "\u202e": {"completed": "x"}, "ok-1": "errored"}})
+        self.assertEqual([i for i, _, _ in tasks.wait_results(wait["tool_response"])], ["ok-1"])
+
+    def test_spawn_names_accept_a_plain_or_namespaced_name_and_refuse_the_rest(self):
+        from devteam import review_triggers
+        for good, bare in (("code-reviewer", "code-reviewer"), ("plugin:code-reviewer", "code-reviewer"), (" a.b_c ", "a.b_c"), ("x" * 64, "x" * 64)):
+            self.assertEqual(review_triggers.spawn_name(good), bare, good)
+        for bad in ("x" * 65, "a b", "../x", "", "a\u202eb", None, 7, "ns:"):
+            self.assertIsNone(review_triggers.spawn_name(bad), bad)
+        self.assertIs(trace.SAFE_NAME, review_triggers.AGENT_NAME_RE)
 
     def test_a_subagent_stop_on_a_non_codex_record_folds_no_review_result(self):
         steps = cycle()
@@ -478,6 +580,18 @@ class V2DedupTest(BoardCase):
         self.child("SubagentStop", "child-1", T0 + 30)
         self.assertEqual((self.agents()["c1"]["status"], self.agents()["c1"]["history"][-1]["at"]), ("completed", T0 + 30))
 
+    def test_a_claim_with_no_open_task_left_is_cleared_once_it_expires(self):
+        self.spawn("c1", T0)
+        self.child("SubagentStart", "child-1", T0 + 2)
+        self.child("SubagentStop", "child-1", T0 + 10)
+        self.assertIn("answer_claim", self.agents()["c1"])
+        self.stop(T0 + 100)  # within the age cap: the claim is still held
+        self.assertIn("answer_claim", self.agents()["c1"])
+        self.stop(T0 + 10 + tasks.PENDING_MAX_AGE + 1)  # nothing is open: only the expiry path runs
+        done = self.agents()["c1"]
+        self.assertNotIn("answer_claim", done)
+        self.assertEqual(done["status"], "completed")
+
     def test_the_execution_trace_gets_one_span_and_no_subagent_event_touches_it(self):
         pre = {"session_id": "s1", "cwd": "", "tool_use_id": "c1", "hook_event_name": "PreToolUse",
                "tool_name": "collaborationspawn_agent", "transcript_path": str(self.rollout),
@@ -515,16 +629,6 @@ class CodexHooksMergeOwnershipTest(unittest.TestCase):
             path.write_text(json.dumps(data), encoding="utf-8")
             self.assertEqual(providers.unwire_codex_hooks(tmp), ["SubagentStart"])
             self.assertEqual(json.loads(path.read_text())["hooks"]["SubagentStart"], [{"hooks": [theirs]}])
-
-
-class BuiltinGateParityTest(unittest.TestCase):
-    def test_the_hooks_bash_gate_lists_exactly_codexs_built_in_roles(self):
-        import re
-        from devteam import review_triggers
-        for script in (HOOKS / "subagent-start" / "01-task-board.sh", HOOKS / "subagent-stop" / "01-task-board.sh"):
-            found = re.search(r'BUILTIN_TYPE_RE=.*?"\(([^)]*)\)', script.read_text(encoding="utf-8"))
-            self.assertIsNotNone(found, script)
-            self.assertEqual(set(found.group(1).split("|")), set(review_triggers.BUILTIN_AGENTS["codex"]), script)
 
 
 if __name__ == "__main__":

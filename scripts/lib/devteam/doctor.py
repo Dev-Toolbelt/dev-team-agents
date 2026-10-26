@@ -105,16 +105,28 @@ def _task_board_findings(root, bound):
     """Whether each bound provider can bring an approved plan to the task board."""
     findings = []
     if "codex" in bound:
-        if permissions.codex_update_plan_enabled(root) is True:
+        state = permissions.codex_update_plan_enabled(root)
+        if state is True:
             findings.append(_finding(OK, "task-board", "Codex update_plan tool is on (plans reach the task board)"))
         else:
-            findings.append(_finding(
-                WARN, "task-board",
-                "Codex's `update_plan` tool is off, so approved plans cannot reach the task board as steps; "
-                "devteam does not write Codex config",
+            hint = (
                 "Add `[tools.update_plan]` / `enabled = true` to `~/.codex/config.toml` "
-                "(or to the project's `.codex/config.toml` in a trusted project).",
-            ))
+                "(or to the project's `.codex/config.toml` in a trusted project)."
+            )
+            if state is None:
+                findings.append(_finding(
+                    WARN, "task-board",
+                    "Codex's config could not be read, so it is not confirmed that the `update_plan` tool is on; "
+                    "approved plans reach the task board as steps only when it is; devteam does not write Codex config",
+                    hint,
+                ))
+            else:
+                findings.append(_finding(
+                    WARN, "task-board",
+                    "Codex's `update_plan` tool is off, so approved plans cannot reach the task board as steps; "
+                    "devteam does not write Codex config",
+                    hint,
+                ))
     return findings
 
 

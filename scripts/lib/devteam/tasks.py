@@ -324,14 +324,16 @@ _WAIT_FINAL = {
 }
 
 
-def _wait_results(response):
-    """``[(agent id, status, failed)]`` for every agent a Codex ``wait_agent`` reports as finished."""
+def _wait_entries(response):
+    """``[(agent id, state, status, failed)]`` for every agent a Codex ``wait_agent`` reports as finished."""
     out = []
     for found in _json_objects(response):
         statuses = found.get("status")
         if not isinstance(statuses, dict):
             continue
         for ident, state in statuses.items():
+            if not _SAFE_KEY.fullmatch(str(ident)):
+                continue
             if isinstance(state, str):
                 word = state
             elif isinstance(state, dict) and len(state) == 1:
@@ -339,9 +341,24 @@ def _wait_results(response):
             else:
                 word = None
             if isinstance(word, str) and word in _WAIT_FINAL:
-                out.append((str(ident),) + _WAIT_FINAL[word])
+                out.append((str(ident), state) + _WAIT_FINAL[word])
         if out:
             break
+    return out
+
+
+def _wait_results(response):
+    """``[(agent id, status, failed)]`` for every agent a Codex ``wait_agent`` reports as finished."""
+    return [(ident, status, failed) for ident, _, status, failed in _wait_entries(response)]
+
+
+def _wait_reports(response):
+    """``[(slot id, marker or None)]``: each finished agent of a ``wait_agent`` with the review marker
+    of its own report. A worker's report carries none."""
+    out = []
+    for ident, state, _, _ in _wait_entries(response):
+        found = review_triggers.markers(state)
+        out.append(("{}{}".format(_SUBAGENT_SLOT, ident), found[-1] if found else None))
     return out
 
 
@@ -425,6 +442,8 @@ def _normalize_subagent(payload, provider):
         return None
     session_id = _first_text(payload, "session_id", "sessionID", "sessionId")
     agent_id = _first_text(payload, "agent_id")
+    if agent_id and not _SAFE_KEY.fullmatch(agent_id):
+        return None  # a child id is written to disk: only a plain identifier is one
     name = review_triggers.spawn_name(_first_text(payload, "agent_type"))
     if not session_id or not agent_id or not name:
         return None
@@ -1567,6 +1586,13 @@ def _apply_agent(record, call, now):
             if task is not None:
                 _end_agent(record, task, status, failed, now)
                 changed = True
+            elif failed:
+                # A `SubagentStop` already ended it as done, yet the wait reports the agent errored:
+                # the later word is the true one. Mark it failed; it is never ended a second time.
+                done = _find_agent(record, {"id": ident}, statuses=("completed",))
+                if done is not None and not done.get("failed"):
+                    done["failed"] = True
+                    changed = True
         return changed
     item = dict(body, owner=call["owner"])
     task = _find_agent(record, item)
@@ -2069,7 +2095,7 @@ def review_call(payload):
         # tool-use id names the wait, not a launch, so it retires no launch token by id.
         call.update(
             kind="result", markers=found, per_marker=True, slot_id=None,
-            agent_ids=["{}{}".format(_SUBAGENT_SLOT, ident) for ident, _, _ in _wait_results(payload.get("tool_response"))],
+            agent_reports=_wait_reports(payload.get("tool_response")),
         )
         return call
 
@@ -2217,15 +2243,16 @@ def _apply_result(rec, call, now, observed=None):
         window.setdefault("consumed", []).append(launch)
     markers = call["markers"]
     slot = False
-    ids = call.get("agent_ids")
-    if ids:
-        # A `wait_agent` that names its agents: those a `SubagentStop` already folded count once.
+    reports = call.get("agent_reports")
+    if reports:
+        # A `wait_agent` that names its agents: a report a `SubagentStop` already folded counts once.
+        # Each marker is paired with its own agent, never by position: workers list no marker.
         consumed = window.setdefault("consumed", [])
-        fresh = [i for i in ids if i not in consumed]
+        fresh = [m for i, m in reports if m is not None and i not in consumed]
         if not fresh:
             return None
-        consumed.extend(fresh)
-        markers = markers[-len(fresh):]
+        consumed.extend(i for i, m in reports if m is not None and i not in consumed)
+        markers = fresh
     if late:
         return _reread(rec, window, markers, now)
     if call.get("per_marker"):

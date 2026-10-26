@@ -88,6 +88,40 @@ class CodexUpdatePlanFlagTest(unittest.TestCase):
                 else:
                     os.environ["CODEX_HOME"] = old
 
+    def test_a_project_off_overrides_a_user_on(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _project_with(tmp, "[tools.update_plan]\nenabled = false\n")
+            home = _home_with(tmp, ON + '[projects."{}"]\ntrust_level = "trusted"\n'.format(root.resolve()))
+            self.assertFalse(permissions.codex_update_plan_enabled(root, home=home))
+
+    def test_a_project_that_sets_nothing_defers_to_the_user(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _project_with(tmp, 'model = "x"\n')
+            home = _home_with(tmp, ON + '[projects."{}"]\ntrust_level = "trusted"\n'.format(root.resolve()))
+            self.assertTrue(permissions.codex_update_plan_enabled(root, home=home))
+
+    def test_a_bracketed_line_inside_a_multi_line_array_hides_no_later_key(self):
+        self.assertTrue(self.user('matrix = [\n  [1, 2],\n  [3, 4]\n]\n[tools.update_plan]\nenabled = true\n'))
+        self.assertTrue(self.user('[tools.update_plan]\nlist = [\n  [1, 2],\n]\nenabled = true\n'))
+        self.assertTrue(self.user('matrix = [\n  ["a", "b"], # [x]\n  [3]\n]\ntools.update_plan.enabled = true\n'))
+
+    def test_every_config_read_honors_codex_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "proj"
+            root.mkdir()
+            text = '[features]\ndefault_mode_request_user_input = true\n[projects."{}"]\ntrust_level = "trusted"\n'.format(root.resolve())
+            (Path(tmp) / "config.toml").write_text(text, encoding="utf-8")
+            old = os.environ.get("CODEX_HOME")
+            os.environ["CODEX_HOME"] = tmp
+            try:
+                self.assertTrue(permissions.codex_default_mode_questions_enabled())
+                self.assertTrue(permissions.codex_project_trusted(root))
+            finally:
+                if old is None:
+                    os.environ.pop("CODEX_HOME", None)
+                else:
+                    os.environ["CODEX_HOME"] = old
+
     def test_helper_never_writes(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = _home_with(tmp, "[features]\n")
@@ -135,6 +169,12 @@ class DoctorUpdatePlanTest(unittest.TestCase):
 
     def test_warns_when_untrusted_project_config_on(self):
         self.assertEqual([f["level"] for f in self.run_doctor(["codex"], "[features]\n", ON)], ["warn"])
+
+    def test_an_unreadable_config_is_not_reported_as_off(self):
+        found = self.run_doctor(["codex"], None)
+        self.assertEqual([f["level"] for f in found], ["warn"])
+        self.assertIn("could not be read", found[0]["message"])
+        self.assertNotIn("is off", found[0]["message"])
 
     def test_silent_for_non_codex(self):
         self.assertEqual(self.run_doctor(["claude"], "[features]\n"), [])

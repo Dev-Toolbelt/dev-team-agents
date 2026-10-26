@@ -7,10 +7,9 @@
 unset BASH_ENV ENV
 set -uo pipefail
 
-INPUT="$(cat)"
+INPUT="$(head -c 4194304)"
 [[ "$INPUT" == *'"agent_id"'* && "$INPUT" == *'"agent_type"'* ]] || exit 0
 REVIEW_TYPE_RE='"agent_type"[[:space:]]*:[[:space:]]*"([^"]*:)?(qa-specialist|code-reviewer|backend-reviewer|frontend-reviewer)"'
-BUILTIN_TYPE_RE='"agent_type"[[:space:]]*:[[:space:]]*"(default|explorer|worker)"'  # mirrors review_triggers.BUILTIN_AGENTS["codex"]
 
 # shellcheck source=scripts/hooks/lib/task-board.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/task-board.sh"
@@ -20,6 +19,6 @@ if [[ "$INPUT" =~ $REVIEW_TYPE_RE ]]; then
     devteam_task_board_review_result "$INPUT" >/dev/null 2>&1
     exit 0
 fi
-# A Codex built-in role is no task: no python fork for its settle.
-[[ "$INPUT" =~ $BUILTIN_TYPE_RE ]] || devteam_task_board_record "$INPUT" >/dev/null 2>&1
+# A Codex built-in role is dropped by the CLI (`tasks._normalize_subagent`), the one home of that list.
+devteam_task_board_record "$INPUT" >/dev/null 2>&1
 exit 0
