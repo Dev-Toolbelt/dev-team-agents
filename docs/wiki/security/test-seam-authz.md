@@ -33,6 +33,12 @@ with the real key.
 - Setting only `DEVTEAM_AUTH_TEST_ANON_KEY` changes nothing and prints nothing.
 - The seam cannot point at a non-loopback host, and its key cannot pose as a production kid (the
   `test-` prefix), so a leaked environment cannot redirect a real user's sign-in.
+- The session record lives in the store, so use the seam with its own `DEVTEAM_HOME` (`dev-local.sh env`
+  sets one). The OS keychain ignores both, so each store and seam has its own session secret reference
+  (`account.session.refresh_token.<16 hex>`, recorded as `secret_ref`; only the default store uses the
+  plain name). Sign-in, refresh and logout read and delete only their own context's reference. A seam set
+  in the default store sees the real session as signed out instead of reaching it. The suffix separates
+  contexts; it is not an access control.
 - The desktop app's child environment does not pass `DEVTEAM_AUTH_TEST_*` to the CLI, so the app cannot
   use the local stack yet; opening that is a separate security decision.
 

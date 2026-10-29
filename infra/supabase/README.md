@@ -21,7 +21,7 @@ python3 scripts/cli/devteam auth login --email you@example.test --password  # pa
 - `up` also creates a local Ed25519 key (kid `test-local`) and ban pepper in `.local/secrets/`, and sets
   `ENTITLEMENT_ISSUER` to the URL the CLI calls (inside the stack `SUPABASE_URL` is the gateway's internal address).
 - `env` prints the test seam (`DEVTEAM_AUTH_TEST_URL`, `_KID`, `_PUBKEY`, `_ANON_KEY`) and a throwaway
-  `DEVTEAM_HOME`, so the local account never mixes with your real store. Every command then warns that the seam is active.
+  `DEVTEAM_HOME`. The session record lives in the store, so always use the seam with its own `DEVTEAM_HOME` (as `env` sets it). The refresh-token secret in the OS keychain is global to your user, so each store and seam has its own reference (`account.session.refresh_token.<hash>`) and only the default store uses the plain name. A seam set in the default store sees your real session as signed out rather than reaching it. Every command then warns that the seam is active.
 - `down` stops the stack and keeps the database; `reset` drops it. Re-run `up` after editing a migration or function.
 - One failed online check makes the CLI wait 900 s before the next (`RETRY_AFTER_FAILURE_SECONDS`). `devteam auth logout` and sign in again to retry at once.
 - The desktop app does not pass the seam variables to the CLI, so it cannot use the local stack yet.

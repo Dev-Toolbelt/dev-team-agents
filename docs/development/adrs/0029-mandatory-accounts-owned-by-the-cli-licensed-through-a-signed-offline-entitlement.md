@@ -304,8 +304,9 @@ fake IdP issues so tests can grep every output for it.
 
 ### C. Session storage and secret hygiene
 
-16. **Refresh token storage.** Stored only through `secrets.py` under the global ref
-    `account.session.refresh_token`, on the default backend. When that backend is `insecure` (Linux
+16. **Refresh token storage.** Stored only through `secrets.py` under the reference of its store
+    and seam (the plain `account.session.refresh_token` in the default store; see the 2026-10-26
+    amendment), on the default backend. When that backend is `insecure` (Linux
     today, or a failed DPAPI probe), `auth login` and `auth status` say so in plain words and in
     `--json` (`secret_backend`), and the file stays mode 0600. The access token is never persisted.
     *Test:* with only `insecure` available, the warning and field appear; no file outside the secrets
@@ -499,7 +500,8 @@ Issued by the `entitlement` Edge Function (`infra/supabase/functions/entitlement
     to stderr and `auth status --json` reports `"test_seam": true`. The bypass it gives the local user
     is the risk § 8 accepts. An optional `DEVTEAM_AUTH_TEST_ANON_KEY` replaces the public `apikey`
     only while the seam is valid, so a local `supabase start` gateway accepts the requests; on its
-    own it changes nothing. *Test:* a non-loopback URL with the seam on is refused; the warning and
+    own it changes nothing. The session secret is bound to the seam's store (see the
+    2026-10-26 amendment). *Test:* a non-loopback URL with the seam on is refused; the warning and
     field are present; the anon key is ignored without a valid seam.
 
 ### Open points
@@ -594,3 +596,32 @@ uses them for both development and production. This replaces the separate `dev` 
 - A Free-plan project is paused after a period of inactivity, which would take sign-in down for every user.
 - Separating environments later means a new project, new OAuth clients and a new key pair, shipped in a
   CLI release that trusts the new `kid`.
+
+### 2026-10-26 — the session secret is bound to its store and seam
+
+**Decision.** The OS keychain is global to the user and ignores `DEVTEAM_HOME` and the test seam, so a
+fixed reference let a throwaway store or the local stack overwrite and delete the real session's token.
+The refresh-token reference is now `account.session.refresh_token` only in the default store with no
+valid seam; in any other context it is `account.session.refresh_token.<16 hex>`, the first 16 hex
+characters of sha256 over the store path and the seam URL. The suffix separates contexts; it is not an
+access control.
+
+**What changed.**
+- `account-session.json` records the reference as `secret_ref`, the source of truth, bound to the context
+  that wrote it. A store reads, refreshes and deletes only its own context's reference.
+- A record without `secret_ref` predates this change and counts as the plain reference, so it is bound
+  only to the default store with no seam. A record whose `secret_ref` is another context's, malformed,
+  planted, or missing outside that context is treated as signed out: nothing is read, refreshed, rotated, sent or
+  deleted, and sign-out leaves that record and the cached entitlement alone.
+- The plain reference is deleted only from the default context.
+- Records whose `secret_ref` is not the plain one are written with `schema` 2 (1 stays for the default
+  context); both load. An older CLI reads only schema 1, so it sees an isolated record as unreadable
+  instead of reading the real token.
+
+**Consequences.**
+- A real session kept under a custom `DEVTEAM_HOME`, written before this change, needs one new sign-in
+  (its record counts as signed out there). The default store is unaffected.
+- The seam must still use its own `DEVTEAM_HOME`, because `account-session.json` lives in the store. A
+  seam set in the default store sees the real record as signed out instead of reaching the real session.
+  Signing in under that seam replaces the default store's `account-session.json`; the real token stays
+  under the plain reference, untouched, and the real CLI then needs one new sign-in.
