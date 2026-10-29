@@ -82,7 +82,9 @@ class ThirdPartyManifestTest(unittest.TestCase):
             if path.is_file():
                 with self.subTest(file=path.name):
                     self.assertTrue(path.suffix == ".md" or path.name == "LICENSE")
-                    self.assertFalse(os.access(path, os.X_OK))
+                    # Windows has no POSIX executable bit: os.access(X_OK) is true for every file.
+                    if os.name != "nt":
+                        self.assertFalse(os.access(path, os.X_OK))
 
     def test_vendored_trees_match_their_recorded_hash(self):
         result = subprocess.run(
