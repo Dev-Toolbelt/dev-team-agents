@@ -2,9 +2,11 @@
 
 Two records and one in-memory value:
 
-* the **refresh token** goes through :mod:`secrets` under the global reference
-  :data:`REF` (SR-16), on the default backend. When that backend is ``insecure`` the file
-  stays mode 0600 and every report says so in plain words and in ``secret_backend``;
+* the **refresh token** goes through :mod:`secrets` on the default backend, under the
+  reference :func:`context_ref` names: :data:`REF` in the default store, a suffixed one in
+  any other store or under the test seam (SR-16, amendment 2026-10-26). When that backend is
+  ``insecure`` the file stays mode 0600 and every report says so in plain words and in
+  ``secret_backend``;
 * ``account-session.json`` in the machine-local state directory holds the non-secret
   facts: the account id the entitlement's ``sub`` is checked against, the email, which
   backend holds the token, and when the entitlement was last fetched. It lets an offline
@@ -22,6 +24,7 @@ prints: the callers receive plain dicts and are written not to render them.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import threading
 import time
@@ -35,6 +38,10 @@ from .lock import store_lock
 REF = "account.session.refresh_token"
 META_FILE = "account-session.json"
 META_SCHEMA = 1
+#: Written for a record whose ``secret_ref`` is not :data:`REF`. An older CLI accepts only
+#: schema 1 and would read :data:`REF`; it treats a schema 2 record as unreadable instead.
+ISOLATED_META_SCHEMA = 2
+_META_SCHEMAS = (META_SCHEMA, ISOLATED_META_SCHEMA)
 LOCK_NAME = "auth-session"
 LOCK_TIMEOUT = 45.0
 #: An access token this close to its expiry is treated as expired.
@@ -55,12 +62,38 @@ _memory_lock = threading.Lock()
 _refresh_gate = threading.Lock()
 
 
+def context_ref():
+    """The secret reference this store and seam own; the only one this process touches.
+
+    The keychain is global to the OS user and ignores ``DEVTEAM_HOME`` and the test seam, so
+    a fixed name would let a throwaway store or a local test stack overwrite and delete the
+    real session's token. The default store with no valid seam keeps :data:`REF` (existing
+    sessions stay readable); any other context gets a suffix of its own. The suffix
+    separates contexts; it is not an access control.
+    """
+    home = paths.devteam_home()
+    seam_url, _ = entitlement._seam(os.environ, {})
+    if home is None and seam_url is None:
+        return REF
+    basis = "{}\n{}".format(
+        os.path.normcase(os.path.realpath(str(home))) if home is not None else "", seam_url or ""
+    )
+    return "{}.{}".format(REF, hashlib.sha256(basis.encode("utf-8")).hexdigest()[:16])
+
+
+def _bound(data):
+    """Whether a record belongs to this context. A record without ``secret_ref`` predates
+    namespacing and holds its token under :data:`REF`, so it is bound only where
+    :func:`context_ref` is :data:`REF`. Another context's, a planted or a malformed one is not,
+    and is treated as no session."""
+    return data.get("secret_ref", REF) == context_ref()
+
+
 def meta_path():
     return paths.machine_dir() / META_FILE
 
 
-def read_meta():
-    """The session record, or ``None`` when signed out. Regenerable, so a bad one is ignored."""
+def _read_raw():
     base = paths.known_machine_dir()
     if base is None:
         return None
@@ -68,11 +101,20 @@ def read_meta():
         data = jsonio.read_json(base / META_FILE)
     except EnvError:
         return None
-    if not isinstance(data, dict) or data.get("schema") != META_SCHEMA:
+    if not isinstance(data, dict) or data.get("schema") not in _META_SCHEMAS:
         return None
     if not isinstance(data.get("account_id"), str) or not data["account_id"]:
         return None
     return data
+
+
+def read_meta():
+    """The session record, or ``None`` when signed out. Regenerable, so a bad one is ignored.
+
+    A record bound to another context is signed out here, never read through.
+    """
+    data = _read_raw()
+    return data if data is not None and _bound(data) else None
 
 
 def update_meta(**fields):
@@ -152,17 +194,19 @@ def save_session(session, provider, now=None):
     with store_lock(LOCK_NAME, timeout=LOCK_TIMEOUT):
         previous = read_meta()
         backend = secrets_module.default_backend()
-        secrets_module.put(REF, session["refresh_token"], backend)
+        ref = context_ref()
+        secrets_module.put(ref, session["refresh_token"], backend)
         if previous and previous.get("backend") not in (None, backend):
-            _delete_quietly(previous["backend"])
+            _delete_quietly(ref, previous["backend"])
         same_account = bool(previous) and previous["account_id"] == user["id"]
         meta = {
-            "schema": META_SCHEMA,
+            "schema": META_SCHEMA if ref == REF else ISOLATED_META_SCHEMA,
             "account_id": user["id"],
             "email": user.get("email") if isinstance(user.get("email"), str) else None,
             "display_name": _display_name(user) or (previous.get("display_name") if same_account else None),
             "provider": _provider(user, provider),
             "backend": backend,
+            "secret_ref": ref,
             "signed_in_at": previous["signed_in_at"] if same_account and previous.get("signed_in_at") else now,
             "last_online_check": previous.get("last_online_check") if same_account else None,
             "last_online_attempt": None,
@@ -174,9 +218,11 @@ def save_session(session, provider, now=None):
     return meta
 
 
-def _delete_quietly(backend):
+def _delete_quietly(ref, backend):
+    if ref != context_ref():
+        return
     try:
-        secrets_module.delete(REF, backend)
+        secrets_module.delete(ref, backend)
     except EnvError:
         pass
 
@@ -184,7 +230,7 @@ def _delete_quietly(backend):
 def _stored_refresh_token(meta):
     try:
         return creds.read_system_secret(
-            REF, meta.get("backend") or secrets_module.default_backend(), "account.session"
+            context_ref(), meta.get("backend") or secrets_module.default_backend(), "account.session"
         )
     except EnvError:
         raise EnvError(
@@ -231,7 +277,7 @@ def access_token(client):
                 raise Rejected(
                     REASON_SESSION_EXPIRED, hint="Sign in again with `devteam auth login`."
                 )
-            secrets_module.put(REF, session["refresh_token"], meta["backend"])
+            secrets_module.put(context_ref(), session["refresh_token"], meta["backend"])
             _remember(session["access_token"], session["expires_in"], meta["account_id"])
             return session["access_token"]
 
@@ -310,6 +356,9 @@ def clear_local():
 def _clear_steps(meta_file):
     report = {"refresh_token_removed": True, "entitlement_removed": True, "session_record_removed": True}
     meta = read_meta()
+    ref = context_ref()
+    raw = _read_raw()
+    foreign = raw is not None and meta is None
     backends = []
     if meta and meta.get("backend"):
         backends.append(meta["backend"])
@@ -318,9 +367,14 @@ def _clear_steps(meta_file):
             backends.append(name)
     for name in backends:
         try:
-            secrets_module.delete(REF, name)
+            secrets_module.delete(ref, name)
         except EnvError:
             report["refresh_token_removed"] = False
+    if foreign:
+        # The record and the cached entitlement belong to a session of another context
+        # (the real one, when a seam is set in the default store); sign-out here leaves both.
+        # The ``*_removed`` flags mean "nothing of this context remains", not "the file is gone".
+        return report
     try:
         entitlement.clear_cache()
     except (EnvError, ConflictError):

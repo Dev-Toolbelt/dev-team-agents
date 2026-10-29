@@ -151,7 +151,10 @@ class SessionStorageTest(AuthTestCase):
         self.assertIn("keychain", out)
         self.assertIn('"secret_backend_insecure": false', out)
         self.assertNotIn("plain file", out)
-        self.assertTrue(vault["account.session.refresh_token"].startswith("SENTINEL-REFRESH"))
+        # A throwaway store and the seam never use the plain name the real session owns.
+        self.assertNotIn("account.session.refresh_token", vault)
+        (stored,) = vault.values()
+        self.assertTrue(stored.startswith("SENTINEL-REFRESH"))
         self.assertFalse(any(b"SENTINEL-REFRESH" in raw for raw in self.store_files().values()))
         code, out, _ = self.run_inproc(["auth", "logout", "--json"])
         self.assertEqual(code, 0)
