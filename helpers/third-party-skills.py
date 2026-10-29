@@ -84,7 +84,9 @@ def validate_entry(name, entry):
         raise ValueError(f"{name}: repo must be owner/name")
     if not COMMIT_RE.match(entry.get("commit", "")):
         raise ValueError(f"{name}: commit must be a full 40-character sha, never a branch or tag")
-    _safe_relative(entry.get("path", ""), f"{name}: path")
+    # "." is the repository root, for an upstream that is the skill itself.
+    if entry.get("path") != ".":
+        _safe_relative(entry.get("path", ""), f"{name}: path")
     for license_file in entry.get("license_files", []):
         if PurePosixPath(license_file).name in ("SKILL.md", ""):
             raise ValueError(f"{name}: license file {license_file!r} is not allowed")

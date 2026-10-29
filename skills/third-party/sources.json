@@ -25,6 +25,20 @@
       ],
       "sha256": "ee49fd5455606f49f2f162277e904da6e0eec2b661c674ed2fa0c9358badbfe7"
     },
+    "stop-slop": {
+      "repo": "hardikpandya/stop-slop",
+      "commit": "8da1f030185bdfe8471220585162991eaeb970e9",
+      "path": ".",
+      "exclude": [
+        "README.md",
+        "CHANGELOG.md"
+      ],
+      "license": "MIT",
+      "license_files": [
+        "LICENSE"
+      ],
+      "sha256": "156e9854bdc1ca877adaac4f2389039540e5df3a28470c7a85895121de47427b"
+    },
     "ui-ux-pro-max": {
       "repo": "nextlevelbuilder/ui-ux-pro-max-skill",
       "commit": "d14efff8ed1faa4187f004f79926f428c8074ec7",
