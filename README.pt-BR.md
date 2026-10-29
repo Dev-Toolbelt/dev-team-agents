@@ -417,15 +417,16 @@ Todos os plugins vêm no core — sem instalação remota, sem integrações de 
 
 ## Skills de Terceiros
 
-Skills da comunidade vendorizadas para os agentes de design, mantidas separadas das skills do próprio framework em `skills/third-party/` e entregues em toda instalação, em todo provider:
+Skills da comunidade vendorizadas para os agentes de design e de escrita, mantidas separadas das skills do próprio framework em `skills/third-party/` e entregues em toda instalação, em todo provider:
 
 | Skill | Upstream | Licença | Usada para |
 |---|---|---|---|
 | `ui-ux-pro-max` | [nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | MIT | Direção visual, paletas, pares de fontes, design systems |
 | `impeccable` | [pbakaus/impeccable](https://github.com/pbakaus/impeccable) | Apache-2.0 | Crítica, auditoria e polimento de telas existentes (só instruções) |
 | `emil-design-eng` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT | Animação, interações e sensação dos componentes |
+| `stop-slop` | [hardikpandya/stop-slop](https://github.com/hardikpandya/stop-slop) | MIT | Remover padrões de escrita de IA de descrições de PR, comentários de review, release notes e READMEs |
 
-`ui-ux-designer`, `frontend-developer` e `frontend-reviewer` carregam a que a tarefa pede por meio de `skills/design/third-party-design-skills/SKILL.md`. As regras e o design system do seu projeto continuam valendo primeiro. Cada skill é fixada por commit e hash de conteúdo em `skills/third-party/sources.json`. O `impeccable` vem só com as instruções: o launcher dele, que baixa um binário, não é incluído. Se o seu projeto já tem uma cópia própria de uma dessas skills em `.claude/skills/`, o bind mantém a sua e avisa. Detalhes: [skills/third-party/README.md](skills/third-party/README.md) e [ADR-0047](docs/development/adrs/0047-third-party-skills-are-vendored-apart-from-the-framework-s-own-and-pinned-by-commit-and-content-hash.md).
+`ui-ux-designer`, `frontend-developer` e `frontend-reviewer` carregam a que a tarefa pede por meio de `skills/design/third-party-design-skills/SKILL.md`. O `technical-writer` e o comentário de review de PR carregam o `stop-slop` por meio de `skills/shared/third-party-writing-skills/SKILL.md`, que o mantém fora de arquivos de regra, mensagens de commit, ADRs e specs e desliga as proibições do upstream que conflitam com eles: `always`/`never`, advérbios, voz passiva e travessões. As regras e o design system do seu projeto continuam valendo primeiro. Cada skill é fixada por commit e hash de conteúdo em `skills/third-party/sources.json`. O `impeccable` vem só com as instruções: o launcher dele, que baixa um binário, não é incluído. Se o seu projeto já tem uma cópia própria de uma dessas skills em `.claude/skills/`, o bind mantém a sua e avisa. Detalhes: [skills/third-party/README.md](skills/third-party/README.md) e [ADR-0047](docs/development/adrs/0047-third-party-skills-are-vendored-apart-from-the-framework-s-own-and-pinned-by-commit-and-content-hash.md).
 
 ---
 

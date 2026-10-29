@@ -37,7 +37,11 @@ SKILL_PATHS = {
 
 TOOLS = {"claude": (), "opencode": ("bash", "python3", "jq"), "codex": ("bash", "python3")}
 
-ROUTING_SKILL = REPO_ROOT / "skills" / "design" / "third-party-design-skills" / "SKILL.md"
+#: One routing skill per category of vendored skill (ADR-0047).
+ROUTING_SKILLS = (
+    REPO_ROOT / "skills" / "design" / "third-party-design-skills" / "SKILL.md",
+    REPO_ROOT / "skills" / "shared" / "third-party-writing-skills" / "SKILL.md",
+)
 
 
 def _load_helper():
@@ -57,17 +61,28 @@ def _files(root):
 
 
 class ThirdPartyManifestTest(unittest.TestCase):
-    def test_routing_skill_names_every_provider_path_and_skill(self):
-        text = ROUTING_SKILL.read_text(encoding="utf-8")
-        for provider, template in SKILL_PATHS.items():
-            with self.subTest(provider=provider):
-                self.assertIn("`{}/`".format(template.format(name="<name>")), text)
+    def test_routing_skills_name_every_provider_path_and_skill(self):
+        texts = [path.read_text(encoding="utf-8") for path in ROUTING_SKILLS]
+        for path, text in zip(ROUTING_SKILLS, texts):
+            for provider, template in SKILL_PATHS.items():
+                with self.subTest(routing=path.parent.name, provider=provider):
+                    self.assertIn("`{}/`".format(template.format(name="<name>")), text)
         for name in MANIFEST["skills"]:
-            self.assertIn("`{}`".format(name), text)
+            with self.subTest(skill=name):
+                self.assertTrue(any("`{}`".format(name) in text for text in texts))
 
     def test_impeccable_ships_no_executable(self):
         # ADR-0047: its launcher downloads and runs an engine binary nobody here pins.
         self.assertFalse((THIRD_PARTY / "impeccable" / "scripts").exists())
+
+    def test_stop_slop_ships_markdown_only(self):
+        # Pinned at the repository root (`path: "."`), so anything upstream adds would be vendored.
+        root = THIRD_PARTY / "stop-slop"
+        for path in root.rglob("*"):
+            if path.is_file():
+                with self.subTest(file=path.name):
+                    self.assertTrue(path.suffix == ".md" or path.name == "LICENSE")
+                    self.assertFalse(os.access(path, os.X_OK))
 
     def test_vendored_trees_match_their_recorded_hash(self):
         result = subprocess.run(
@@ -189,6 +204,17 @@ class ThirdPartyExtractionTest(unittest.TestCase):
             helper.fetch(entry, dest)
         return dest
 
+    def test_a_repository_root_skill_is_extracted_with_its_excludes(self):
+        entry = dict(ENTRY, path=".", exclude=["README.md"])
+        helper.validate_entry("demo", entry)
+        dest = self._fetch([
+            ("SKILL.md", SKILL, "file"),
+            ("references/a.md", b"a", "file"),
+            ("README.md", b"r", "file"),
+            ("LICENSE", b"MIT", "file"),
+        ], entry)
+        self.assertEqual(_files(dest), ["LICENSE", "SKILL.md", "references/a.md"])
+
     @unittest.skipIf(os.name == "nt", "Windows has no POSIX executable bit: chmod only toggles read-only and os.access(X_OK) is true for every file")
     def test_extracts_the_subset_with_modes_and_licenses_and_honors_excludes(self):
         dest = self._fetch([
@@ -235,6 +261,9 @@ class ThirdPartyExtractionTest(unittest.TestCase):
         bad = {
             "branch": dict(ENTRY, commit="main"),
             "path": dict(ENTRY, path="../x"),
+            "dot-slash path": dict(ENTRY, path="./"),
+            "empty path": dict(ENTRY, path=""),
+            "missing path": {k: v for k, v in ENTRY.items() if k != "path"},
             "license": dict(ENTRY, license_files=["SKILL.md"]),
         }
         for label, entry in bad.items():

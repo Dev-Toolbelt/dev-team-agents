@@ -7,11 +7,13 @@ Skills written and maintained outside this repository, vendored unchanged so the
 | `ui-ux-pro-max` | [nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | MIT | `ui-ux-pro-max/LICENSE` |
 | `impeccable` | [pbakaus/impeccable](https://github.com/pbakaus/impeccable) | Apache-2.0 | `impeccable/LICENSE`, `impeccable/NOTICE.md` |
 | `emil-design-eng` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT | `emil-design-eng/LICENSE` |
+| `stop-slop` | [hardikpandya/stop-slop](https://github.com/hardikpandya/stop-slop) | MIT | `stop-slop/LICENSE` |
 
 The pinned commit, upstream path and content hash of each one are in `sources.json`.
 
 ## Rules
 
 - **Never edit a vendored folder.** Each one must match the hash recorded in `sources.json`; a local change belongs upstream or in your project's own skills.
+- A skill pinned at `path: "."` (its repository root) vendors everything not in `exclude`. When you bump its pin, add any new non-skill top-level file to `exclude` and review the vendored diff.
 - `impeccable` ships as instructions only: its launcher and the engine binary it downloads are deliberately left out.
-- Agents load these skills through `skills/design/third-party-design-skills/SKILL.md`, which also limits what their scripts may run.
+- Agents load these skills through the routing skill of their category: `skills/design/third-party-design-skills/SKILL.md` for design, `skills/shared/third-party-writing-skills/SKILL.md` for writing. The routing skill also limits what their scripts may run and which upstream rules apply.

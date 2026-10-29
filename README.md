@@ -417,15 +417,16 @@ All plugins ship in the core — no remote install, no third-party integrations.
 
 ## Third-Party Skills
 
-Community skills vendored for the design agents, kept apart from the framework's own skills in `skills/third-party/` and shipped with every install, on every provider:
+Community skills vendored for the design and writing agents, kept apart from the framework's own skills in `skills/third-party/` and shipped with every install, on every provider:
 
 | Skill | Upstream | License | Used for |
 |---|---|---|---|
 | `ui-ux-pro-max` | [nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | MIT | Visual direction, palettes, font pairings, design systems |
 | `impeccable` | [pbakaus/impeccable](https://github.com/pbakaus/impeccable) | Apache-2.0 | Design critique, audit and polish of existing screens (instructions only) |
 | `emil-design-eng` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT | Animation, interactions and component feel |
+| `stop-slop` | [hardikpandya/stop-slop](https://github.com/hardikpandya/stop-slop) | MIT | Removing AI writing patterns from PR descriptions, review comments, release notes and READMEs |
 
-`ui-ux-designer`, `frontend-developer` and `frontend-reviewer` load the one a task calls for through `skills/design/third-party-design-skills/SKILL.md`. Your project's rules and design system still win. Each skill is pinned by commit and content hash in `skills/third-party/sources.json`. `impeccable` ships as instructions only: its launcher, which downloads a binary, is not included. If your project already has its own copy of one of these skills in `.claude/skills/`, bind keeps yours and warns. Details: [skills/third-party/README.md](skills/third-party/README.md) and [ADR-0047](docs/development/adrs/0047-third-party-skills-are-vendored-apart-from-the-framework-s-own-and-pinned-by-commit-and-content-hash.md).
+`ui-ux-designer`, `frontend-developer` and `frontend-reviewer` load the one a task calls for through `skills/design/third-party-design-skills/SKILL.md`. `technical-writer` and the PR review comment load `stop-slop` through `skills/shared/third-party-writing-skills/SKILL.md`, which keeps it off rule files, commit messages, ADRs and specs and turns off the upstream bans that clash with them: on `always`/`never`, adverbs, passive voice and em dashes. Your project's rules and design system still win. Each skill is pinned by commit and content hash in `skills/third-party/sources.json`. `impeccable` ships as instructions only: its launcher, which downloads a binary, is not included. If your project already has its own copy of one of these skills in `.claude/skills/`, bind keeps yours and warns. Details: [skills/third-party/README.md](skills/third-party/README.md) and [ADR-0047](docs/development/adrs/0047-third-party-skills-are-vendored-apart-from-the-framework-s-own-and-pinned-by-commit-and-content-hash.md).
 
 ---
 
