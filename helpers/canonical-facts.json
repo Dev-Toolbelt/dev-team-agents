@@ -102,25 +102,26 @@
     },
     {
       "id": "crawl-delay-honoured-by-google",
-      "pattern": "crawl-delay",
+      "pattern": "crawl[- _]?delay",
       "allow": [
-        "\\b(ignored|ignores|not supported|unsupported|does not|doesn't|never)\\b"
+        "\\b(ignored|ignores|not supported|unsupported|does not|doesn't|never)\\b",
+        "^(?!.*\\bgoogle).*\\b(Bing|Yandex)\\b"
       ],
       "why": "Googlebot does not support the crawl-delay robots.txt rule; Google adjusts its crawl rate from server responses",
       "source": "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt#syntax"
     },
     {
       "id": "url-parameters-tool",
-      "pattern": "URL Parameters? tool",
+      "pattern": "URL Parameters?( handling)? (tool|report)",
       "allow": [
         "\\b(retired|removed|deprecated|no longer|never recommend)\\b"
       ],
-      "why": "Search Console's URL Parameters tool was deprecated in 2022; parameter URLs are handled on the site",
+      "why": "Search Console's URL Parameters tool was retired in 2022; parameter URLs are handled on the site",
       "source": "https://developers.google.com/search/blog/2022/03/url-parameters-tool-deprecated"
     },
     {
       "id": "410-faster-than-404",
-      "pattern": "\\b410\\b.{0,60}\\b(faster|quicker|sooner)\\b|\\b(faster|quicker|sooner)\\b.{0,60}\\b410\\b",
+      "pattern": "\\b410\\b.{0,60}\\b(faster|quicker|quickly|sooner|rapidly|promptly)\\b|\\b(faster|quicker|quickly|sooner|rapidly|promptly)\\b.{0,60}\\b410\\b",
       "allow": [
         "\\b(treats? it like|same as|no faster|not faster|identical)\\b"
       ],

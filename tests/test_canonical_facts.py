@@ -64,6 +64,11 @@ class CanonicalFactsTest(unittest.TestCase):
         result = run_lint(self.tree("Use rich results for FAQ pages.\n"))
         self.assertEqual(result.returncode, 1, result.stdout)
 
+    def test_crawl_delay_google_claim_naming_bing_is_still_caught(self):
+        for line in ("Bing and Google both honour Crawl-delay.", "Set a crawl delay of 10 for Googlebot."):
+            result = run_lint(self.tree(line + "\n"))
+            self.assertEqual(result.returncode, 1, line)
+
     def test_allowed_wording_passes(self):
         allowed = [
             "FID was replaced by INP in March 2024.",
@@ -80,6 +85,7 @@ class CanonicalFactsTest(unittest.TestCase):
             "Serve llms.txt as text/plain at the site root.",
             "Strip tracking parameters such as `utm_source=chatgpt.com` from URLs.",
             "Googlebot ignores crawl-delay in robots.txt.",
+            "Bing honours Crawl-delay in robots.txt.",
             "The URL Parameters tool was retired in 2022.",
             "410: Google treats it like 404.",
             "Delete subscriptions that return 410 or 404.",
