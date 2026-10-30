@@ -157,3 +157,40 @@ breakdown.
 ---
 
 
+## 2026-07-31 — Auditoria guardiã (verificação + 5 eixos)
+
+Primeiro pass guardião sobre o banco v2. Verificou 49 das 121 marcações ✅/⚠️ aplicadas pelo pass de
+execução do mesmo dia (84% confirmadas, 10% reabertas), revalidou os 10 achados abertos (0% de
+mortalidade) e produziu 11 achados originais. Ver [o relatório do pass](2026-07-31/index.md) para
+método, placar e candidatos descartados por duplicação.
+
+### Agnosticismo de Stack (`agent-*`, `flow-*`) — 4
+
+- `agent-frontend-test-specialist-sonarqube-coverage-block-hardcodes-jest-vitest-commands-and-sonar-javascript-key-while-backend-twin-was-delegated` — **MEDIUM-HIGH** — alvo: `agents/frontend-test-specialist.md` — Matriz de comandos de cobertura hardcoded que o gêmeo backend já teve removida — [report](2026-07-31/01-agnosticismo-de-stack.md)
+- `agent-frontend-developer-description-frontmatter-enumerates-eight-frameworks-react-vue-svelte-angular-blade-twig-erb-jinja-on-identity-surface` — **MEDIUM** — alvo: `agents/frontend-developer.md` — Oito frameworks fixados na superfície de identidade, defeito já corrigido em `mobile-developer` — [report](2026-07-31/01-agnosticismo-de-stack.md)
+- `agent-devops-specialist-core-expertise-declares-primary-docker-and-done-checklist-gates-on-docker-terraform-contradicting-own-never-name-a-product-rule` — **MEDIUM** — alvo: `agents/devops-specialist.md` — O agente declara produto primário e contradiz a própria regra 86 linhas depois — [report](2026-07-31/01-agnosticismo-de-stack.md)
+- `flow-audit-command-devops-analysis-prompt-names-redis-cdn-docker-inside-spawn-instruction` — **LOW-MEDIUM** — alvo: `commands/audit.md` — Duas das cinco linhas de escopo do devops-specialist nomeiam vendor — [report](2026-07-31/01-agnosticismo-de-stack.md)
+
+### Referências e Consistência (`docs-sync-*`) — 3
+
+- `docs-sync-claude-md-102-states-skill-desc-strict-false-non-blocking-while-agent-lint-31-sets-true-and-ci-promoted-it-same-day` — **HIGH** — alvo: `CLAUDE.md` — Documenta como verdade corrente o valor oposto ao do código, com a variável nomeada — [report](2026-07-31/02-referencias-e-consistencia.md) — 📍 **Mudou de forma em 2026-10-10 e piorou:** `grep -rn SKILL_DESC_STRICT helpers/agent-lint.sh` devolve **vazio** — a variável não existe mais. Sobraram três referências a um knob removido: `CLAUDE.md:139` ("non-blocking warning today (`SKILL_DESC_STRICT=false`)"), `helpers/agent-lint.sh:327` ("warning — see SKILL_DESC_STRICT") e `.github/scripts/ci/01-lint.sh:66` ("`SKILL_DESC_STRICT=true` in helpers/agent-lint.sh"), as duas últimas em desacordo sobre o valor
+- `docs-sync-claude-md-173-says-all-devteam-commands-load-current-context-while-213-lists-four-exceptions-as-the-complete-list` — **MEDIUM** — alvo: `CLAUDE.md` — Duas afirmações incompatíveis no mesmo arquivo, 40 linhas de distância — [report](2026-07-31/02-referencias-e-consistencia.md) — 📍 **Re-ancorado em 2026-10-10:** a afirmação está em `CLAUDE.md:216` ("All `/devteam:*` commands") e a lista de exceções migrou para `CLAUDE-md/commands.md:51`, agora com **seis** declaradas "the complete list" mais cinco que só a nomeiam em prosa
+- `docs-sync-reports-index-md-99-legend-comment-claims-all-131-entries-unmarked-while-121-carry-executed-or-partial-marks` — **LOW-MEDIUM** — alvo: `docs/reports/_index.md` — O comentário de legenda do próprio banco contradiz a contagem de marcadores — [report](2026-07-31/02-referencias-e-consistencia.md)
+
+### Fluxos e Comandos (`auto-*`, `flow-*`) — 2
+
+- `auto-commands-json-plan-gate-field-has-no-consumer-and-no-validator-architect-declared-required-but-body-carries-no-plan-step` — **MEDIUM-HIGH** — alvo: `scripts/lib/commands.json` — Metadado declarado canônico sem consumidor, já divergente em 1 dos 6 comandos `required` — [report](2026-07-31/03-fluxos-e-comandos.md) — 🟢 **Resolved:** 2026-08-12 — `scripts/lib/render_provider.py:105` `soften_plan_gate()` consome `meta.get("plan_gate")` (linhas 899, 921, 928)
+- `flow-pre-tool-use-02b-telemetry-reads-devteam-hook-payload-branch-that-only-stop-dispatcher-ever-sets-dead-path-in-pretooluse` — **LOW** — alvo: `scripts/hooks/pre-tool-use/02b-telemetry.sh` — Ramo morto de leitura de payload; contrato assimétrico entre os dois dispatchers — [report](2026-07-31/03-fluxos-e-comandos.md)
+
+### Agentes e Skills (`skill-*`) — 1
+
+- `skill-shared-migration-v1-to-v2-437-lines-largest-in-repo-single-conditional-loader-in-setup-assistant-no-references-extraction-and-no-retirement-criterion` — **MEDIUM** — alvo: `skills/shared/migration-v1-to-v2/SKILL.md` — Maior skill do repo, um carregador, sem `references/` e sem critério de aposentadoria — [report](2026-07-31/04-agentes-e-skills.md)
+
+### Economia de Tokens (`token-*`) — 1
+
+- `token-interaction-patterns-209-lines-loaded-unconditionally-by-24-commands-and-2-agents-while-only-38-lines-are-the-rule-and-159-are-json-examples-and-recurring-patterns` — **MEDIUM-HIGH** — alvo: `skills/shared/interaction-patterns/SKILL.md` — 76% é catálogo de exemplos; extrair para `references/` economiza ≈4.130 linhas agregadas — [report](2026-07-31/05-economia-tokens.md)
+
+---
+
+
+
