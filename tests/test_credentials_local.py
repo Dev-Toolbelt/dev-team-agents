@@ -31,8 +31,8 @@ CONTENT = '{"custom": {"password": "%s"}, "app": {"staging": {"appUrl": "u"}}}\n
 #: The shape the template had before ADR-0024 made the file free-form; patch tests run on it
 #: because it exercises nested objects, lists and secret-named keys in one document.
 SAMPLE = json.loads(cl.LEGACY_BLANKS_FILE.read_text(encoding="utf-8"))["templates"][0]
-HIDDEN = {"secret": True, "set": True, "marked": False}
-MARKED = {"secret": True, "set": True, "marked": True}
+HIDDEN = {"secret": True, "set": True, "marked": False, "stored": None}
+MARKED = {"secret": True, "set": True, "marked": True, "stored": None}
 
 
 def _mode(path):
@@ -264,7 +264,7 @@ class ShowTest(LocalCredsCase):
         self.assertEqual(state["data"]["b"]["privateKeyPath"], "/k/id")
         db = state["data"]["c"]["staging"]["database"]
         self.assertEqual(db[0]["password"], HIDDEN)
-        self.assertEqual(db[1]["password"], {"secret": True, "set": False, "marked": False})
+        self.assertEqual(db[1]["password"], {"secret": True, "set": False, "marked": False, "stored": None})
 
     def test_unmarked_plain_values_are_shown_whatever_their_names(self):
         doc = {"jira": {"site": "acme.atlassian.net", "port": 443, "on": True, "none": None}, "list": ["a", 1]}
@@ -283,7 +283,7 @@ class InitTest(LocalCredsCase):
         self.assertMode(self.target, 0o600)
         self.assertEqual(json.loads(self.target.read_text()), cl.load_template())
         self.assertEqual(self.target.read_bytes(), cl.TEMPLATE_FILE.read_bytes())
-        self.assertEqual(state["data"]["example"]["production"]["password"], {"secret": True, "set": False, "marked": True})
+        self.assertEqual(state["data"]["example"]["production"]["password"], {"secret": True, "set": False, "marked": True, "stored": None})
 
     def test_refuses_when_the_file_exists_and_leaves_it_alone(self):
         self.put(self.target, CONTENT)
@@ -438,7 +438,7 @@ class PatchTest(LocalCredsCase):
         staging = self.on_disk()["app"]["staging"]
         self.assertNotIn("password", staging)
         self.assertEqual(staging["pass"], "")
-        self.assertEqual(state["data"]["app"]["staging"]["pass"], {"secret": True, "set": False, "marked": False})
+        self.assertEqual(state["data"]["app"]["staging"]["pass"], {"secret": True, "set": False, "marked": False, "stored": None})
 
     def test_move_nests_a_value_under_a_new_group(self):
         self.put(self.target, json.dumps({"token": PLANTED, "$secrets": ["token"]}))
@@ -1010,14 +1010,16 @@ class DoctorCredentialsTest(LocalCredsCase):
     def test_loose_mode_warns_with_a_chmod_hint(self):
         self.put(self.target, CONTENT, mode=0o644)
         findings, _actions, _report = doctor.check_credentials_local(self.root)
-        warns = [f for f in findings if f["level"] == "warn"]
+        warns = [f for f in findings if f["level"] == "warn" and f["category"] != "plaintext-secret"]
         self.assertEqual(len(warns), 1)
         self.assertIn("chmod 600", warns[0]["hint"])
 
     def test_owner_only_mode_is_quiet(self):
         self.put(self.target, CONTENT, mode=0o600)
         findings, _a, _r = doctor.check_credentials_local(self.root)
-        self.assertEqual([f for f in findings if f["level"] == "warn"], [])
+        self.assertEqual(
+            [f for f in findings if f["level"] == "warn" and f["category"] != "plaintext-secret"], []
+        )
 
 
 
