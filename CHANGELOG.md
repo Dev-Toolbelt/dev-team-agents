@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.49.1] - 2026-10-30
+
+### Fixed
+- **The Windows CLI installers build again.** Nine `.claude/skills/` symlinks into `.dev-team-agents/` had been committed, and `packaging/windows-cli/build.py` refuses a committed tree that holds links, so v2.49.0 shipped without its Windows installers. The links are no longer tracked; they stay in the working tree, ignored like the rest of this repository's hand-maintained `.claude` install.
+
 ## [2.49.0] - 2026-10-30
 
 ### Added
@@ -2398,7 +2403,8 @@ Large refactor/performance release focused on reducing per-session and per-spawn
 - `templates/plan-template.md`
 - `CLAUDE.md` authoring standards
 
-[Unreleased]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.49.0...HEAD
+[Unreleased]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.49.1...HEAD
+[2.49.1]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.49.0...v2.49.1
 [2.49.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.48.0...v2.49.0
 [1.9.3]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.9.2...v1.9.3
 [1.9.2]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.9.1...v1.9.2
