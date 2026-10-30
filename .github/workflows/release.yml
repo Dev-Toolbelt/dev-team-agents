@@ -431,102 +431,17 @@ jobs:
             --sha256 "${{ needs.bump-homebrew-formula.outputs.sha256 }}"
 
   # ── The Windows CLI installers (ADR-0028) ────────────────────────────────────
-  # Built on Windows from the tag's own tree, installed silently on this runner as a
-  # smoke test, uninstalled, then attached to the tag's GitHub release with their
-  # SHA256SUMS.txt — the asset names the app's "Install the CLI" action and the winget
-  # manifest look for. The release is created when the tag has none: a tag need not
-  # have one, and the app's lookup only sees releases. What this does NOT cover: the
-  # interactive wizard and its Git for Windows prompt, which a silent install skips.
+  # Built, smoke-tested and attached by windows-cli.yml, which pull requests also run
+  # (without attaching), so a broken installer shows up before a tag is pushed.
   windows-cli-installer:
     name: Build, smoke-test and attach the Windows CLI installers
-    runs-on: windows-latest
     if: ${{ !startsWith(github.ref_name, 'app-v') }}
     permissions:
       contents: write
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Validate tag matches vX.Y.Z
-        run: |
-          set -euo pipefail
-          TAG="${GITHUB_REF#refs/tags/}"
-          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Tag '$TAG' does not match ^v[0-9]+\.[0-9]+\.[0-9]+$ — refusing to build installers."
-            exit 1
-          fi
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
-          echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: "3.12"
-
-      # A pinned version, not whatever Chocolatey serves today: this job builds the
-      # executable users run. build.py finds makensis under Program Files itself, so
-      # nothing is written to GITHUB_PATH (a POSIX path there is not one Windows
-      # python can resolve).
-      - name: Install NSIS
-        run: |
-          set -euo pipefail
-          choco install nsis --version 3.13.0 -y --no-progress
-
-      - name: Build the installers
-        run: python packaging/windows-cli/build.py --version "$VERSION" --out dist
-
-      - name: Smoke-test a silent install of the x64 installer
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $env:DEVTEAM_HOME = Join-Path $env:RUNNER_TEMP 'devteam-home'
-          $installer = Start-Process -FilePath "dist\devteam-setup-$env:VERSION-x64.exe" -ArgumentList '/S' -Wait -PassThru
-          if ($installer.ExitCode -ne 0) { throw "installer exited with $($installer.ExitCode)" }
-          $exe = Join-Path $env:LOCALAPPDATA 'Programs\devteam\bin\devteam.exe'
-          if (-not (Test-Path $exe)) { throw "$exe was not written" }
-          & $exe version --json
-          if ($LASTEXITCODE -ne 0) { throw "devteam version exited with $LASTEXITCODE" }
-          $listed = & $exe store list --json | ConvertFrom-Json
-          if ($listed.current -ne $env:VERSION) {
-            throw "the bundled framework $env:VERSION is not the store's current version"
-          }
-          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-          if ($userPath -notlike '*Programs\devteam\bin*') { throw 'bin was not added to the user PATH' }
-          Start-Process -FilePath (Join-Path $env:LOCALAPPDATA 'Programs\devteam\uninstall.exe') -ArgumentList '/S' -Wait | Out-Null
-          # The NSIS uninstaller re-launches itself from %TEMP% and returns early: poll.
-          $deadline = (Get-Date).AddSeconds(60)
-          do {
-            Start-Sleep -Seconds 2
-            $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-            $gone = ($userPath -notlike '*Programs\devteam\bin*') -and -not (Test-Path $exe)
-          } until ($gone -or (Get-Date) -gt $deadline)
-          if (-not $gone) { throw 'uninstall left bin on the user PATH, or devteam.exe on disk' }
-          if (-not (Test-Path (Join-Path $env:DEVTEAM_HOME 'core'))) { throw 'uninstall removed the store, which it must never touch' }
-
-      # Draft first, publish after the assets are in: with the repository's immutable
-      # releases setting on (ADR-0027 requires it), a published release accepts no new
-      # assets. A release that already exists as a draft is reused; one that is already
-      # published (a re-run) only takes the upload if the setting allows it.
-      - name: Attach the installers to the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --draft --verify-tag --title "$TAG" \
-              --notes "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md). Windows: devteam-setup-${VERSION}-<arch>.exe installs the devteam CLI with its own Python (ADR-0028); check it against SHA256SUMS.txt."
-          fi
-          gh release upload "$TAG" \
-            "dist/devteam-setup-${VERSION}-x64.exe" \
-            "dist/devteam-setup-${VERSION}-arm64.exe" \
-            dist/SHA256SUMS.txt \
-            --clobber
-          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "true" ]; then
-            gh release edit "$TAG" --draft=false
-          fi
+    uses: ./.github/workflows/windows-cli.yml
+    with:
+      tag: ${{ github.ref_name }}
+      attach: true
 
   # The winget manifests for the CLI at this release's real version, URLs and digests,
   # validated, as a workflow artifact. Submission to microsoft/winget-pkgs is manual.
