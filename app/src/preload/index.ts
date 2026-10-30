@@ -192,6 +192,9 @@ const bridge: DevteamBridge = {
   // forwards them over stdin.
   credentialsLocalShow: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.credentialsLocalShow, String(projectId)),
   credentialsLocalInit: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.credentialsLocalInit, String(projectId)),
+  credentialsLocalSecureList: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.credentialsLocalSecureList, String(projectId)),
+  credentialsLocalSecureApply: (projectId: ProjectId, pointers: readonly string[]) =>
+    ipcRenderer.invoke(CHANNELS.credentialsLocalSecureApply, String(projectId), pointers.map(String)),
   credentialsLocalCopySecret: (projectId: ProjectId, expectHash: string, pointer: string) =>
     ipcRenderer.invoke(CHANNELS.credentialsLocalCopySecret, String(projectId), String(expectHash), String(pointer)),
   credentialsLocalPatch: (projectId: ProjectId, expectHash: string, ops: readonly CredentialsPatchOp[]) =>

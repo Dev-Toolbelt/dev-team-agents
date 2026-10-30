@@ -1,6 +1,8 @@
 import {
+  CREDENTIALS_MAX_SECRET_BYTES,
   CREDENTIALS_PRODUCTION_KEY,
   CREDENTIALS_SECRETS_KEY,
+  CREDENTIALS_STORED_PENDING,
   type CredentialsPatchOp,
   type CredentialsSecretLeaf,
 } from '../../shared/api.js';
@@ -62,6 +64,41 @@ export function productionAt(doc: unknown, path: Path): { own: boolean; inherite
   return { own, inherited };
 }
 
+// ── references (ADR-0053) ────────────────────────────────────────────────────────
+
+/** The reserved key of a leaf that points at a value instead of holding it. */
+export const REFERENCE_KEY = '$ref';
+
+// These mirror `_OP_REF` and `_BW_REF` in credentials_local.py, which match the whole string.
+/* eslint-disable no-control-regex -- the CLI refuses control characters in a reference */
+const OP_REFERENCE = /^op:\/\/[^\s\u0000-\u001f]+$/;
+const BW_REFERENCE =
+  /^bw:\/\/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\/[^\s/\u0000-\u001f][^/\u0000-\u001f]{0,127}$/;
+/* eslint-enable no-control-regex */
+
+/** Why `text` is not a reference the user may write by hand (it mirrors the CLI's check), or `null`. */
+export function referenceProblem(text: string): string | null {
+  const ref = text.trim();
+  return OP_REFERENCE.test(ref) || BW_REFERENCE.test(ref)
+    ? null
+    : 'Use op://vault/item/field (1Password) or bw://item-uuid/field (Bitwarden)';
+}
+
+/** Why `text` cannot be stored as a secret value, or `null`. Mirrors the CLI's limits (ADR-0010, ADR-0053). */
+export function secretValueProblem(text: string): string | null {
+  if (new TextEncoder().encode(text).length > CREDENTIALS_MAX_SECRET_BYTES) {
+    return `Too long: a secret holds at most ${CREDENTIALS_MAX_SECRET_BYTES} bytes`;
+  }
+  return /[\n\r\0]/.test(text) ? 'A secret cannot contain a line break or NUL' : null;
+}
+
+/** What `cred local show` would report as `stored` for a reference typed by hand. */
+const storedOfReference = (ref: string): string => (ref.startsWith('bw://') ? 'bw' : 'op');
+
+/** A secret the file keeps as plain text: `stored` is `null`, not merely absent (an older CLI). */
+export const isPlaintextSecret = (value: unknown): value is CredentialsSecretLeaf =>
+  isSecretLeaf(value) && value.set && value.stored === null;
+
 // ── applying ops, mirroring credentials_local.py ─────────────────────────────────
 
 function tokensOf(pointer: string): string[] {
@@ -97,12 +134,31 @@ function unsetIn(doc: Record<string, unknown>, tokens: string[]): void {
   else if (isRecord(node)) delete node[last];
 }
 
+const referenceLeaf = (stored: string): CredentialsSecretLeaf => ({ secret: true, set: true, marked: true, stored });
+
+/** Add the key at `tokens` to its parent's `$secrets`, as `set-secret` does on disk. */
+function markSecret(doc: Record<string, unknown>, tokens: string[]): void {
+  const key = tokens[tokens.length - 1];
+  const parent = tokens.slice(0, -1).reduce<unknown>(step, doc);
+  if (key === undefined || !isRecord(parent) || Array.isArray(parent)) return;
+  const names = markedIn(parent);
+  if (!names.has(key)) parent[CREDENTIALS_SECRETS_KEY] = [...names, key].sort();
+}
+
 /** The working copy: `data` with `ops` applied in order. Never mutates `data`. */
 export function applyOps(data: Doc, ops: readonly CredentialsPatchOp[]): Doc {
   const doc = structuredClone(data) as Record<string, unknown>;
   for (const op of ops) {
-    if (op.op === 'set') setIn(doc, tokensOf(op.pointer), structuredClone(op.value));
-    else if (op.op === 'unset') unsetIn(doc, tokensOf(op.pointer));
+    if (op.op === 'set') {
+      const ref = isRecord(op.value) ? op.value[REFERENCE_KEY] : undefined;
+      // A hand-written reference reads back redacted, so the working copy shows it the same way.
+      setIn(doc, tokensOf(op.pointer), typeof ref === 'string' ? referenceLeaf(storedOfReference(ref)) : structuredClone(op.value));
+    } else if (op.op === 'set-secret') {
+      // The CLI stores the value and writes a reference; the working copy shows it as stored.
+      const tokens = tokensOf(op.pointer);
+      setIn(doc, tokens, referenceLeaf(CREDENTIALS_STORED_PENDING));
+      markSecret(doc, tokens);
+    } else if (op.op === 'unset') unsetIn(doc, tokensOf(op.pointer));
     else {
       const value = tokensOf(op.from).reduce<unknown>(step, doc);
       unsetIn(doc, tokensOf(op.from));
@@ -117,7 +173,9 @@ export function record(ops: readonly CredentialsPatchOp[], ...added: Credentials
   const out = [...ops];
   for (const op of added) {
     const last = out[out.length - 1];
-    if (op.op === 'set' && last?.op === 'set' && last.pointer === op.pointer) out[out.length - 1] = op;
+    // The last write to a pointer wins, so a typed value then a reference (or the reverse) is one op.
+    const writes = (candidate: CredentialsPatchOp | undefined): boolean => candidate?.op === 'set' || candidate?.op === 'set-secret';
+    if (writes(op) && writes(last) && last !== undefined && 'pointer' in last && last.pointer === op.pointer) out[out.length - 1] = op;
     else out.push(op);
   }
   return out;
@@ -127,6 +185,10 @@ export function record(ops: readonly CredentialsPatchOp[], ...added: Credentials
 
 export type Edit =
   | { kind: 'value'; path: Path; value: unknown }
+  /** A secret value typed by the user: the CLI stores it and keeps a reference (ADR-0053). */
+  | { kind: 'secret-value'; path: Path; value: string }
+  /** A password-manager reference typed by hand (`op://…`, `bw://…`): not itself secret. */
+  | { kind: 'reference'; path: Path; ref: string }
   | { kind: 'add'; parent: Path; key: string | null; value: unknown }
   | { kind: 'remove'; path: Path }
   | { kind: 'rename'; path: Path; to: string }
@@ -136,6 +198,8 @@ export type Edit =
 
 /** Why `edit` cannot be made against `doc`, or `null`. */
 export function editProblem(doc: Doc, edit: Edit): string | null {
+  if (edit.kind === 'reference') return referenceProblem(edit.ref);
+  if (edit.kind === 'secret-value') return secretValueProblem(edit.value);
   const parentOf = (path: Path): unknown => valueAt(doc, path.slice(0, -1));
   if (edit.kind === 'add' && edit.key !== null) {
     const key = edit.key.trim();
@@ -189,6 +253,10 @@ export function opsFor(doc: Doc, edit: Edit): CredentialsPatchOp[] {
   switch (edit.kind) {
     case 'value':
       return [{ op: 'set', pointer: pointerOf(edit.path), value: edit.value }];
+    case 'secret-value':
+      return [{ op: 'set-secret', pointer: pointerOf(edit.path), value: edit.value }];
+    case 'reference':
+      return [{ op: 'set', pointer: pointerOf(edit.path), value: { [REFERENCE_KEY]: edit.ref.trim() } }];
     case 'add': {
       const parent = valueAt(doc, edit.parent);
       const token = Array.isArray(parent) ? '-' : (edit.key ?? '').trim();
@@ -296,4 +364,44 @@ export function coerce(text: string, previous: unknown): { value: unknown; probl
     return { value: text, problem: 'Must be a number' };
   }
   return { value: text, problem: null };
+}
+
+/** Pointers of every secret the working copy shows as plain text in the file (ADR-0053 § 5). */
+export function plaintextSecrets(doc: Doc): { pointer: string; production: boolean }[] {
+  const found: { pointer: string; production: boolean }[] = [];
+  const walk = (node: unknown, path: Path): void => {
+    const entries: [string | number, unknown][] = Array.isArray(node)
+      ? node.map((item, index) => [index, item])
+      : isRecord(node)
+        ? Object.entries(node).filter(([key]) => !isReserved(key))
+        : [];
+    for (const [key, child] of entries) {
+      const childPath = [...path, key];
+      if (isPlaintextSecret(child)) {
+        const production = productionAt(doc, childPath.slice(0, -1));
+        found.push({ pointer: pointerOf(childPath), production: production.own || production.inherited });
+      } else if (isContainer(child)) walk(child, childPath);
+    }
+  };
+  walk(doc, []);
+  return found;
+}
+
+/** Whether `op` is a typed secret or a hand-written reference: the writes a secret field holds back. */
+const isSecretWrite = (op: CredentialsPatchOp): boolean =>
+  op.op === 'set-secret' || (op.op === 'set' && isRecord(op.value) && typeof op.value[REFERENCE_KEY] === 'string');
+
+/** `ops` without the pending secret value or reference for `pointer`: what clearing the field means. */
+export function forgetSecretWrite(ops: readonly CredentialsPatchOp[], pointer: string): CredentialsPatchOp[] {
+  return ops.filter((op) => !(isSecretWrite(op) && 'pointer' in op && op.pointer === pointer));
+}
+
+/** Pointers that hold a typed secret or reference not saved yet. */
+export function pendingSecretPointers(ops: readonly CredentialsPatchOp[]): ReadonlySet<string> {
+  return new Set(ops.filter(isSecretWrite).map((op) => ('pointer' in op ? op.pointer : '')));
+}
+
+/** `ops` without any pending secret write at `pointer` or below it: what removing that field means. */
+export function forgetSecretWritesUnder(ops: readonly CredentialsPatchOp[], pointer: string): CredentialsPatchOp[] {
+  return ops.filter((op) => !(isSecretWrite(op) && 'pointer' in op && (op.pointer === pointer || op.pointer.startsWith(`${pointer}/`))));
 }

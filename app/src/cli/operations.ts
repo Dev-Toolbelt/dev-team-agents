@@ -27,7 +27,7 @@ import { ACCOUNT_COMMANDS, ACCOUNT_SHAPES } from './accountCommands.js';
 import { ONBOARDING_GATED_COMMANDS, ONBOARDING_READ_ONLY_COMMANDS, ONBOARDING_SHAPES } from './onboardingCommands.js';
 import { streamDevteam, type StreamEnd, type StreamHandle } from './stream.js';
 import { explain, ranAndAnswered, type CliResult } from './contract.js';
-import { CREDENTIALS_SAVED_UNREADABLE } from '../shared/api.js';
+import { CREDENTIALS_MAX_SECRET_BYTES, CREDENTIALS_MAX_SECURE_POINTERS, CREDENTIALS_SAVED_UNREADABLE } from '../shared/api.js';
 import { textProblem } from '../shared/preferenceRules.js';
 import { PLUGIN_ACTION_ID, PLUGIN_CONFIG_KEY, PLUGIN_NAME } from '../shared/pluginRules.js';
 import type {
@@ -63,6 +63,8 @@ import type {
   OperationResult,
   PinReport,
   CredentialsLocalView,
+  CredentialsPlaintextSecret,
+  CredentialsSecureReport,
   CredentialsPatchOp,
   IntegrationConfigWrite,
   IntegrationConnectReport,
@@ -195,7 +197,8 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
  * the defect the whole design exists to prevent.
  *
  * ADR-0024 § 5 widens the list by exactly two leaves, `cred local init` and `cred local
- * patch` (ops on stdin, `--expect-hash` required); `cred get` and `cred list` stay refused.
+ * patch` (ops on stdin, `--expect-hash` required); ADR-0053 adds `cred local secure`.
+ * `cred get`, `cred list` and `cred local exec` stay refused.
  *
  * Adding a further entry is again a decision to widen what this app can change. Make it
  * explicitly; `test/operations.test.ts` fails on an unreviewed addition.
@@ -233,6 +236,10 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   // two leaves plus `cred local show`; `cred get` and `cred list` stay forbidden.
   ['cred', 'local', 'init'],
   ['cred', 'local', 'patch'],
+  // ADR-0053 § 5. One leaf: bare it lists plaintext secrets, with `--apply` it moves them into the
+  // OS secret store. Gated as a whole, since the gate is per command. `cred local exec` (which
+  // resolves values into a child process) is deliberately absent: a value must not enter this app.
+  ['cred', 'local', 'secure'],
   // Writes `notifications-seen.json` in one project's machine-local state directory —
   // the smallest write this app makes, and still a write, so it is declared and gated
   // like every other. The id is validated (`NOTIFICATION_ID`) before it reaches argv.
@@ -359,6 +366,7 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'cred local show': { operands: 0, flags: { '--path': 'value' } },
   'cred local init': { operands: 0, flags: { '--path': 'value' } },
   'cred local patch': { operands: 0, flags: { '--path': 'value', '--expect-hash': 'value' } },
+  'cred local secure': { operands: 0, flags: { '--path': 'value', '--apply': 'bare', '--pointer': 'repeatable' } },
   'cred local copy-value': { operands: 0, flags: { '--path': 'value', '--pointer': 'value', '--expect-hash': 'value' } },
   // One id per ack: the app acknowledges each notification as it shows it. Never `--all`
   // — an ack the user did not see happen is a notification they never got.
@@ -1402,14 +1410,24 @@ export function credentialsOpsProblem(ops: unknown): string | null {
   for (const entry of ops) {
     if (!isRecord(entry)) return 'an edit is not an object';
     const { op, pointer } = entry;
-    if (op !== 'set' && op !== 'unset' && op !== 'move') return 'an edit\'s op is `set`, `unset` or `move`';
+    if (op !== 'set' && op !== 'set-secret' && op !== 'unset' && op !== 'move') {
+      return 'an edit\'s op is `set`, `set-secret`, `unset` or `move`';
+    }
     const pointers = op === 'move' ? [pointer, entry['from']] : [pointer];
     for (const candidate of pointers) {
       const problem = credentialsPointerProblem(candidate);
       if (problem !== null) return problem;
     }
     if (op === 'set' && (!('value' in entry) || entry['value'] === undefined)) return 'a `set` edit needs a value';
-    if (op !== 'set' && 'value' in entry) return `\`${op}\` takes no value`;
+    if (op === 'set-secret' && (typeof entry['value'] !== 'string' || entry['value'] === '')) {
+      return 'a `set-secret` edit needs a non-empty text value';
+    }
+    if (op === 'set-secret') {
+      const text = entry['value'] as string;
+      if (Buffer.byteLength(text, 'utf8') > CREDENTIALS_MAX_SECRET_BYTES) return `a secret holds at most ${CREDENTIALS_MAX_SECRET_BYTES} bytes`;
+      if (/[\n\r\0]/.test(text)) return 'a secret cannot contain a line break or NUL';
+    }
+    if (op !== 'set' && op !== 'set-secret' && 'value' in entry) return `\`${op}\` takes no value`;
   }
   return null;
 }
@@ -1424,9 +1442,11 @@ function normalizeOps(ops: readonly CredentialsPatchOp[]): CredentialsPatchOp[] 
   return ops.map((entry) =>
     entry.op === 'set'
       ? { op: 'set', pointer: entry.pointer, value: entry.value }
-      : entry.op === 'move'
-        ? { op: 'move', from: entry.from, pointer: entry.pointer }
-        : { op: 'unset', pointer: entry.pointer },
+      : entry.op === 'set-secret'
+        ? { op: 'set-secret', pointer: entry.pointer, value: entry.value }
+        : entry.op === 'move'
+          ? { op: 'move', from: entry.from, pointer: entry.pointer }
+          : { op: 'unset', pointer: entry.pointer },
   );
 }
 
@@ -1443,7 +1463,7 @@ export function secretValuesOf(ops: readonly CredentialsPatchOp[]): string[] {
     } else if (Array.isArray(value)) value.forEach(collect);
     else if (isRecord(value)) Object.values(value).forEach(collect);
   };
-  for (const entry of ops) if (entry.op === 'set') collect(entry.value);
+  for (const entry of ops) if (entry.op === 'set' || entry.op === 'set-secret') collect(entry.value);
   return [...found];
 }
 
@@ -1553,6 +1573,52 @@ export async function credentialsLocalPatch(
     return { ...result, reason: CREDENTIALS_SAVED_UNREADABLE };
   }
   return result;
+}
+
+/**
+ * `cred local secure --json` (ADR-0053 § 5). The CLI's answer names pointers and whether each sits
+ * under `$production`; a value is never in it. Read from `secrets`, the key the CLI documents.
+ */
+export function asCredentialsSecureReport(body: Record<string, unknown>): CredentialsSecureReport | string {
+  if (typeof body['path'] !== 'string') return 'no string `path`';
+  const listed = body['secrets'];
+  if (!Array.isArray(listed)) return 'no array `secrets`';
+  const secrets: CredentialsPlaintextSecret[] = [];
+  for (const entry of listed) {
+    if (!isRecord(entry) || typeof entry['pointer'] !== 'string') return 'a `secrets` entry has no string `pointer`';
+    secrets.push({ pointer: entry['pointer'], production: entry['production'] === true });
+  }
+  if (typeof body['hash'] !== 'string') return 'no string `hash`';
+  return { path: body['path'], secrets, hash: body['hash'] };
+}
+
+/** Lists every plaintext secret in the file and changes nothing. */
+export function credentialsLocalSecureList(context: CliContext, path: string): Promise<OperationResult<CredentialsSecureReport>> {
+  return run(context, ['cred', 'local', 'secure', '--path', path], asCredentialsSecureReport);
+}
+
+/**
+ * Moves plaintext secrets into the secret store: all of them, or only those at `pointers`. Only
+ * ever reached after the user confirmed the listing. Nothing here carries a value.
+ */
+export function credentialsLocalSecureApply(
+  context: CliContext,
+  path: string,
+  pointers: readonly string[],
+): Promise<OperationResult<CredentialsSecureReport>> {
+  if (pointers.length === 0) return Promise.resolve(refusedCredentials('cred local secure', 'name the secrets to move'));
+  if (pointers.length > CREDENTIALS_MAX_SECURE_POINTERS) {
+    return Promise.resolve(refusedCredentials('cred local secure', `at most ${CREDENTIALS_MAX_SECURE_POINTERS} secrets can be moved at once`));
+  }
+  for (const pointer of pointers) {
+    const problem = credentialsPointerProblem(pointer);
+    if (problem !== null) return Promise.resolve(refusedCredentials('cred local secure', problem));
+  }
+  return run(
+    context,
+    ['cred', 'local', 'secure', '--path', path, '--apply', ...pointers.flatMap((pointer) => ['--pointer', pointer])],
+    asCredentialsSecureReport,
+  );
 }
 
 export function integrationList(context: CliContext, path: string | null): Promise<OperationResult<IntegrationList>> {

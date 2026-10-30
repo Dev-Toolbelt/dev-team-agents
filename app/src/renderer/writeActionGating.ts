@@ -46,6 +46,7 @@ export const INTEGRATION_COMMANDS = {
 export const CREDENTIALS_COMMANDS = {
   init: 'cred local init',
   patch: 'cred local patch',
+  secure: 'cred local secure',
 } as const;
 
 /** The first of `commands` that is withheld, so one reason is reported when several are. */

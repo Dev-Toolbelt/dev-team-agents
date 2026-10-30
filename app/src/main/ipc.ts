@@ -36,8 +36,11 @@ import {
   credentialsLocalCopyValue,
   credentialsLocalInit,
   credentialsLocalPatch,
+  credentialsLocalSecureApply,
+  credentialsLocalSecureList,
   credentialsLocalShow,
   credentialsOpsProblem,
+  credentialsPointerProblem,
   isCredentialsOps,
   CREDENTIALS_HASH,
   integrationConfigSet,
@@ -122,7 +125,9 @@ import {
   type IntegrationConfigWrite,
   type IntegrationConnectReport,
   type IntegrationDisconnectReport,
+  CREDENTIALS_MAX_SECURE_POINTERS,
   type CredentialsLocalView,
+  type CredentialsSecureReport,
   type CredentialsSecretCopied,
   type IntegrationList,
   type IntegrationResources,
@@ -1466,6 +1471,32 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
       const gated = await gatedContext('cred local patch');
       if (!gated.ready) return gated.problem;
       return credentialsLocalPatch(gated.ctx, resolved.path, expectHash, ops);
+    },
+  );
+
+  // ADR-0053 § 5. Listing and applying are one CLI leaf, gated as a whole; neither answer
+  // carries a value. Applying is only ever sent after the screen's confirmation.
+  handle(CHANNELS.credentialsLocalSecureList, async (_event, projectId: unknown): Promise<OperationResult<CredentialsSecureReport>> => {
+    if (typeof projectId !== 'string') return refusedBadArgument('cred local secure');
+    const resolved = await resolveProject(projectId);
+    if (!('path' in resolved)) return resolved;
+    const gated = await gatedContext('cred local secure');
+    if (!gated.ready) return gated.problem;
+    return credentialsLocalSecureList(gated.ctx, resolved.path);
+  });
+
+  handle(
+    CHANNELS.credentialsLocalSecureApply,
+    async (_event, projectId: unknown, pointers: unknown): Promise<OperationResult<CredentialsSecureReport>> => {
+      if (typeof projectId !== 'string') return refusedBadArgument('cred local secure');
+      if (!Array.isArray(pointers) || pointers.length === 0 || pointers.length > CREDENTIALS_MAX_SECURE_POINTERS || pointers.some((pointer) => credentialsPointerProblem(pointer) !== null)) {
+        return refusedRequest('cred local secure', '`devteam cred local secure` was refused: the pointers are invalid');
+      }
+      const resolved = await resolveProject(projectId);
+      if (!('path' in resolved)) return resolved;
+      const gated = await gatedContext('cred local secure');
+      if (!gated.ready) return gated.problem;
+      return credentialsLocalSecureApply(gated.ctx, resolved.path, pointers as string[]);
     },
   );
 

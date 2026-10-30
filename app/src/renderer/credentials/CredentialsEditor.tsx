@@ -1,5 +1,5 @@
-import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, FolderInput, FolderPlus, KeyRound, Lock, LockOpen, Pencil, Plus, Search, ShieldAlert, Trash2 } from 'lucide-react';
-import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, FolderInput, FolderPlus, KeyRound, Lock, LockOpen, Pencil, Plus, Search, ShieldAlert, ShieldCheck, Trash2, TriangleAlert } from 'lucide-react';
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Hint } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { CREDENTIALS_CLIPBOARD_CLEAR_SECONDS } from '../../shared/api.js';
+import { CREDENTIALS_CLIPBOARD_CLEAR_SECONDS, CREDENTIALS_STORED_PENDING, type CredentialsSecretLeaf } from '../../shared/api.js';
 import { SELECT_CLASS } from '../formStyles.js';
 import {
   coerce,
@@ -23,6 +23,8 @@ import {
   moveTargets,
   pointerOf,
   productionAt,
+  referenceProblem,
+  secretValueProblem,
   scalarText,
   searchHits,
   valueAt,
@@ -99,6 +101,14 @@ interface Ctx {
   onCopySecret: (pointer: string) => Promise<boolean>;
   /** Why copying is unavailable right now, or `null`. */
   copyBlocked: string | null;
+  /** Asks to move one plaintext secret out of the file (ADR-0053); the screen confirms first. */
+  onSecureNow: (pointer: string) => void;
+  /** Why securing is unavailable right now, or `null`. */
+  secureBlocked: string | null;
+  /** Pointers holding a typed secret or reference not saved yet. */
+  pending: ReadonlySet<string>;
+  /** Drops the typed secret or reference waiting for `pointer`. */
+  onForget: (pointer: string) => void;
 }
 
 /**
@@ -113,6 +123,10 @@ export function CredentialsEditor({
   onProblem,
   onCopySecret,
   copyBlocked,
+  onSecureNow,
+  secureBlocked,
+  pending,
+  onForget,
 }: {
   doc: Doc;
   disabled: boolean;
@@ -120,11 +134,15 @@ export function CredentialsEditor({
   onProblem: (pointer: string, problem: string | null) => void;
   onCopySecret: (pointer: string) => Promise<boolean>;
   copyBlocked: string | null;
+  onSecureNow: (pointer: string) => void;
+  secureBlocked: string | null;
+  pending: ReadonlySet<string>;
+  onForget: (pointer: string) => void;
 }) {
   const [query, setQuery] = useState('');
   const [bulk, setBulk] = useState<Bulk | null>(null);
   const hits = searchHits(doc, query);
-  const ctx: Ctx = { doc, disabled, hits, bulk, onEdit, onProblem, onCopySecret, copyBlocked };
+  const ctx: Ctx = { doc, disabled, hits, bulk, onEdit, onProblem, onCopySecret, copyBlocked, onSecureNow, secureBlocked, pending, onForget };
   const empty = hits !== null && hits.size === 0;
   const hasGroups = Object.entries(doc).some(([key, value]) => !isReserved(key) && isContainer(value));
   // A search opens every group it matches, so neither action would change what is drawn.
@@ -286,7 +304,7 @@ function Field({ ctx, path, value, stripe = 'even' }: { ctx: Ctx; path: Path; va
             path={path}
             id={id}
             isSet={isSecretLeaf(value) ? value.set : value !== '' && value !== null}
-            stored={isSecretLeaf(value) && value.set}
+            leaf={isSecretLeaf(value) ? value : null}
           />
         ) : typeof value === 'boolean' ? (
           <Switch
@@ -345,52 +363,179 @@ function TextField({ ctx, path, id, value }: { ctx: Ctx; path: Path; id: string;
   );
 }
 
+/** Backends and managers that keep a value out of the file, encrypted (as opposed to `insecure`). */
+const SECURE_STORES: ReadonlySet<string> = new Set(['keychain', 'dpapi', 'op', 'bw']);
+
+/** What `stored` says about where a secret lives, in words; `null` when the view did not say. */
+function storedLabel(stored: string | null | undefined): string | null {
+  if (stored === undefined || stored === null) return null;
+  if (stored === CREDENTIALS_STORED_PENDING) return 'Will be stored outside the file when you save';
+  if (stored === 'op') return 'Stored in 1Password';
+  if (stored === 'bw') return 'Stored in Bitwarden';
+  if (stored === 'insecure') return 'Stored outside the file, without encryption';
+  if (stored === 'invalid') return 'Malformed reference — the value cannot be read';
+  if (SECURE_STORES.has(stored)) return 'Stored securely';
+  return 'Stored outside the file';
+}
+
+/** Whether the secret is a list item: a list has no `$secrets`, so the CLI refuses to store a typed value there. */
+const inList = (path: Path): boolean => typeof path[path.length - 1] === 'number';
+
 /**
- * Write-only: the stored value is never shown. Typing is offered only after Replace (or Set).
- * `stored`: the value is in the file as loaded, so it can be copied (ADR-0046).
+ * Write-only: the stored value is never shown. Typing is offered only after Replace (or Set), and
+ * what is typed is stored by the CLI, never written to the file (ADR-0053). A password-manager
+ * reference can be typed instead; it is not itself a secret. `leaf`: the redacted value, when
+ * there is one. A value that can be copied is one held in the file as loaded (ADR-0046).
  */
-function SecretField({ ctx, path, id, isSet, stored }: { ctx: Ctx; path: Path; id: string; isSet: boolean; stored: boolean }) {
-  const [editing, setEditing] = useState(false);
+function SecretField({ ctx, path, id, isSet, leaf }: { ctx: Ctx; path: Path; id: string; isSet: boolean; leaf: CredentialsSecretLeaf | null }) {
+  const [mode, setMode] = useState<'view' | 'value' | 'reference'>('view');
   const [text, setText] = useState('');
-  if (editing) {
+  const pointer = pointerOf(path);
+  const stored = leaf?.stored;
+  const label = storedLabel(stored);
+  const plaintext = isSet && stored === null;
+  const listItem = inList(path);
+  const pending = ctx.pending.has(pointer);
+  const hadPending = useRef(false);
+  // Set just before this field drops its own pending write, so the effect below can tell that
+  // from a Discard, a save or a reload dropping it from outside.
+  const selfForget = useRef(false);
+  const forgetOwn = (): void => {
+    if (pending) selfForget.current = true;
+    ctx.onForget(pointer);
+  };
+  const finish = (): void => {
+    ctx.onProblem(pointer, null);
+    forgetOwn();
+    setMode('view');
+    setText('');
+  };
+  // The pending write went away from outside (Discard, a save, a reload): leave the entry form.
+  useEffect(() => {
+    if (hadPending.current && !pending && !selfForget.current) {
+      ctx.onProblem(pointer, null);
+      setMode('view');
+      setText('');
+    }
+    if (!pending) selfForget.current = false;
+    hadPending.current = pending;
+  }, [pending, pointer, ctx]);
+  if (mode !== 'view') {
+    const reference = mode === 'reference';
+    const problem = text === '' ? null : reference ? referenceProblem(text) : secretValueProblem(text);
     return (
-      <div className="flex flex-wrap gap-2">
-        <Input
-          id={id}
-          type="password"
-          value={text}
-          autoFocus
-          disabled={ctx.disabled}
-          autoComplete="new-password"
-          spellCheck={false}
-          placeholder={isSet ? 'Enter the new value' : 'Enter a value'}
-          aria-labelledby={`${id}-name`}
-          className="min-w-0 flex-1 font-mono"
-          onChange={(event) => {
-            setText(event.target.value);
-            ctx.onEdit({ kind: 'value', path, value: event.target.value });
-          }}
-        />
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            id={id}
+            type={reference ? 'text' : 'password'}
+            value={text}
+            autoFocus
+            disabled={ctx.disabled}
+            autoComplete={reference ? 'off' : 'new-password'}
+            spellCheck={false}
+            placeholder={reference ? 'op://vault/item/field or bw://item-uuid/field' : isSet ? 'Enter the new value' : 'Enter a value'}
+            aria-labelledby={`${id}-name`}
+            aria-invalid={problem !== null || undefined}
+            aria-describedby={problem !== null ? `${id}-error` : undefined}
+            className="min-w-0 flex-1 font-mono"
+            onChange={(event) => {
+              const next = event.target.value;
+              setText(next);
+              // Whatever the field holds that is not valid sends nothing: the pending write is dropped.
+              const invalid = next === '' ? 'Enter a value' : reference ? referenceProblem(next) : secretValueProblem(next);
+              ctx.onProblem(pointer, invalid);
+              if (invalid !== null) forgetOwn();
+              else ctx.onEdit(reference ? { kind: 'reference', path, ref: next } : { kind: 'secret-value', path, value: next });
+            }}
+          />
+          {!(reference && listItem) ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={ctx.disabled}
+              aria-label={reference ? `Type a value for ${labelOf(path)} instead` : `Use a password manager reference for ${labelOf(path)}`}
+              onClick={() => {
+                finish();
+                setMode(reference ? 'value' : 'reference');
+              }}
+            >
+              {reference ? 'Type a value' : 'Use password manager reference'}
+            </Button>
+          ) : null}
+          <Button type="button" variant="ghost" size="sm" disabled={ctx.disabled} aria-label={`Cancel editing ${labelOf(path)}`} onClick={finish}>
+            Cancel
+          </Button>
+        </div>
+        <p id={`${id}-error`} aria-live="polite" className="text-xs text-destructive">
+          {problem}
+        </p>
+        {!reference ? <p className="text-xs text-muted-foreground">Stored outside the file when you save, not written in it.</p> : null}
       </div>
     );
   }
+  const whySecure = ctx.secureBlocked;
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="flex items-center gap-1.5 text-sm">
-        <KeyRound className="size-4 text-muted-foreground" aria-hidden="true" />
-        {isSet ? 'Set' : 'Not set'}
-      </span>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={ctx.disabled}
-        aria-label={`${isSet ? 'Replace' : 'Set'} ${labelOf(path)}`}
-        onClick={() => setEditing(true)}
-      >
-        {isSet ? 'Replace' : 'Set'}
-      </Button>
-      {stored ? <CopySecret ctx={ctx} path={path} /> : null}
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="flex items-center gap-1.5 text-sm">
+          {label !== null ? (
+            <ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" />
+          ) : (
+            <KeyRound className="size-4 text-muted-foreground" aria-hidden="true" />
+          )}
+          {label ?? (isSet ? 'Set' : 'Not set')}
+        </span>
+        {!listItem ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={ctx.disabled}
+            aria-label={`${isSet ? 'Replace' : 'Set'} ${labelOf(path)}`}
+            onClick={() => setMode('value')}
+          >
+            {isSet ? 'Replace' : 'Set'}
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={ctx.disabled}
+          aria-label={`Use a password manager reference for ${labelOf(path)}`}
+          onClick={() => setMode('reference')}
+        >
+          Use password manager reference
+        </Button>
+        {isSet && leaf !== null && stored !== CREDENTIALS_STORED_PENDING && stored !== 'invalid' ? <CopySecret ctx={ctx} path={path} /> : null}
+      </div>
+      {plaintext ? (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-destructive">
+          <TriangleAlert className="size-3.5" aria-hidden="true" />
+          <span>Stored as plain text in the file.</span>
+          {!listItem ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              disabled={ctx.disabled || whySecure !== null}
+              aria-describedby={whySecure !== null ? `${id}-secure-why` : undefined}
+              aria-label={`Secure ${labelOf(path)} now`}
+              onClick={() => ctx.onSecureNow(pointer)}
+            >
+              Secure now
+            </Button>
+          ) : null}
+          {!listItem && whySecure !== null ? (
+            <span id={`${id}-secure-why`} className="text-muted-foreground">
+              {whySecure}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -428,6 +573,24 @@ function SecretToggle({ ctx, path, value, markedHere }: { ctx: Ctx; path: Path; 
   const [confirm, setConfirm] = useState(false);
   if (typeof path[path.length - 1] !== 'string') return null;
   const looksSecret = isSecretLeaf(value) && !value.marked && !markedHere;
+  // A value held outside the file is always a secret: unmarking would only expose the reference.
+  if (isSecretLeaf(value) && typeof value.stored === 'string') {
+    const stored = value.stored;
+    const words = storedLabel(stored) ?? 'Stored outside the file';
+    const hint = SECURE_STORES.has(stored)
+      ? 'Stored outside the file: always a secret'
+      : stored === 'invalid'
+        ? 'Malformed reference: replace it'
+        : stored === CREDENTIALS_STORED_PENDING
+          ? 'Moves out of the file when you save'
+          : 'Stored without encryption: always a secret';
+    return (
+      <IconAction label={`Secret: ${labelOf(path)}. ${words}`} hint={hint} disabled onClick={() => undefined}>
+        <Lock aria-hidden="true" />
+        Secret
+      </IconAction>
+    );
+  }
   if (markedHere) {
     return (
       <>
@@ -682,15 +845,21 @@ function AddControls({ ctx, parent }: { ctx: Ctx; parent: Path }) {
     );
   }
   const edit: Edit = { kind: 'add', parent, key: isList ? null : name, value: adding === 'group' ? {} : value };
-  const problem = editProblem(ctx.doc, edit);
+  const problem =
+    secret && !isList && adding === 'field' && value !== '' ? (secretValueProblem(value) ?? editProblem(ctx.doc, edit)) : editProblem(ctx.doc, edit);
   return (
     <form
       className="flex flex-wrap items-end gap-2 rounded-md border border-dashed p-2"
       onSubmit={(event) => {
         event.preventDefault();
         if (problem !== null) return;
-        ctx.onEdit(edit);
-        if (secret && !isList) ctx.onEdit({ kind: 'secret', path: [...parent, name.trim()], marked: true });
+        if (secret && !isList && adding === 'field' && value !== '') {
+          // A typed secret is stored by the CLI, which also marks it (ADR-0053).
+          ctx.onEdit({ kind: 'secret-value', path: [...parent, name.trim()], value });
+        } else {
+          ctx.onEdit(edit);
+          if (secret && !isList) ctx.onEdit({ kind: 'secret', path: [...parent, name.trim()], marked: true });
+        }
         reset();
       }}
     >
@@ -731,7 +900,7 @@ function AddControls({ ctx, parent }: { ctx: Ctx; parent: Path }) {
         Cancel
       </Button>
       {problem !== null && name !== '' ? (
-        <p role="alert" className="w-full text-xs text-destructive">
+        <p aria-live="polite" className="w-full text-xs text-destructive">
           {problem}
         </p>
       ) : null}

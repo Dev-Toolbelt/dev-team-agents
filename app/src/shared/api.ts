@@ -898,7 +898,17 @@ export interface CredentialsSecretLeaf {
   readonly secret: true;
   readonly set: boolean;
   readonly marked: boolean;
+  /**
+   * Where the value lives (ADR-0053): a backend name (`keychain`, `dpapi`, `insecure`), `op` or
+   * `bw` for a password-manager reference, `invalid` for a malformed `$ref`, `null` for a
+   * plaintext value in the file. Absent from a CLI that predates ADR-0053, which the screen
+   * reads as "unknown", never as plaintext.
+   */
+  readonly stored?: string | null;
 }
+
+/** `stored` of a leaf the working copy shows for a `set-secret` not saved yet. */
+export const CREDENTIALS_STORED_PENDING = 'pending';
 
 /** The reserved keys of the local credentials file (ADR-0024); every other key is the user's own. */
 export const CREDENTIALS_SECRETS_KEY = '$secrets';
@@ -910,8 +920,34 @@ export const CREDENTIALS_PRODUCTION_KEY = '$production';
  */
 export type CredentialsPatchOp =
   | { readonly op: 'set'; readonly pointer: string; readonly value: unknown }
+  /** ADR-0053: the CLI moves `value` into the OS secret store and writes a `{"$ref"}` leaf in its place. */
+  | { readonly op: 'set-secret'; readonly pointer: string; readonly value: string }
   | { readonly op: 'unset'; readonly pointer: string }
   | { readonly op: 'move'; readonly from: string; readonly pointer: string };
+
+/** `details.reason` of a `patch` refused because a plaintext secret was set inside `$production` (ADR-0053 § 4). */
+export const CREDENTIALS_PLAINTEXT_IN_PRODUCTION = 'plaintext-in-production';
+/** `details.reason` of a `set-secret` refused because only the `insecure` backend exists, inside `$production` (§ 6). */
+export const CREDENTIALS_INSECURE_IN_PRODUCTION = 'insecure-backend-in-production';
+
+/** One plaintext secret `cred local secure` found (ADR-0053 § 5). The value is never part of it. */
+export interface CredentialsPlaintextSecret {
+  readonly pointer: string;
+  readonly production: boolean;
+}
+
+/** `cred local secure`: what it found, or, with `--apply`, what it moved. */
+export interface CredentialsSecureReport {
+  readonly path: string;
+  readonly secrets: readonly CredentialsPlaintextSecret[];
+  /** The file's hash, in a listing and after `--apply` alike; never null. */
+  readonly hash: string;
+}
+
+/** Most pointers one `credentialsLocalSecureApply` may name; a larger listing is secured in rounds. */
+export const CREDENTIALS_MAX_SECURE_POINTERS = 256;
+/** The most bytes (UTF-8) a secret value may hold: the keychain cap (ADR-0010). */
+export const CREDENTIALS_MAX_SECRET_BYTES = 3072;
 
 /** How long a copied secret stays on the clipboard before the app clears it (ADR-0046). */
 export const CREDENTIALS_CLIPBOARD_CLEAR_SECONDS = 30;
@@ -1424,6 +1460,16 @@ export interface DevteamBridge {
     ops: readonly CredentialsPatchOp[],
   ) => Promise<OperationResult<CredentialsLocalView>>;
   /**
+   * ADR-0053 § 5. `credentialsLocalSecureList` names every plaintext secret and changes nothing;
+   * `credentialsLocalSecureApply` moves them (all, or those at `pointers`) into the secret store.
+   * Neither carries a value.
+   */
+  readonly credentialsLocalSecureList: (projectId: ProjectId) => Promise<OperationResult<CredentialsSecureReport>>;
+  readonly credentialsLocalSecureApply: (
+    projectId: ProjectId,
+    pointers: readonly string[],
+  ) => Promise<OperationResult<CredentialsSecureReport>>;
+  /**
    * Copy one hidden value to the clipboard (ADR-0046). The main process reads it through the CLI
    * and writes the clipboard itself; the answer carries no value. The clipboard is cleared after
    * `clearsInSeconds` unless it changed meanwhile. Refused like a patch on a stale `expectHash`.
@@ -1934,6 +1980,8 @@ export const CHANNELS = {
   credentialsLocalInit: 'devteam:credentials-local-init',
   credentialsLocalPatch: 'devteam:credentials-local-patch',
   credentialsLocalCopySecret: 'devteam:credentials-local-copy-secret',
+  credentialsLocalSecureList: 'devteam:credentials-local-secure-list',
+  credentialsLocalSecureApply: 'devteam:credentials-local-secure-apply',
   notificationFeed: 'devteam:notification-feed',
   markNotificationsRead: 'devteam:mark-notifications-read',
   setNotificationsPaused: 'devteam:set-notifications-paused',

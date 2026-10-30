@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileWarning, KeyRound, RefreshCw } from 'lucide-react';
+import { FileWarning, KeyRound, RefreshCw, ShieldCheck } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -7,9 +7,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import {
   CREDENTIALS_ALREADY_EXISTS,
   CREDENTIALS_HASH_CONFLICT,
+  CREDENTIALS_INSECURE_IN_PRODUCTION,
+  CREDENTIALS_MAX_SECURE_POINTERS,
+  CREDENTIALS_PLAINTEXT_IN_PRODUCTION,
   CREDENTIALS_SAVED_UNREADABLE,
   type CredentialsLocalView,
   type CredentialsPatchOp,
+  type CredentialsPlaintextSecret,
   type EnvironmentReport,
   type OperationResult,
   type ProjectRecord,
@@ -22,13 +26,67 @@ import { unreachable } from '../useOperation.js';
 import { WriteButton } from '../WriteButton.js';
 import { CREDENTIALS_COMMANDS, isWithheld } from '../writeActionGating.js';
 import { CredentialsEditor } from './CredentialsEditor.js';
-import { MAX_OPS, applyOps, opsFor, record, type Edit } from './document.js';
+import {
+  MAX_OPS,
+  applyOps,
+  forgetSecretWrite,
+  forgetSecretWritesUnder,
+  opsFor,
+  pendingSecretPointers,
+  plaintextSecrets,
+  pointerOf,
+  record,
+  valueAt,
+  type Edit,
+} from './document.js';
 
 type Failure = Extract<OperationResult<never>, { ok: false }>;
 
 /** Why a save is refused because the file moved under the form; the one failure that has its own words. */
 export function isHashConflict(failure: Failure): boolean {
   return failure.kind === 'conflict' && failure.reason === CREDENTIALS_HASH_CONFLICT;
+}
+
+const REFUSALS: Readonly<Record<string, { title: string; body: string }>> = {
+  [CREDENTIALS_PLAINTEXT_IN_PRODUCTION]: {
+    title: 'Production secrets cannot be plain text',
+    body: 'A group marked Production does not accept a secret written in the file. Enter the value with Set or Replace so it is stored securely, or use a password manager reference.',
+  },
+  [CREDENTIALS_INSECURE_IN_PRODUCTION]: {
+    title: 'No secure store on this machine',
+    body: 'This machine has no keychain to hold production secrets, and the unencrypted fallback is refused for them. Use a password manager reference (op:// or bw://) instead, or save the secret from a machine with a keychain.',
+  },
+  'tracked-file': {
+    title: 'The credentials file is tracked by git',
+    body: 'References are not resolved while credentials.local.json is tracked by git, so a value could leak into the repository. Stop tracking the file (git rm --cached) and try again.',
+  },
+  'tracked-file-unknown': {
+    title: 'Git could not say whether the file is tracked',
+    body: 'References are not resolved until git can confirm credentials.local.json is not tracked. Check that this folder is a working git repository and try again.',
+  },
+  'invalid-ref': {
+    title: 'A reference is malformed',
+    body: 'Use op://vault/item/field for 1Password or bw://item-uuid/field for Bitwarden.',
+  },
+  'value-too-large': {
+    title: 'A secret is too large',
+    body: 'A secret holds at most 3072 bytes. Shorten it, or keep it in a password manager and use a reference.',
+  },
+  'invalid-secret-value': {
+    title: 'A secret value is not valid',
+    body: 'A secret cannot contain a line break or NUL. Enter it again without them.',
+  },
+};
+
+/** The words for a refusal that has its own reason (ADR-0053), or `null`. */
+export function productionRefusal(failure: Failure): { title: string; body: string } | null {
+  return failure.reason !== undefined ? (REFUSALS[failure.reason] ?? null) : null;
+}
+
+/** A confirmation the user must give before plaintext secrets move out of the file. */
+interface SecureRequest {
+  /** Exactly what is sent: the pointers the listing named, or the one field asked about. */
+  readonly found: readonly CredentialsPlaintextSecret[];
 }
 
 /**
@@ -65,6 +123,10 @@ export function ProjectCredentials({
   // The file moved under the form: nothing can be saved against this hash until it is re-read.
   const [stale, setStale] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
+  const [secureRequest, setSecureRequest] = useState<SecureRequest | null>(null);
+  const [securing, setSecuring] = useState(false);
+  const [secureNote, setSecureNote] = useState<string | null>(null);
+  const [secureFailure, setSecureFailure] = useState<Failure | null>(null);
   const request = useRef(0);
   const changesNow = useRef(0);
   const copying = useRef(false);
@@ -108,7 +170,13 @@ export function ProjectCredentials({
     (edit: Edit) => {
       if (data === null) return;
       // Functional: two edits in one event (add a field, then mark it secret) each see the first.
-      setOps((previous) => record(previous, ...opsFor(applyOps(data, previous), edit)));
+      setOps((previous) => {
+        if (edit.kind !== 'remove') return record(previous, ...opsFor(applyOps(data, previous), edit));
+        // Removing a field that only exists as an unsaved secret: forget that write, there is nothing on disk to unset.
+        const kept = forgetSecretWritesUnder(previous, pointerOf(edit.path));
+        if (kept.length === previous.length) return record(previous, ...opsFor(applyOps(data, previous), edit));
+        return valueAt(applyOps(data, kept), edit.path) === undefined ? kept : record(kept, ...opsFor(applyOps(data, kept), edit));
+      });
     },
     [data],
   );
@@ -208,15 +276,88 @@ export function ProjectCredentials({
       return true;
     }
     if (isHashConflict(result)) setStale(true);
-    toastFailure(result, 'credentials-copy');
+    const refusal = productionRefusal(result);
+    toastFailure(refusal !== null ? { ...result, message: `${refusal.title}. ${refusal.body}` } : result, 'credentials-copy');
     return false;
   }
   const copyBlocked =
     stale ? 'The file changed on disk: reload to copy' : report.changes > 0 ? 'Save or discard your edits to copy a value' : null;
 
+  /** List what would move (the CLI is the judge of what looks secret), then ask. Nothing moves yet. */
+  async function reviewPlaintext(): Promise<void> {
+    if (secureBlocked !== null || securing) return;
+    setSecuring(true);
+    setSecureFailure(null);
+    setSecureNote(null);
+    const result = await window.devteam.credentialsLocalSecureList(projectId).catch(unreachable);
+    setSecuring(false);
+    if (!result.ok) {
+      setSecureFailure(result);
+      return;
+    }
+    if (result.data.secrets.length === 0) {
+      toastResult(result, 'No plain text secrets in the file', 'credentials-secure');
+      return;
+    }
+    if (result.data.secrets.length > CREDENTIALS_MAX_SECURE_POINTERS) {
+      setSecureNote(
+        `${result.data.secrets.length} secrets are in plain text. Secure at most ${CREDENTIALS_MAX_SECURE_POINTERS} at a time: use Secure now on some of them first.`,
+      );
+      return;
+    }
+    setSecureRequest({ found: result.data.secrets });
+  }
+
+  /** One field's "Secure now": the confirmation names just that field. */
+  function secureOne(pointer: string): void {
+    if (secureBlocked !== null) return;
+    setSecureFailure(null);
+    setSecureNote(null);
+    setSecureRequest({ found: plaintext.filter((entry) => entry.pointer === pointer) });
+  }
+
+  function closeSecure(): void {
+    setSecureRequest(null);
+    setSecureFailure(null);
+  }
+
+  async function applySecure(): Promise<void> {
+    if (secureRequest === null || secureRequest.found.length === 0 || secureGate.withheld) return;
+    supersedeLoads();
+    setSecuring(true);
+    setSecureFailure(null);
+    const result = await window.devteam
+      .credentialsLocalSecureApply(projectId, secureRequest.found.map((entry) => entry.pointer))
+      .catch(unreachable);
+    setSecuring(false);
+    if (result.ok) {
+      setSecureRequest(null);
+      setSecureNote(null);
+      toastResult(result, 'Moved the secrets out of the file', 'credentials-secure');
+      await load();
+    } else {
+      setSecureFailure(result);
+    }
+  }
+
   const gate = environment === null
     ? { withheld: true as const, reason: 'the app has not finished checking its own preconditions' }
     : isWithheld(environment.withheld, CREDENTIALS_COMMANDS.patch);
+  const plaintext = useMemo(() => (doc !== null ? plaintextSecrets(doc) : []), [doc]);
+  const secureGate = environment === null
+    ? { withheld: true as const, reason: 'the app has not finished checking its own preconditions' }
+    : isWithheld(environment.withheld, CREDENTIALS_COMMANDS.secure);
+  const secureBlocked = secureGate.withheld
+    ? `Securing is unavailable: ${secureGate.reason}`
+    : stale
+      ? 'The file changed on disk: reload first'
+      : report.changes > 0
+        ? 'Save or discard your edits first'
+        : null;
+  const pendingSecrets = useMemo(() => pendingSecretPointers(ops), [ops]);
+  const onForget = useCallback((pointer: string) => setOps((previous) => forgetSecretWrite(previous, pointer)), []);
+  const saveRefusal = saveFailure !== null ? productionRefusal(saveFailure) : null;
+  const secureRefusal = secureFailure !== null ? productionRefusal(secureFailure) : null;
   const hasProblems = Object.keys(report.problems).length > 0;
   const busy = saving || creating;
   const reloading = loading && view !== null;
@@ -291,6 +432,46 @@ export function ProjectCredentials({
           <p role="status" aria-live="polite" className="sr-only">
             {report.changes > 0 ? status : ''}
           </p>
+          {plaintext.length > 0 ? (
+            <Alert role="group" aria-label="Plain text secrets" variant={plaintext.some((entry) => entry.production) ? 'destructive' : 'default'}>
+              <ShieldCheck />
+              <AlertTitle>
+                {plaintext.length} secret{plaintext.length === 1 ? ' is' : 's are'} stored as plain text in this file
+              </AlertTitle>
+              <AlertDescription>
+                <p>
+                  Anyone or anything that can read the file can read them
+                  {plaintext.some((entry) => entry.production) ? ', and some belong to a Production group' : ''}. Move them out of the file; the
+                  file keeps a reference in their place.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  disabled={securing || busy || reloading || secureBlocked !== null}
+                  aria-describedby={secureBlocked !== null ? 'credentials-secure-why' : undefined}
+                  onClick={() => void reviewPlaintext()}
+                >
+                  {securing ? 'Checking…' : 'Secure plaintext secrets'}
+                </Button>
+                {secureBlocked !== null ? (
+                  <p id="credentials-secure-why" className="mt-1 text-xs text-muted-foreground">
+                    {secureBlocked}
+                  </p>
+                ) : null}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {secureNote !== null ? (
+            <Alert variant="destructive">
+              <FileWarning />
+              <AlertTitle>Too many to move at once</AlertTitle>
+              <AlertDescription>
+                <p>{secureNote}</p>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {secureFailure !== null && secureRequest === null ? <Problem problem={secureFailure} /> : null}
           <fieldset disabled={reloading || stale} className="m-0 min-w-0 border-0 p-0" aria-busy={reloading || undefined}>
             {doc !== null ? (
               <CredentialsEditor
@@ -300,6 +481,10 @@ export function ProjectCredentials({
                 onProblem={onProblem}
                 onCopySecret={copySecret}
                 copyBlocked={copyBlocked}
+                onSecureNow={secureOne}
+                secureBlocked={secureBlocked}
+                pending={pendingSecrets}
+                onForget={onForget}
               />
             ) : null}
           </fieldset>
@@ -326,6 +511,14 @@ export function ProjectCredentials({
               <p>Another process is using it right now. Your edits are kept: try saving again in a moment.</p>
             </AlertDescription>
           </Alert>
+        ) : saveRefusal !== null ? (
+          <Alert variant="destructive">
+            <FileWarning />
+            <AlertTitle>{saveRefusal.title}</AlertTitle>
+            <AlertDescription>
+              <p>{saveRefusal.body} Your edits are kept.</p>
+            </AlertDescription>
+          </Alert>
         ) : (
           <Problem problem={saveFailure} />
         )
@@ -348,6 +541,47 @@ export function ProjectCredentials({
           onSave={() => void save()}
         />
       ) : null}
+
+      <Dialog open={secureRequest !== null} onOpenChange={(open) => (open || securing ? undefined : closeSecure())}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move {secureRequest?.found.length ?? 0} secret{secureRequest?.found.length === 1 ? '' : 's'} out of the file?</DialogTitle>
+            <DialogDescription>
+              Each value is stored outside the file and the file keeps a reference in its place. Nothing else in
+              the file changes, and the values are not shown.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-48 space-y-1 overflow-auto text-sm" role="list">
+            {secureRequest?.found.map((entry) => (
+              <li key={entry.pointer} className="flex items-center justify-between gap-2">
+                <span className="break-all font-mono">{entry.pointer}</span>
+                {entry.production ? <span className="text-xs text-destructive">Production</span> : null}
+              </li>
+            ))}
+          </ul>
+          {secureFailure !== null ? (
+            secureRefusal !== null ? (
+              <Alert variant="destructive">
+                <FileWarning />
+                <AlertTitle>{secureRefusal.title}</AlertTitle>
+                <AlertDescription>
+                  <p>{secureRefusal.body} The file was not changed.</p>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Problem problem={secureFailure} />
+            )
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" disabled={securing} onClick={closeSecure}>
+              Cancel
+            </Button>
+            <Button disabled={securing || secureGate.withheld} onClick={() => void applySecure()}>
+              {securing ? 'Moving…' : 'Move out of the file'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmReload} onOpenChange={setConfirmReload}>
         <DialogContent>
