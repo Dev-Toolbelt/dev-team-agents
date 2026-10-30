@@ -228,7 +228,7 @@ Os comandos de implementação também recebem uma tarefa de sprint (`/devteam:b
 | `/devteam:spec` | Spec retroativa — escreve a spec de uma feature que já existe a partir do código, dos testes e dos docs; o qa-specialist confere cada cenário com a feature rodando, os testes existentes recebem o token do cenário e você decide cada divergência (descrever como está construído, ou manter o comportamento pretendido e corrigi-lo) |
 | `/devteam:design` | Design UI/UX — ui-ux-designer |
 | `/devteam:relayout` | Refazer o layout de uma tela existente para corresponder a referências visuais — ui-ux-designer + frontend-developer, gate obrigatório de referência/tela alvo, worktree isolada, review automática pós-execução |
-| `/devteam:seo` | Quality gate de SEO — seo-specialist (técnico, on-page, Core Web Vitals, dados estruturados, GEO/LLM) |
+| `/devteam:seo` | Quality gate de SEO — seo-specialist (técnico, on-page, Core Web Vitals, dados estruturados, busca por IA (AEO/GEO)) |
 | `/devteam:fix` | Correção de bug — desenvolvedor(es) relevante(s) → test-specialist |
 | `/devteam:refactor` | Refatoração — software-architect planeja, desenvolvedor(es) executam |
 | `/devteam:architect` | Decisões de arquitetura e ADRs — software-architect |
@@ -291,7 +291,7 @@ O time tem **18 agentes** cobrindo todo o ciclo de vida. Detalhes completos na [
 | `frontend-developer` | Código client-side — telas, componentes, fluxos de UI |
 | `mobile-developer` | Features mobile — React Native, Expo, Flutter, iOS/Android nativo |
 | `ui-ux-designer` | Design system, fluxos de UX e decisões visuais |
-| `seo-specialist` | Quality gate de SEO — técnico, on-page, Core Web Vitals, dados estruturados, GEO/LLM |
+| `seo-specialist` | Quality gate de SEO — técnico, on-page, Core Web Vitals, dados estruturados, busca por IA (AEO/GEO) |
 | `devops-specialist` | CI/CD, Docker, infraestrutura e scripts de deploy |
 
 **Qualidade & revisão**

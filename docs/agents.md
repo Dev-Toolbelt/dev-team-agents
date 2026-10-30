@@ -22,7 +22,7 @@ Every agent presents a plan for approval before executing anything. You review, 
 | `frontend-developer` | Client-side implementation (SPA + templates) | DEVELOPMENT | `frontend` |
 | `mobile-developer` | Mobile implementation (React Native, Expo, Flutter, native iOS/Android) | DEVELOPMENT | `backend-exec` |
 | `ui-ux-designer` | Design system, visual consistency, UX (dual mode) | DESIGN + DEVELOPMENT | `frontend` |
-| `seo-specialist` | Technical/on-page SEO, Core Web Vitals, structured data, GEO/LLM readiness | DEVELOPMENT + QUALITY GATE | `frontend` |
+| `seo-specialist` | Technical/on-page SEO, Core Web Vitals, structured data, AI search (AEO/GEO) | DEVELOPMENT + QUALITY GATE | `frontend` |
 | `database-specialist` | Schema design, query optimization, DB selection | DEVELOPMENT | `backend-exec` |
 | `devops-specialist` | Docker, CI/CD, VPS, cloud deployment | DEVELOPMENT | `backend-exec` |
 | `backend-test-specialist` | Backend test coverage (conditional) | DEVELOPMENT | `repetitive` |
@@ -64,7 +64,7 @@ Implements mobile features across React Native, Expo, Flutter, and native iOS/An
 Operates in two modes: **design mode** (produces design system docs, component specs, UX flows) and **development mode** (audits implementation against design system and web interface guidelines). Conditional — spawned when the task involves visual or UX decisions.
 
 ### `seo-specialist`
-Runs the SEO quality gate: technical SEO (sitemap, robots.txt, canonicals, redirects), on-page SEO (titles, meta descriptions, Open Graph verified as the `facebookexternalhit` crawler sees it), Core Web Vitals, structured data (schema.org/JSON-LD), and GEO — SEO for LLMs/AI search (`llms.txt`, answer-first structure, semantic HTML). Mandatory gate for public sites, landing pages, e-commerce, and blogs; advisory otherwise. Conditional — spawned by `/devteam:frontend` and `/devteam:fullstack` when the project matches a Detection Signal, or directly via `/devteam:seo`.
+Runs the SEO quality gate: technical SEO (sitemap, robots.txt, canonicals, redirects), on-page SEO (titles, meta descriptions, Open Graph verified as the `facebookexternalhit` crawler sees it), Core Web Vitals, structured data (schema.org/JSON-LD), and AI search (AEO/GEO) treated as ordinary SEO per Google's AI optimization guide — snippet eligibility, people-first content, semantic HTML, the generative AI performance report — without practices Google calls unnecessary for Search, such as `llms.txt` or chunking. Mandatory gate for public sites, landing pages, e-commerce, and blogs; advisory otherwise. Conditional — spawned by `/devteam:frontend` and `/devteam:fullstack` when the project matches a Detection Signal, or directly via `/devteam:seo`.
 
 ### `database-specialist`
 Handles schema design, query optimization, index strategy, and database selection. Produces migration files and zero-downtime migration plans. Conditional — spawned when the task touches data models or database infrastructure.

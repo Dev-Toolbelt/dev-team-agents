@@ -22,7 +22,7 @@ Cada agente apresenta um plano para aprovação antes de executar qualquer coisa
 | `frontend-developer` | Implementação client-side (SPA + templates) | DEVELOPMENT | `frontend` |
 | `mobile-developer` | Implementação mobile (React Native, Expo, Flutter, iOS/Android nativo) | DEVELOPMENT | `backend-exec` |
 | `ui-ux-designer` | Design system, consistência visual, UX (modo duplo) | DESIGN + DEVELOPMENT | `frontend` |
-| `seo-specialist` | SEO técnico/on-page, Core Web Vitals, dados estruturados, GEO/LLM | DEVELOPMENT + QUALITY GATE | `frontend` |
+| `seo-specialist` | SEO técnico/on-page, Core Web Vitals, dados estruturados, busca por IA (AEO/GEO) | DEVELOPMENT + QUALITY GATE | `frontend` |
 | `database-specialist` | Schema design, otimização de queries, seleção de banco | DEVELOPMENT | `backend-exec` |
 | `devops-specialist` | Docker, CI/CD, VPS, deploy em nuvem | DEVELOPMENT | `backend-exec` |
 | `backend-test-specialist` | Cobertura de testes backend (condicional) | DEVELOPMENT | `repetitive` |
@@ -64,7 +64,7 @@ Implementa features mobile em React Native, Expo, Flutter e iOS/Android nativo. 
 Opera em dois modos: **modo design** (produz docs de design system, specs de componentes, fluxos de UX) e **modo development** (audita implementação contra o design system e guidelines de interface web). Condicional — spawned quando a tarefa envolve decisões visuais ou de UX.
 
 ### `seo-specialist`
-Executa o quality gate de SEO: SEO técnico (sitemap, robots.txt, canonicals, redirects), SEO on-page (títulos, meta descriptions, Open Graph verificado como o crawler `facebookexternalhit` o enxerga), Core Web Vitals, dados estruturados (schema.org/JSON-LD) e GEO — SEO para LLMs/busca por IA (`llms.txt`, estrutura resposta-primeiro, HTML semântico). Gate obrigatório para sites públicos, landing pages, e-commerce e blogs; consultivo nos demais casos. Condicional — spawned por `/devteam:frontend` e `/devteam:fullstack` quando o projeto casa com um Detection Signal, ou diretamente via `/devteam:seo`.
+Executa o quality gate de SEO: SEO técnico (sitemap, robots.txt, canonicals, redirects), SEO on-page (títulos, meta descriptions, Open Graph verificado como o crawler `facebookexternalhit` o enxerga), Core Web Vitals, dados estruturados (schema.org/JSON-LD) e busca por IA (AEO/GEO) tratada como SEO comum, conforme o guia de otimização para IA do Google — elegibilidade para snippet, conteúdo pensado nas pessoas, HTML semântico, o relatório de performance de IA generativa — sem práticas que o Google considera desnecessárias para a Pesquisa, como `llms.txt` ou chunking. Gate obrigatório para sites públicos, landing pages, e-commerce e blogs; consultivo nos demais casos. Condicional — spawned por `/devteam:frontend` e `/devteam:fullstack` quando o projeto casa com um Detection Signal, ou diretamente via `/devteam:seo`.
 
 ### `database-specialist`
 Responsável por schema design, otimização de queries, estratégia de índices e seleção de banco de dados. Produz arquivos de migration e planos de migração zero-downtime. Condicional — spawned quando a tarefa toca modelos de dados ou infraestrutura de banco.

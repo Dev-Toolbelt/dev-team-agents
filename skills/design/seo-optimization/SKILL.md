@@ -1,6 +1,6 @@
 ---
 name: seo-optimization
-description: Technical/on-page SEO, Core Web Vitals, structured data, GEO/LLM SEO, and quality-gate signals.
+description: Technical/on-page SEO, Core Web Vitals, structured data, AI search (AEO/GEO), gate signals.
 ---
 
 # SEO Optimization
@@ -69,7 +69,7 @@ A project counts as "needs SEO" when any of these hold. Use this table to decide
 - Meta description unique per page, about 140–160 characters (*heuristic* — truncation is by pixel width, not character count), includes a reason to click, does not repeat the title, and is not one site-wide template with only the product name swapped
 - Image `alt` text descriptive (not keyword-stuffed), decorative images use `alt=""`
 - Internal linking uses descriptive anchor text, not "click here"
-- Content answers the query in the first 1–2 sentences before elaborating (also serves GEO — see below)
+- Content answers the query early, before elaborating — for the reader, not as an AI technique (see § AI Search)
 - Editorial pages show who wrote them, how, and why (E-E-A-T), and match the page type the query's results already favour — checks in `references/content-quality.md`
 - Open Graph (`og:title`, `og:description`, `og:image`, `og:url`) and Twitter Card tags present for shareable pages
 - **Share preview check** — verify those tags in the HTML served to the `facebookexternalhit` crawler, not just in source. Procedure: `references/share-preview-check.md`
@@ -121,19 +121,50 @@ Validate with structured-data testing tools before shipping when the project has
 
 ---
 
-## GEO — SEO for LLMs / AI Search (Generative Engine Optimization)
+## AI Search — AEO / GEO
 
-Search is increasingly answered by AI systems (chat assistants, AI Overviews, agentic browsers) that read and cite pages rather than only ranking them. **Google's position is that optimizing for its AI features is ordinary SEO**: a page must be indexed and eligible for a snippet to appear in AI Overviews, there is no separate AI index, and no special markup or file is required. The controls are the usual ones — `nosnippet`, `data-nosnippet`, `max-snippet`, `noindex`. The practices below make content easier to extract and cite correctly, for Google and for other systems:
+Search is increasingly answered by AI features (AI Overviews, AI Mode, chat assistants, agentic browsers) that retrieve pages and cite them. **Google treats AEO and GEO as names for ordinary SEO**: its AI features are grounded in the Search index through the same ranking and quality systems, and expand a query into related queries (*query fan-out*) to retrieve more pages. Source: [Google's AI optimization guide](https://developers.google.com/search/docs/fundamentals/ai-optimization-guide) (updated 2026-07-14). Judge any third-party AEO/GEO advice against that guide.
 
-- **`llms.txt`** (optional) — a Markdown index of the site's key pages at the root, per llmstxt.org: an `#` title on the first line, a `>` one-paragraph summary, `##` sections of Markdown links with a one-line description each. Google states it does not use it, and no ranking or citation weight is documented; it helps coding agents reading developer docs and some non-Google tools. Never report its absence as a blocker. Keep it accurate — a stale `llms.txt` misdirects, and it must be served as text, not an HTML soft-404.
-- **Answer-first structure** — state the direct answer to the likely query in the first sentence or two of a section, then elaborate. LLMs extract from the top of a block; burying the answer under preamble reduces citation accuracy.
-- **Self-contained sections** — each `h2`/`h3` section should make sense read in isolation (LLMs often extract a section, not the whole page). Avoid "as mentioned above" references that only work in full-page context.
-- **Explicit entities** — name the product, company, or concept by its full name near the top of the page instead of relying on pronouns or implied context established elsewhere.
-- **Clean semantic HTML** — proper `<article>`, `<section>`, heading hierarchy, and lists (`<ul>`/`<ol>`) over div-soup; extraction quality tracks markup quality.
-- **Structured data doubles as GEO signal** — the same JSON-LD that helps traditional search also gives LLM crawlers unambiguous facts (price, author, date) instead of forcing them to infer from prose.
-- **Avoid content gated behind JS-only rendering** — rules in § JavaScript rendering above; the raw-HTML check for crawlers that do not run JavaScript is in `references/agent-readiness.md`.
-- **`robots.txt` AI-crawler directives** — training crawlers, search/citation crawlers and user-triggered fetchers are **separate tokens**: blocking a training bot does not remove a site from AI answers, and blocking a search bot does. Ask the user for their policy; never block by default. Token list and robots.txt mechanics: `references/ai-crawlers.md`.
-- **Agent readiness** — agentic browsers act through the accessibility tree, so the same native controls and accessible names that serve screen readers serve agents. Checks: `references/agent-readiness.md`.
+### Eligibility
+
+- The page is indexed and eligible to appear in Search **with a snippet** — `noindex`, `nosnippet` and `max-snippet:0` remove it from AI features; `data-nosnippet` excludes a passage
+- The site is included in the generative AI features of Search in Search Console ([settings help](https://support.google.com/webmasters/answer/16908024)) — confirm with the user; it is not visible from the code
+- Content is crawlable, publicly accessible and passes the § Technical SEO Checklist — meeting every requirement still does not guarantee crawling, indexing or an AI appearance, so never promise one
+
+### What works
+
+The same practices that serve readers serve AI features — report them as SEO, not as AI tricks:
+
+- **Unique, people-first content** — first-hand experience and expertise a model could not produce by summarising existing pages. Checks in `references/content-quality.md`
+- **Clear organisation** — paragraphs, sections and descriptive headings; answer the reader's question early, and name the product, company or concept in full near the top. These help readers and non-Google systems; Google states it needs no special writing style
+- **Semantic HTML** — `<article>`, `<section>`, heading hierarchy, real lists. Preferred, not required to be perfect; it also serves assistive technology and agents
+- **Images and video** that follow image and video SEO guidance
+- **Page experience** — renders on every device, low latency, main content easy to tell apart from the rest; duplicate content kept low
+- **JavaScript** that follows § JavaScript rendering — Google renders unblocked JS; the raw-HTML check for crawlers that do not run it is in `references/agent-readiness.md`
+- **Merchant and local data** through Merchant Center feeds and a Google Business Profile — `references/schema-ecommerce-local.md`
+- **`robots.txt` AI-crawler directives** for non-Google operators — training, search and user-triggered bots are separate tokens; never block by default. `references/ai-crawlers.md`
+- **Agent readiness** — `references/agent-readiness.md`
+
+### Not needed for Google
+
+Google's guide names these as unnecessary for its AI features. Never recommend one as a Search improvement, and never raise its absence as an `ISSUE` or `BLOCKER`:
+
+| Practice | Google's position |
+|---|---|
+| `llms.txt` or any other "AI file" | Not used by Search; neither helps nor hurts. It may still serve coding agents and non-Google tools — optional, per llmstxt.org (`#` title, `>` summary, `##` link sections), kept accurate and served as text, never an HTML soft-404 |
+| Chunking pages into short blocks | Not needed; there is no ideal page length — size pages for the audience |
+| Rewriting content in an "AI style" or for every keyword variant | Not needed; the systems understand synonyms and intent |
+| AI-specific structured data | None exists, and structured data is not required for AI features. Keep it for rich results (§ Structured Data) |
+
+**Counterproductive** — the guide also names two tactics that work against a site. Their *presence* is a finding: an `ISSUE`, or the swap-test `BLOCKER` in § Quality Gate Output Format for a page generator:
+
+- Pages generated for each query variation or fan-out query — scaled content abuse (`references/content-quality.md`)
+- Seeking inauthentic mentions — blocked by spam systems; ranking rests on content quality
+
+### Measuring
+
+- Use the **generative AI performance report** in Search Console ([help](https://support.google.com/webmasters/answer/16984139)) for AI features in Search and Discover — it is the only source of Google AI visibility data
+- No third-party tool has access to Google's internal ranking or AI systems. Treat a tool that claims it, or promises AI placement, as unverified, and never cite its numbers as a finding
 
 ---
 
@@ -156,11 +187,11 @@ Use this exact structure when reporting an SEO review (see `agents/seo-specialis
 ### Structured Data
 [PASS / ISSUE / BLOCKER] — [finding]
 
-### GEO / LLM Readiness
+### AI Search (AEO / GEO)
 [PASS / ISSUE / BLOCKER] — [finding]
 
 ### Verdict
 [APPROVED / APPROVED WITH NOTES / BLOCKED]
 ```
 
-`BLOCKER` = missing sitemap, `robots.txt` blocking indexable pages or answering a persistent `5xx`/`429`, missing canonical on a duplicated route, broken structured data, LCP/INP/CLS in the "Poor" band **on field data** (a lab-only Poor reading is an `ISSUE` marked "lab"), a soft-404, an indexable page whose title, canonical, robots meta or main content exists only after JavaScript runs **and** is also missing from the rendered output (confirmed in a rendering test), a generator about to publish near-identical pages that fail the swap test in `references/content-quality.md`, or a shareable page answering `403`/`429` to the `facebookexternalhit` crawler while a regular browser User-Agent gets `200` (see `references/share-preview-check.md`). Everything else non-passing is `ISSUE`. `BLOCKED` verdict when any `BLOCKER` is present.
+`BLOCKER` = missing sitemap, `robots.txt` blocking indexable pages or answering a persistent `5xx`/`429`, missing canonical on a duplicated route, broken structured data, LCP/INP/CLS in the "Poor" band **on field data** (a lab-only Poor reading is an `ISSUE` marked "lab"), a soft-404, an indexable page whose title, canonical, robots meta or main content exists only after JavaScript runs **and** is also missing from the rendered output (confirmed in a rendering test), a generator about to publish near-identical pages that fail the swap test in `references/content-quality.md`, or a shareable page answering `403`/`429` to the `facebookexternalhit` crawler while a regular browser User-Agent gets `200` (see `references/share-preview-check.md`). Everything else non-passing is `ISSUE` — except the absence of a practice listed in § AI Search › Not needed for Google, which is never a finding. `BLOCKED` verdict when any `BLOCKER` is present.

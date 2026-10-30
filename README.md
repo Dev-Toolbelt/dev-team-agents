@@ -228,7 +228,7 @@ Implementation commands also take a sprint task (`/devteam:backend TASK-003`): t
 | `/devteam:spec` | Retroactive spec — writes the spec of a feature that already exists from its code, tests and docs; qa-specialist checks every scenario against the running feature, existing tests get the scenario token, and you decide each divergence (describe it as built, or keep the intended behavior and fix it) |
 | `/devteam:design` | UI/UX design — ui-ux-designer |
 | `/devteam:relayout` | Redesign an existing screen to match visual references — ui-ux-designer + frontend-developer, mandatory reference/target-screen gate, isolated worktree, automatic post-execution review |
-| `/devteam:seo` | SEO quality gate — seo-specialist (technical, on-page, Core Web Vitals, structured data, GEO/LLM readiness) |
+| `/devteam:seo` | SEO quality gate — seo-specialist (technical, on-page, Core Web Vitals, structured data, AI search (AEO/GEO)) |
 | `/devteam:fix` | Bug fix — relevant developer(s) → test-specialist |
 | `/devteam:refactor` | Refactoring — software-architect plans, then developer(s) execute |
 | `/devteam:architect` | Architecture decisions and ADRs — software-architect |
@@ -291,7 +291,7 @@ The team has **18 agents** covering the full lifecycle. Full details in the [Age
 | `frontend-developer` | Client-side code — screens, components, UI flows |
 | `mobile-developer` | Mobile features — React Native, Expo, Flutter, native iOS/Android |
 | `ui-ux-designer` | Design system, UX flows, and visual decisions |
-| `seo-specialist` | SEO quality gate — technical, on-page, Core Web Vitals, structured data, GEO/LLM readiness |
+| `seo-specialist` | SEO quality gate — technical, on-page, Core Web Vitals, structured data, AI search (AEO/GEO) |
 | `devops-specialist` | CI/CD, Docker, infrastructure, and deploy scripts |
 
 **Quality & review**
