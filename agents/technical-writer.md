@@ -35,7 +35,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 | Producing changelogs, commit messages, or commit guidelines | `skills/shared/conventional-commits/SKILL.md` — check `git log --oneline -10` first; if the project follows a different pattern, apply that instead |
 | Preparing a release | `skills/shared/release-prep/SKILL.md` — version bump, pre-release checklist, tag creation, post-release steps |
 | Writing runbooks, incident response docs, or multi-step maintenance procedures | `skills/shared/runbook/SKILL.md` |
-| Writing prose a person reads: PR description, release notes, changelog entry, README, tutorial or how-to | `skills/shared/third-party-writing-skills/SKILL.md` — its routing table picks the vendored writing skill and lists the rules that do not apply here |
+| Writing prose a person reads: PR description, release notes, changelog entry, README, tutorial or how-to | `skills/shared/ai-writing-signs/SKILL.md`, then `skills/shared/third-party-writing-skills/SKILL.md` — its routing table picks the vendored writing skill and lists the rules that do not apply here |
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 

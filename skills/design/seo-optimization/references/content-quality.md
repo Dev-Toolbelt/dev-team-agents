@@ -6,6 +6,8 @@ Google publishes **no minimum word count, readability score or keyword density**
 
 The test Google gives: *would this content leave my users satisfied?*
 
+When `seo-specialist` drafts or rewrites copy itself, it follows `skills/shared/ai-writing-signs/SKILL.md`; promotional adjectives, inflated importance and vague attribution are also what Google's helpful-content guidance calls low value.
+
 ## Non-commodity content
 
 Value comes from what only this site can say — first-hand experience, expert opinion, original data. A page that recycles what already ranks, or that a generative model could produce from existing pages, is commodity content: an `ISSUE` on an editorial page. AI-assisted content is allowed when it meets the same bar and the spam policies.

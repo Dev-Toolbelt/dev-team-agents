@@ -69,6 +69,10 @@ A command author picks `verbatim` only for the second case; `helpers/agent-lint.
 
 Notifications (context window, stale config, tips) are raised by hooks and shown by the desktop app — never print a `DEV TEAM AGENTS` box. `skills/shared/notifier/SKILL.md` says what raises what, and how a hook adds a new one.
 
+### Prose a Person Reads
+
+Before writing prose a person reads — docs, README, release notes, PR text and review comments, page copy, UX microcopy, requirements, messages drafted for the user — load `skills/shared/ai-writing-signs/SKILL.md`. It applies in every language and names what it exempts.
+
 ---
 
 ## Mandatory Plan Mode — No Silent Execution

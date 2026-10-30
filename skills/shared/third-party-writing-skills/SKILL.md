@@ -7,22 +7,15 @@ description: When to load the vendored third-party writing skills and which of t
 
 The skills under `skills/third-party/` are vendored upstream content, pinned by commit and listed in `skills/third-party/sources.json`. They are not authored here and are never edited in place. This skill decides when an agent loads a writing one and which of its rules hold in this framework.
 
-Project rules, the project's own documentation standards and the framework's writing skills (`conventional-commits`, `diataxis-framework`, the Google Developer Documentation Style Guide default) win over a third-party skill. Load a third-party skill **in addition to** them, never instead of them.
+Project rules, the project's own documentation standards and the framework's writing skills (`conventional-commits`, `diataxis-framework`, `ai-writing-signs`, the Google Developer Documentation Style Guide default) win over a third-party skill. Load a third-party skill **in addition to** them, never instead of them.
 
 ## Routing
 
 | Task | Load | Typical agent or flow |
 |---|---|---|
-| Drafting or editing narrative prose a person reads: PR description, review comment posted to a PR/MR, release notes, CHANGELOG entry, README, tutorial or how-to | `stop-slop` | `technical-writer` (also the PR body `/devteam:pr` delegates to it), `pr-review` § PR Comment Gate |
+| Drafting or editing narrative prose a person reads: PR description, review comment posted to a PR/MR, release notes, CHANGELOG entry, README, tutorial or how-to, page or marketing copy | `stop-slop`, together with the framework's `skills/shared/ai-writing-signs/SKILL.md` — that one is not vendored and covers every language; this one adds the English phrase checks | `technical-writer` (also the PR body `/devteam:pr` delegates to it), `pr-review` § PR Comment Gate |
 
-Load none of them for:
-
-| Text | Why |
-|---|---|
-| Agent, skill, command and template bodies; `CLAUDE.md`, `AGENTS.md` | Rule documents: `always` / `never` and terse imperatives carry the requirement |
-| Commit messages | `conventional-commits` owns the format |
-| ADRs, specs, wiki entries, plans | Fixed templates with their own wording rules |
-| Code, code comments, CLI output, `--json` payloads | Not prose |
+Load none of them for the text `skills/shared/ai-writing-signs/SKILL.md` § Exempt lists.
 
 ## Rules That Do Not Apply
 
@@ -40,6 +33,8 @@ Apply `stop-slop`'s phrase and structure checks as written, except:
 | Scoring below 35/50 means revise | Optional self-check; never printed to the user |
 
 The phrase and word lists (adverbs, Wh- openers, "Here's what…") apply to English text only. The structural checks (binary contrasts, vague declaratives, false agency, rhythm) apply in any language.
+
+The table lists the `stop-slop` rules relaxed here; `ai-writing-signs` already states its own version of each.
 
 Never change quoted text, command output, code, identifiers, a fixed message a command says to output `exactly` or `verbatim`, or a format a framework skill or template fixes (a PR template's sections, the PR Comment Gate's item layout).
 
