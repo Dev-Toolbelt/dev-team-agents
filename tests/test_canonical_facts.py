@@ -47,6 +47,10 @@ class CanonicalFactsTest(unittest.TestCase):
             "llms-txt-helps-google": "Publish llms.txt to rank in AI Overviews.",
             "chunking-for-google-ai": "Chunk every page into short blocks for AI Overviews.",
             "ai-specific-structured-data": "Add structured data for AI Overviews.",
+            "leaked-chatbot-tokens": "See the guide (https://example.org/guide?utm_source=chatgpt.com).",
+            "crawl-delay-honoured-by-google": "Set Crawl-delay: 10 to slow Googlebot down.",
+            "url-parameters-tool": "Configure the URL Parameters tool in Search Console.",
+            "410-faster-than-404": "Return 410 so Google drops the page faster.",
         }
         ids = {f["id"] for f in json.loads(CONFIG.read_text(encoding="utf-8"))["facts"]}
         self.assertEqual(ids, set(wrong), "every fact needs a wrong-claim case here")
@@ -74,6 +78,11 @@ class CanonicalFactsTest(unittest.TestCase):
             # near misses: topic word without the wrong claim
             "Chunk size for the embedding index is 512 tokens.",
             "Serve llms.txt as text/plain at the site root.",
+            "Strip tracking parameters such as `utm_source=chatgpt.com` from URLs.",
+            "Googlebot ignores crawl-delay in robots.txt.",
+            "The URL Parameters tool was retired in 2022.",
+            "410: Google treats it like 404.",
+            "Delete subscriptions that return 410 or 404.",
             '| "llms.txt", "GEO", "AEO", "AI Overviews" | `seo-specialist` |',
             # near misses: correct, adjacent wording
             "P1 priority: improve Google ranking of the landing page.",

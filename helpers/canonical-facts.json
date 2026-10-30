@@ -90,6 +90,42 @@
       ],
       "why": "There is no special schema.org markup for Google's generative AI features, and structured data is not required for them",
       "source": "https://developers.google.com/search/docs/fundamentals/ai-optimization-guide"
+    },
+    {
+      "id": "leaked-chatbot-tokens",
+      "pattern": "oaicite:\\d|contentReference\\[|citeturn\\d|【\\d+†|utm_source=(chatgpt(\\.com)?|openai|copilot\\.com)|referrer=grok\\.com",
+      "allow": [
+        "`[^`]*(oaicite|contentReference|citeturn|【|utm_source=|referrer=grok)[^`]*`"
+      ],
+      "why": "Citation tokens and tracking parameters a chatbot leaves behind; they mark pasted model output and never belong in shipped text",
+      "source": "https://pt.wikipedia.org/wiki/Wikip%C3%A9dia:Sinais_de_texto_gerado_por_intelig%C3%AAncia_artificial"
+    },
+    {
+      "id": "crawl-delay-honoured-by-google",
+      "pattern": "crawl-delay",
+      "allow": [
+        "\\b(ignored|ignores|not supported|unsupported|does not|doesn't|never)\\b"
+      ],
+      "why": "Googlebot does not support the crawl-delay robots.txt rule; Google adjusts its crawl rate from server responses",
+      "source": "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt#syntax"
+    },
+    {
+      "id": "url-parameters-tool",
+      "pattern": "URL Parameters? tool",
+      "allow": [
+        "\\b(retired|removed|deprecated|no longer|never recommend)\\b"
+      ],
+      "why": "Search Console's URL Parameters tool was deprecated in 2022; parameter URLs are handled on the site",
+      "source": "https://developers.google.com/search/blog/2022/03/url-parameters-tool-deprecated"
+    },
+    {
+      "id": "410-faster-than-404",
+      "pattern": "\\b410\\b.{0,60}\\b(faster|quicker|sooner)\\b|\\b(faster|quicker|sooner)\\b.{0,60}\\b410\\b",
+      "allow": [
+        "\\b(treats? it like|same as|no faster|not faster|identical)\\b"
+      ],
+      "why": "Google treats all 4xx responses except 429 the same way for indexing; 410 is not documented as faster than 404",
+      "source": "https://developers.google.com/search/docs/crawling-indexing/http-network-errors#4xx-client-errors"
     }
   ]
 }
