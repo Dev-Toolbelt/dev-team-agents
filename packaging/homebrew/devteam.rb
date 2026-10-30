@@ -37,8 +37,8 @@ class Devteam < Formula
   # scripts/install.sh downloads at install time (see
   # scripts/install.sh's TARBALL_URL and scripts/lib/installer-fetch.sh), so
   # there is exactly one artifact shape to keep honest, not two.
-  url "https://github.com/Dev-Toolbelt/dev-team-agents/archive/refs/tags/vX.Y.Z.tar.gz"
-  sha256 "REPLACE_WITH_SHA256_OF_RELEASE_TARBALL"
+  url "https://github.com/Dev-Toolbelt/dev-team-agents/archive/refs/tags/v2.49.1.tar.gz"
+  sha256 "03a89a8bebb73aa40b1812e2a3a5e6fa761069f5a32edd84d31503d3e0783fb9"
   license "MIT"
   head "https://github.com/Dev-Toolbelt/dev-team-agents.git", branch: "main"
 
