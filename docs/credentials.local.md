@@ -10,6 +10,8 @@ Reference for `.dev-team-agents/credentials.local.json`: how to create and edit 
 - [File Location](#file-location)
 - [Creating and Editing](#creating-and-editing)
 - [Structure](#structure)
+- [Secret Values](#secret-values)
+- [Release QA Sign-In](#release-qa-sign-in)
 - [Usage Notes](#usage-notes)
 - [Security Guidance](#security-guidance)
 
@@ -19,7 +21,7 @@ Reference for `.dev-team-agents/credentials.local.json`: how to create and edit 
 
 `credentials.local.json` is the local, gitignored credential and environment reference file. It gives selected agents enough structured information to access staging or production systems when a task requires operational validation or deployment support.
 
-It is not a secret manager. It is a local convenience file whose shape you choose.
+It is a local file whose shape you choose. Secret values do not have to live in it: a secret can be stored by reference, with the value kept in your machine's secret store or in a password manager (see [Secret Values](#secret-values)).
 
 ---
 
@@ -98,6 +100,56 @@ Example:
 ```
 
 A value stays hidden even without a `$secrets` entry when its key looks secret (`password`, `token`, `secret`, `apiKey`…) or the value does (a URL with `user:password@`, a URL with a query string, pasted key material). That is a safety net, not a substitute: mark your secrets so a value under an innocent name (`conn`, `dsn2`) is protected too.
+
+---
+
+## Secret Values
+
+A secret entered through the app's Credentials tab, or with a `set-secret` patch, is stored in the machine's secret store (Keychain on macOS, DPAPI on Windows) and the file keeps only a reference:
+
+```json
+"password": { "$ref": "devteam/<project_id>/local/<id>", "$backend": "keychain" }
+```
+
+You can also point at a password manager by hand: `{ "$ref": "op://QA/staging/password" }` (1Password CLI) or `{ "$ref": "bw://<item-id>/password" }` (Bitwarden CLI). The vendor CLI must be installed and unlocked.
+
+| Command | What it does |
+|---------|--------------|
+| `devteam cred local secure` | Lists secrets still stored as plaintext in the file; changes nothing |
+| `devteam cred local secure --apply` | Moves them into the secret store and writes their references |
+| `devteam cred local exec <pointer> -- <cmd>` | Runs `<cmd>` with the group's values as `DEVTEAM_<KEY>` environment variables; this is how agents use a secret without seeing it |
+
+Under `$production`, a plaintext secret is refused on write and reported by `devteam doctor`. On a machine with no secret store, values fall back to an `insecure` file outside the project; that fallback is refused under `$production`.
+
+Every read of a secret value is recorded in the machine-local audit log, without the value.
+
+---
+
+## Release QA Sign-In
+
+`/devteam:release-qa` signs in with `devteam qa auth <pointer>` instead of typing a password. Give the group a test identity and a `login` recipe:
+
+```json
+"staging": {
+  "url": "https://staging.example.com",
+  "qa": {
+    "username": "qa@example.com",
+    "password": { "$ref": "devteam/<project_id>/local/<id>", "$backend": "keychain" },
+    "totp_secret": { "$ref": "devteam/<project_id>/local/<id>", "$backend": "keychain" },
+    "$secrets": ["password", "totp_secret"],
+    "login": {
+      "url": "https://staging.example.com/login",
+      "username_selector": "#email",
+      "password_selector": "#password",
+      "submit_selector": "button[type=submit]",
+      "totp_selector": "#otp",
+      "success_url_contains": "/dashboard"
+    }
+  }
+}
+```
+
+Without a recipe or a stored password, `devteam qa auth <pointer> --interactive` opens a browser, you sign in once, and the session is kept on this machine until it expires (at most 8 hours). Sign-in uses the project's own Playwright install. Use a dedicated test account, never a person's account, in production as everywhere else.
 
 ---
 

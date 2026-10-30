@@ -176,7 +176,7 @@ Or discover them interactively from the desktop app's **Integrations** tab, or w
 
 **Agents can execute Cloudflare API calls** (DNS records, cache purge, WAF and cache rules, Pages rollbacks, Workers/R2/KV/D1 inspection) through `devteam integration call cloudflare <METHOD> <endpoint>` ([ADR-0031](docs/development/adrs/0031-agents-call-integration-apis-through-a-cli-proxy-that-holds-the-token.md)). The CLI makes the request with the stored token, so the token never reaches the agent, the chat or the environment. Reads run freely; every write (`POST`/`PUT`/`PATCH`/`DELETE`) needs `--allow-write`, which agents pass only after you confirm the exact change. On top of that, `devteam bind` writes each provider's own approval rule ([ADR-0032](docs/development/adrs/0032-bind-writes-provider-native-ask-rules-for-integration-writes.md)), so Claude Code, opencode and Codex prompt you themselves before any write runs — a prompt the agent cannot answer for you (Codex applies it once you trust the project; `devteam doctor` tells you). Endpoints whose response is a credential are refused outright, and every call is recorded in the credential audit log.
 
-The desktop app also has a **Credentials** tab on each project screen for creating and editing `.dev-team-agents/credentials.local.json` as a free-form tree, with per-field secrets, a per-group production flag and search — or use `devteam cred local init`, `show`, and `patch` from the CLI.
+The desktop app also has a **Credentials** tab on each project screen for creating and editing `.dev-team-agents/credentials.local.json` as a free-form tree, with per-field secrets, a per-group production flag and search — or use `devteam cred local init`, `show`, and `patch` from the CLI. A secret entered there is stored in the machine's secret store (Keychain, DPAPI) and the file keeps only a reference; `devteam cred local secure --apply` moves existing plaintext secrets out of the file.
 
 ---
 
@@ -234,6 +234,7 @@ Implementation commands also take a sprint task (`/devteam:backend TASK-003`): t
 | `/devteam:architect` | Architecture decisions and ADRs — software-architect |
 | `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist + qa-specialist; on a PR/MR, drafts a comment for its owner — or approves it when nothing blocks — after you confirm. When you apply the findings, it re-reviews the fixes for up to 3 rounds and stops early when a round comes back clean or stops making progress |
 | `/devteam:qa` | Quality assurance — qa-specialist |
+| `/devteam:release-qa` | End-to-end QA of every feature in a release (local, staging or production) — qa-specialist |
 | `/devteam:audit` | Deep module/area analysis — backend-developer + frontend-developer + security-specialist + devops-specialist; saves report to `docs/audit/` |
 | `/devteam:security` | Security audit — security-specialist + software-architect |
 | `/devteam:dba` | Database work — database-specialist + software-architect |

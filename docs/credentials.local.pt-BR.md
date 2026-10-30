@@ -10,6 +10,8 @@ Referência de `.dev-team-agents/credentials.local.json`: como criar e editar o 
 - [Local do Arquivo](#local-do-arquivo)
 - [Criando e Editando](#criando-e-editando)
 - [Estrutura](#estrutura)
+- [Valores Secretos](#valores-secretos)
+- [Login do QA de Release](#login-do-qa-de-release)
 - [Notas de Uso](#notas-de-uso)
 - [Orientações de Segurança](#orientações-de-segurança)
 
@@ -19,7 +21,7 @@ Referência de `.dev-team-agents/credentials.local.json`: como criar e editar o 
 
 `credentials.local.json` é o arquivo local, ignorado pelo git, de credenciais e referências de ambiente. Ele dá a agentes selecionados informação estruturada suficiente para acessar staging ou produção quando uma task exige validação operacional ou suporte a deploy.
 
-Ele não é um gerenciador de segredos. É um arquivo local de conveniência cuja forma você escolhe.
+É um arquivo local cuja forma você escolhe. Os valores secretos não precisam ficar nele: um segredo pode ser guardado por referência, com o valor no cofre de segredos da máquina ou num gerenciador de senhas (veja [Valores Secretos](#valores-secretos)).
 
 ---
 
@@ -98,6 +100,56 @@ Exemplo:
 ```
 
 Um valor continua oculto mesmo sem entrada em `$secrets` quando a chave parece segredo (`password`, `token`, `secret`, `apiKey`…) ou o valor parece (uma URL com `usuario:senha@`, uma URL com query string, uma chave colada). Isso é uma rede de segurança, não um substituto: marque seus segredos para que um valor com nome inocente (`conn`, `dsn2`) também fique protegido.
+
+---
+
+## Valores Secretos
+
+Um segredo digitado na aba Credentials do app, ou gravado por um patch `set-secret`, vai para o cofre de segredos da máquina (Keychain no macOS, DPAPI no Windows), e o arquivo guarda só uma referência:
+
+```json
+"password": { "$ref": "devteam/<project_id>/local/<id>", "$backend": "keychain" }
+```
+
+Também dá para apontar um gerenciador de senhas à mão: `{ "$ref": "op://QA/staging/password" }` (CLI do 1Password) ou `{ "$ref": "bw://<item-id>/password" }` (CLI do Bitwarden). A CLI do fornecedor precisa estar instalada e desbloqueada.
+
+| Comando | O que faz |
+|---------|-----------|
+| `devteam cred local secure` | Lista os segredos ainda guardados em texto puro no arquivo; não altera nada |
+| `devteam cred local secure --apply` | Move esses segredos para o cofre e grava as referências |
+| `devteam cred local exec <pointer> -- <cmd>` | Roda `<cmd>` com os valores do grupo como variáveis de ambiente `DEVTEAM_<KEY>`; é assim que os agentes usam um segredo sem vê-lo |
+
+Sob `$production`, um segredo em texto puro é recusado na escrita e reportado pelo `devteam doctor`. Numa máquina sem cofre de segredos, os valores vão para um arquivo `insecure` fora do projeto; esse fallback é recusado sob `$production`.
+
+Toda leitura de um valor secreto fica registrada no log de auditoria da máquina, sem o valor.
+
+---
+
+## Login do QA de Release
+
+O `/devteam:release-qa` faz login com `devteam qa auth <pointer>` em vez de digitar uma senha. Dê ao grupo uma identidade de teste e uma receita de `login`:
+
+```json
+"staging": {
+  "url": "https://staging.example.com",
+  "qa": {
+    "username": "qa@example.com",
+    "password": { "$ref": "devteam/<project_id>/local/<id>", "$backend": "keychain" },
+    "totp_secret": { "$ref": "devteam/<project_id>/local/<id>", "$backend": "keychain" },
+    "$secrets": ["password", "totp_secret"],
+    "login": {
+      "url": "https://staging.example.com/login",
+      "username_selector": "#email",
+      "password_selector": "#password",
+      "submit_selector": "button[type=submit]",
+      "totp_selector": "#otp",
+      "success_url_contains": "/dashboard"
+    }
+  }
+}
+```
+
+Sem receita nem senha guardada, `devteam qa auth <pointer> --interactive` abre um navegador, você faz login uma vez e a sessão fica nesta máquina até expirar (no máximo 8 horas). O login usa o Playwright instalado no próprio projeto. Use uma conta de teste dedicada, nunca a conta de uma pessoa, em produção e em qualquer outro ambiente.
 
 ---
 

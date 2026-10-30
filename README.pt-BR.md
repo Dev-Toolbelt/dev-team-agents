@@ -176,7 +176,7 @@ Ou descubra de forma interativa na aba **Integrações** do app desktop, ou com 
 
 **Agentes podem executar chamadas à API do Cloudflare** (registros DNS, purge de cache, regras de WAF e cache, rollback do Pages, inspeção de Workers/R2/KV/D1) com `devteam integration call cloudflare <MÉTODO> <endpoint>` ([ADR-0031](docs/development/adrs/0031-agents-call-integration-apis-through-a-cli-proxy-that-holds-the-token.md)). A CLI faz a requisição com o token armazenado, então o token nunca chega ao agente, ao chat ou ao ambiente. Leituras rodam livremente; toda escrita (`POST`/`PUT`/`PATCH`/`DELETE`) exige `--allow-write`, que os agentes só passam depois que você confirma a alteração exata. Além disso, o `devteam bind` grava a regra de aprovação nativa de cada provider ([ADR-0032](docs/development/adrs/0032-bind-writes-provider-native-ask-rules-for-integration-writes.md)), então Claude Code, opencode e Codex pedem a sua aprovação antes de qualquer escrita — um prompt que o agente não consegue responder por você (o Codex aplica a regra quando você marca o projeto como confiável; o `devteam doctor` avisa). Endpoints cuja resposta é uma credencial são recusados sempre, e toda chamada fica registrada no log de auditoria de credenciais.
 
-O app desktop também tem uma aba **Credentials** (Credenciais) em cada tela de projeto para criar e editar `.dev-team-agents/credentials.local.json` como uma árvore livre, com segredos por campo, flag de produção por grupo e busca — ou use `devteam cred local init`, `show` e `patch` da CLI.
+O app desktop também tem uma aba **Credentials** (Credenciais) em cada tela de projeto para criar e editar `.dev-team-agents/credentials.local.json` como uma árvore livre, com segredos por campo, flag de produção por grupo e busca — ou use `devteam cred local init`, `show` e `patch` da CLI. Um segredo digitado ali vai para o cofre de segredos da máquina (Keychain, DPAPI) e o arquivo guarda só uma referência; `devteam cred local secure --apply` tira do arquivo os segredos que ainda estão em texto puro.
 
 ---
 
@@ -235,6 +235,7 @@ Os comandos de implementação também recebem uma tarefa de sprint (`/devteam:b
 | `/devteam:audit` | Análise profunda de módulo/área — backend-developer + frontend-developer + security-specialist + devops-specialist; salva relatório em `docs/audit/` |
 | `/devteam:review` | Code review — code-reviewer + software-architect + security-specialist + qa-specialist; em uma PR/MR, rascunha um comentário para o responsável — ou aprova quando nada bloqueia — após sua confirmação. Quando você aplica os achados, revisa as correções por até 3 rodadas e para antes se uma rodada voltar limpa ou parar de progredir |
 | `/devteam:qa` | Garantia de qualidade — qa-specialist |
+| `/devteam:release-qa` | QA de ponta a ponta de todas as features de uma release (local, staging ou produção) — qa-specialist |
 | `/devteam:security` | Auditoria de segurança — security-specialist + software-architect |
 | `/devteam:dba` | Trabalho de banco de dados — database-specialist + software-architect |
 | `/devteam:devops` | Infraestrutura / CI/CD — devops-specialist |

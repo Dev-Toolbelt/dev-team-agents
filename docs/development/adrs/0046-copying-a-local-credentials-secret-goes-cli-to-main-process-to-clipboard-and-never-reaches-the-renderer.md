@@ -4,7 +4,8 @@
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
 **Applies to:** `scripts/lib/devteam/credentials_local.py`, `app/src/main/secretClipboard.ts`, `app/src/main/ipc.ts`, `app/src/cli/operations.ts`  
-**Amends:** [ADR-0024](0024-the-local-credentials-file-lives-at-the-dev-team-agents-root-and-the-app-edits-it-through-the-cli.md) § 5, [ADR-0015](0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md) § 7, [ADR-0011](0011-two-distribution-channels-and-the-desktop-app-as-a-cli-client.md) (the secret-command `--json` category), [ADR-0010](0010-credential-values-in-the-os-keychain-with-non-secret-reference-files.md); `cred get` and its `--json` refusal are unchanged
+**Amends:** [ADR-0024](0024-the-local-credentials-file-lives-at-the-dev-team-agents-root-and-the-app-edits-it-through-the-cli.md) § 5, [ADR-0015](0015-the-desktop-app-s-stack-and-its-operating-rules-as-a-cli-client.md) § 7, [ADR-0011](0011-two-distribution-channels-and-the-desktop-app-as-a-cli-client.md) (the secret-command `--json` category), [ADR-0010](0010-credential-values-in-the-os-keychain-with-non-secret-reference-files.md); `cred get` and its `--json` refusal are unchanged  
+**Amended by:** [ADR-0053](0053-secret-values-in-the-local-credentials-file-are-stored-by-reference-in-the-os-secret-store.md) — `copy-value` also resolves a `{"$ref": …}` leaf; the CLI → main process → clipboard path and the renderer rule are unchanged
 
 ## Context
 

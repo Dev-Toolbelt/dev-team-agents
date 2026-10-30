@@ -3,7 +3,7 @@
 **Date:** 2026-10-01
 **Status:** Accepted
 **Deciders:** dev-team-agents maintainers
-**Amended by:** ADR-0046 (§ 5: a fourth leaf, `cred local copy-value`, lets the app copy a hidden value)
+**Amended by:** ADR-0046 (§ 5: a fourth leaf, `cred local copy-value`, lets the app copy a hidden value); ADR-0053 (§ 5: `set-secret`, `secure`, `exec`; § 6: the `{"$ref": …}` leaf form)
 
 ## Context
 
