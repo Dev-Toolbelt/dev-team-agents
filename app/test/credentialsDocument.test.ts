@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { applyOps, coerce, editProblem, moveTargets, opsFor, productionAt, record, searchHits } from '../src/renderer/credentials/document.js';
+import { applyOps, coerce, editProblem, forgetSecretWrite, moveTargets, opsFor, pendingSecretPointers, plaintextSecrets, productionAt, record, searchHits, secretValueProblem } from '../src/renderer/credentials/document.js';
 
 const DOC = {
   a: { $secrets: ['pw'], pw: { secret: true, set: true, marked: true }, host: 'h.test' },
@@ -134,5 +134,83 @@ describe('moving between groups', () => {
     expect(editProblem({ a: { k: 1 }, b: { k: 2 } }, { kind: 'move', path: ['a', 'k'], into: ['b'] })).toMatch(/already has/);
     expect(editProblem(DOC, { kind: 'move', path: ['list', 0], into: ['a'] })).toMatch(/named/);
     expect(editProblem(DOC, { kind: 'move', path: ['a', 'host'], into: ['list'] })).toMatch(/Pick a group/);
+  });
+});
+
+describe('secrets kept by reference (ADR-0053)', () => {
+  it('turns a set-secret into a stored leaf and marks its key, without keeping the value', () => {
+    const out = applyOps({ svc: { host: 'h' } }, [{ op: 'set-secret', pointer: '/svc/password', value: 'hunter2' }]);
+    expect(out['svc']).toEqual({
+      host: 'h',
+      $secrets: ['password'],
+      password: { secret: true, set: true, marked: true, stored: 'pending' },
+    });
+    expect(JSON.stringify(out)).not.toContain('hunter2');
+  });
+
+  it('shows a hand-written reference as stored by its manager', () => {
+    const out = applyOps({}, [
+      { op: 'set', pointer: '/a', value: { $ref: 'op://v/i/f' } },
+      { op: 'set', pointer: '/b', value: { $ref: 'bw://item/f' } },
+    ]);
+    expect(out).toEqual({
+      a: { secret: true, set: true, marked: true, stored: 'op' },
+      b: { secret: true, set: true, marked: true, stored: 'bw' },
+    });
+  });
+
+  it('makes set-secret for a typed value and set for a reference', () => {
+    expect(opsFor({}, { kind: 'secret-value', path: ['a', 'pw'], value: 'x' })).toEqual([{ op: 'set-secret', pointer: '/a/pw', value: 'x' }]);
+    expect(opsFor({}, { kind: 'reference', path: ['a', 'pw'], ref: ' bw://i/f ' })).toEqual([
+      { op: 'set', pointer: '/a/pw', value: { $ref: 'bw://i/f' } },
+    ]);
+  });
+
+  it('accepts only op:// and bw:// references', () => {
+    expect(editProblem({}, { kind: 'reference', path: ['a'], ref: 'op://v/i/f' })).toBeNull();
+    expect(editProblem({}, { kind: 'reference', path: ['a'], ref: 'https://x' })).not.toBeNull();
+    expect(editProblem({}, { kind: 'reference', path: ['a'], ref: 'op://' })).not.toBeNull();
+    expect(editProblem({}, { kind: 'reference', path: ['a'], ref: 'op://v/i\n/f' })).not.toBeNull();
+    expect(editProblem({}, { kind: 'reference', path: ['a'], ref: 'bw://item/f' })).not.toBeNull();
+    expect(editProblem({}, { kind: 'reference', path: ['a'], ref: 'op://v/i f' })).not.toBeNull();
+    expect(editProblem({}, { kind: 'reference', path: ['a'], ref: `bw://123e4567-e89b-12d3-a456-426614174000/${'x'.repeat(129)}` })).not.toBeNull();
+    expect(editProblem({}, { kind: 'reference', path: ['a'], ref: 'bw://123e4567-e89b-12d3-a456-426614174000/password' })).toBeNull();
+  });
+
+  it('folds a typed value and a later reference for one pointer into the last write', () => {
+    const ops = record([], { op: 'set-secret', pointer: '/a', value: 'x' }, { op: 'set', pointer: '/a', value: { $ref: 'op://v/i/f' } });
+    expect(ops).toEqual([{ op: 'set', pointer: '/a', value: { $ref: 'op://v/i/f' } }]);
+    expect(record([], { op: 'set-secret', pointer: '/a', value: 'x' }, { op: 'set-secret', pointer: '/a', value: 'xy' })).toEqual([
+      { op: 'set-secret', pointer: '/a', value: 'xy' },
+    ]);
+  });
+
+  it('refuses a secret over 3072 bytes or holding a line break or NUL', () => {
+    expect(secretValueProblem('a'.repeat(3072))).toBeNull();
+    expect(secretValueProblem('a'.repeat(3073))).not.toBeNull();
+    expect(secretValueProblem('é'.repeat(1537))).not.toBeNull();
+    expect(secretValueProblem('a\nb')).not.toBeNull();
+    expect(secretValueProblem('a\0b')).not.toBeNull();
+  });
+
+  it('forgets only the pending secret write for one pointer', () => {
+    const ops = [
+      { op: 'set-secret', pointer: '/a', value: 'x' },
+      { op: 'set', pointer: '/a/other', value: '1' },
+      { op: 'set', pointer: '/b', value: { $ref: 'op://v/i/f' } },
+    ] as const;
+    expect(forgetSecretWrite(ops, '/a')).toEqual([ops[1], ops[2]]);
+    expect([...pendingSecretPointers(ops)].sort()).toEqual(['/a', '/b']);
+  });
+
+  it('finds plaintext secrets only where the view says stored is null, and flags production', () => {
+    const doc = {
+      a: { pw: { secret: true, set: true, marked: true, stored: null }, ok: { secret: true, set: true, marked: true, stored: 'keychain' }, old: { secret: true, set: true, marked: true } },
+      p: { $production: true, pw: { secret: true, set: true, marked: false, stored: null } },
+    };
+    expect(plaintextSecrets(doc)).toEqual([
+      { pointer: '/a/pw', production: false },
+      { pointer: '/p/pw', production: true },
+    ]);
   });
 });

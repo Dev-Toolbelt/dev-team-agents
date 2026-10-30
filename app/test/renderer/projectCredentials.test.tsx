@@ -13,7 +13,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProjectCredentials } from '../../src/renderer/credentials/ProjectCredentials.js';
 import { ProjectSettings } from '../../src/renderer/screens/ProjectSettings.js';
-import { CREDENTIALS_ALREADY_EXISTS, CREDENTIALS_HASH_CONFLICT, CREDENTIALS_SAVED_UNREADABLE } from '../../src/shared/api.js';
+import {
+  CREDENTIALS_ALREADY_EXISTS,
+  CREDENTIALS_HASH_CONFLICT,
+  CREDENTIALS_INSECURE_IN_PRODUCTION,
+  CREDENTIALS_PLAINTEXT_IN_PRODUCTION,
+  CREDENTIALS_SAVED_UNREADABLE,
+} from '../../src/shared/api.js';
 import { credentialsView, deferred, environment, fail, fakeBridge, installBridge, ok, project } from './support.js';
 
 afterEach(() => {
@@ -366,7 +372,7 @@ describe('ProjectCredentials — free-form editor', () => {
     expect(screen.getByRole('button', { name: 'Copy the value of example › production › token' })).toBeEnabled();
   });
 
-  it('sends a replaced secret as one set op with the loaded hash', async () => {
+  it('sends a replaced secret as one set-secret op with the loaded hash', async () => {
     const { bridge, user } = renderTab();
     await screen.findByText('example');
     await user.click(screen.getByRole('button', { name: 'Replace example › production › password' }));
@@ -376,7 +382,7 @@ describe('ProjectCredentials — free-form editor', () => {
     await user.type(input, 's3cret');
     await save(user);
     expect(bridge.credentialsLocalPatch).toHaveBeenCalledWith('proj-1', 'hash-1', [
-      { op: 'set', pointer: '/example/production/password', value: 's3cret' },
+      { op: 'set-secret', pointer: '/example/production/password', value: 's3cret' },
     ]);
   });
 
@@ -425,8 +431,7 @@ describe('ProjectCredentials — free-form editor', () => {
     await save(user);
     expect(sentOps(bridge)).toEqual([
       { op: 'set', pointer: '/jira', value: {} },
-      { op: 'set', pointer: '/jira/apiToken', value: 'tok-1' },
-      { op: 'set', pointer: '/jira/$secrets', value: ['apiToken'] },
+      { op: 'set-secret', pointer: '/jira/apiToken', value: 'tok-1' },
     ]);
   });
 
@@ -566,5 +571,218 @@ describe('ProjectCredentials — free-form editor', () => {
     await screen.findByText('a-b');
     const ids = [...document.querySelectorAll('[id]')].map((node) => node.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('ProjectCredentials — secrets kept by reference (ADR-0053)', () => {
+  const leaf = (stored: string | null) => ({ secret: true, set: true, marked: true, stored });
+  const viewWith = (stored: string | null) =>
+    credentialsView({ data: { svc: { $secrets: ['password'], password: leaf(stored), host: 'h.test' } } });
+
+  it('says a stored secret is stored securely, and never offers a plain text warning for it', async () => {
+    renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith('keychain')))) });
+    expect(await screen.findByText('Stored securely')).toBeInTheDocument();
+    expect(screen.queryByText(/plain text/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Secure plaintext secrets' })).not.toBeInTheDocument();
+  });
+
+  it('names a password manager reference by its manager', async () => {
+    renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith('op')))) });
+    expect(await screen.findByText('Stored in 1Password')).toBeInTheDocument();
+  });
+
+  it('warns about a plaintext secret and offers to secure it', async () => {
+    renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith(null)))) });
+    expect(await screen.findByText('Stored as plain text in the file.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Secure svc › password now' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Secure plaintext secrets' })).toBeInTheDocument();
+  });
+
+  it('shows a typed secret as stored once entered, before it is saved', async () => {
+    const { user } = renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith(null)))) });
+    await screen.findByText('Stored as plain text in the file.');
+    await user.click(screen.getByRole('button', { name: 'Replace svc › password' }));
+    await user.type(document.querySelector('input[type="password"]') as HTMLInputElement, 'abc');
+    expect(screen.getByText(/outside the file when you save/i)).toBeInTheDocument();
+  });
+
+  it('lists plaintext secrets and moves nothing until the user confirms', async () => {
+    const found = [{ pointer: '/svc/password', production: true }];
+    const { bridge, user } = renderTab({
+      credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith(null)))),
+      credentialsLocalSecureList: vi.fn(() => Promise.resolve(ok({ path: 'p', secrets: found, hash: 'hash-1' }))),
+    });
+    await screen.findByText('Stored as plain text in the file.');
+    await user.click(screen.getByRole('button', { name: 'Secure plaintext secrets' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('/svc/password')).toBeInTheDocument();
+    expect(bridge.credentialsLocalSecureApply).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Move out of the file' }));
+    expect(bridge.credentialsLocalSecureApply).toHaveBeenCalledWith('proj-1', ['/svc/password']);
+    await waitFor(() => expect(bridge.credentialsLocalShow).toHaveBeenCalledTimes(2));
+  });
+
+  it('secures one field only after a confirmation naming it', async () => {
+    const { bridge, user } = renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith(null)))) });
+    await screen.findByText('Stored as plain text in the file.');
+    await user.click(screen.getByRole('button', { name: 'Secure svc › password now' }));
+    expect(bridge.credentialsLocalSecureApply).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Move out of the file' }));
+    expect(bridge.credentialsLocalSecureApply).toHaveBeenCalledWith('proj-1', ['/svc/password']);
+  });
+
+  it('holds Secure now back while there are unsaved edits', async () => {
+    const view = credentialsView({
+      data: { svc: { $secrets: ['a', 'b'], a: leaf(null), b: leaf(null) } },
+    });
+    const { user } = renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(view))) });
+    await screen.findAllByText('Stored as plain text in the file.');
+    await user.click(screen.getByRole('button', { name: 'Replace svc › a' }));
+    await user.type(document.querySelector('input[type="password"]') as HTMLInputElement, 'x');
+    expect(screen.getByRole('button', { name: 'Secure plaintext secrets' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Secure svc › b now' })).toBeDisabled();
+  });
+
+  it('writes a typed password manager reference as a plain set, and rejects anything else', async () => {
+    const { bridge, user } = renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith('keychain')))) });
+    await screen.findByText('Stored securely');
+    await user.click(screen.getByRole('button', { name: 'Use a password manager reference for svc › password' }));
+    const input = screen.getByPlaceholderText(/op:\/\/vault/);
+    await user.type(input, 'not-a-ref');
+    expect(await screen.findByText(/Use op:\/\/vault\/item\/field/)).toBeInTheDocument();
+    await user.clear(input);
+    await user.type(input, 'op://vault/item/password');
+    await save(user);
+    expect(bridge.credentialsLocalPatch).toHaveBeenCalledWith('proj-1', 'hash-1', [
+      { op: 'set', pointer: '/svc/password', value: { $ref: 'op://vault/item/password' } },
+    ]);
+  });
+
+  it.each([
+    [CREDENTIALS_PLAINTEXT_IN_PRODUCTION, 'Production secrets cannot be plain text'],
+    [CREDENTIALS_INSECURE_IN_PRODUCTION, 'No secure store on this machine'],
+  ])('explains the %s refusal and keeps the edit', async (reason, title) => {
+    const { user } = renderTab({
+      credentialsLocalPatch: vi.fn(() => Promise.resolve(fail('refused', { kind: 'refused', exitCode: 2, reason }))),
+    });
+    await screen.findByText('example');
+    await user.click(screen.getByRole('button', { name: 'Replace example › production › password' }));
+    await user.type(document.querySelector('input[type="password"]') as HTMLInputElement, 'x');
+    await save(user);
+    expect(await screen.findByText(title)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Discard/ })).toBeInTheDocument();
+  });
+
+  it('keeps the entry form and its text when the typed value turns invalid, and lands in the requested mode', async () => {
+    const { bridge, user } = renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith('keychain')))) });
+    await screen.findByText('Stored securely');
+    await user.click(screen.getByRole('button', { name: 'Use a password manager reference for svc › password' }));
+    const input = screen.getByPlaceholderText(/op:\/\/vault/);
+    await user.type(input, 'op://v/i/f');
+    expect(screen.getByRole('button', { name: /Discard/ })).toBeInTheDocument();
+    await user.clear(input);
+    expect(input).toBeInTheDocument();
+    expect(input).toHaveValue('');
+    await user.type(input, 'op://v/i/f');
+    await user.type(input, '{Backspace}');
+    expect(screen.getByPlaceholderText(/op:\/\/vault/)).toHaveValue('op://v/i/');
+    await user.click(screen.getByRole('button', { name: 'Type a value for svc › password instead' }));
+    expect(document.querySelector('input[type="password"]')).not.toBeNull();
+    expect(bridge.credentialsLocalPatch).not.toHaveBeenCalled();
+  });
+
+  it('shows the plain text banner as a group, not an alert', async () => {
+    renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith(null)))) });
+    await screen.findByText('Stored as plain text in the file.');
+    expect(screen.getByRole('group', { name: 'Plain text secrets' })).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: /plain text/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Stored as plain text in the file.').closest('[role="status"]')).toBeNull();
+  });
+
+  it('forgets an unsaved secret when its field is removed, sending nothing', async () => {
+    const { bridge, user } = renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith('keychain')))) });
+    await screen.findByText('Stored securely');
+    await user.click(screen.getByRole('button', { name: 'Add field to svc' }));
+    await user.type(screen.getByLabelText('Field name'), 'token');
+    await user.type(screen.getByLabelText('Value'), 'abc');
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    await user.click(await screen.findByRole('button', { name: 'Remove svc › token' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Discard/ })).not.toBeInTheDocument());
+    expect(bridge.credentialsLocalPatch).not.toHaveBeenCalled();
+  });
+
+  it('drops the pending secret when the field is cleared, and sends nothing', async () => {
+    const { user } = renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith('keychain')))) });
+    await screen.findByText('Stored securely');
+    await user.click(screen.getByRole('button', { name: 'Replace svc › password' }));
+    const input = document.querySelector('input[type="password"]') as HTMLInputElement;
+    await user.type(input, 'abc');
+    expect(screen.getByRole('button', { name: /Discard/ })).toBeInTheDocument();
+    await user.clear(input);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Discard/ })).not.toBeInTheDocument());
+  });
+
+  it('leaves the entry form when Discard drops the pending secret', async () => {
+    const { user } = renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith('keychain')))) });
+    await screen.findByText('Stored securely');
+    await user.click(screen.getByRole('button', { name: 'Replace svc › password' }));
+    await user.type(document.querySelector('input[type="password"]') as HTMLInputElement, 'abc');
+    await user.click(screen.getByRole('button', { name: /Discard/ }));
+    await waitFor(() => expect(document.querySelector('input[type="password"]')).toBeNull());
+  });
+
+  it('refuses a secret that is too large, sending nothing', async () => {
+    const { user } = renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith('keychain')))) });
+    await screen.findByText('Stored securely');
+    await user.click(screen.getByRole('button', { name: 'Replace svc › password' }));
+    const input = document.querySelector('input[type="password"]') as HTMLInputElement;
+    await user.click(input);
+    await user.paste('a'.repeat(3073));
+    expect(await screen.findByText(/at most 3072 bytes/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Discard/ })).not.toBeInTheDocument();
+  });
+
+  it('offers no typed value for a secret inside a list, only a reference', async () => {
+    const view = credentialsView({ data: { svc: { tokens: [leaf(null)] } } });
+    renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(view))) });
+    await screen.findByText('Stored as plain text in the file.');
+    expect(screen.queryByRole('button', { name: /^Replace/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Secure svc/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Use a password manager reference/ })).toBeInTheDocument();
+  });
+
+  it('words insecure and invalid storage apart from "stored securely", and offers no copy for an invalid one', async () => {
+    const view = credentialsView({ data: { svc: { a: leaf('insecure'), b: leaf('invalid'), $secrets: ['a', 'b'] } } });
+    renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(view))) });
+    expect(await screen.findByText('Stored outside the file, without encryption')).toBeInTheDocument();
+    expect(screen.getByText(/Malformed reference/)).toBeInTheDocument();
+    expect(screen.queryByText('Stored securely')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy the value of svc › b' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy the value of svc › a' })).toBeInTheDocument();
+  });
+
+  it('gates the Secure actions on the cred local secure command, not on patch', async () => {
+    const env = environment();
+    const withheld = { ...env, withheld: [{ command: 'cred local secure', reason: 'not declared' }] };
+    const bridge = fakeBridge({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(viewWith(null)))) });
+    installBridge(bridge);
+    render(<ProjectCredentials project={project()} environment={withheld} onDirtyChange={vi.fn()} onRunningChange={vi.fn()} />);
+    await screen.findByText('Stored as plain text in the file.');
+    expect(screen.getByRole('button', { name: 'Secure plaintext secrets' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Secure svc › password now' })).toBeDisabled();
+    expect(screen.getAllByText(/not declared/).length).toBeGreaterThan(0);
+  });
+
+  it('explains a tracked credentials file when a copy is refused', async () => {
+    const error = vi.spyOn(toast, 'error');
+    const { user } = renderTab({
+      credentialsLocalCopySecret: vi.fn(() => Promise.resolve(fail('refused', { kind: 'refused', exitCode: 2, reason: 'tracked-file' }))),
+    });
+    await screen.findByText('example');
+    await user.click(screen.getByRole('button', { name: 'Copy the value of example › production › token' }));
+    await waitFor(() => expect(error).toHaveBeenCalled());
+    expect(JSON.stringify(error.mock.calls)).toContain('tracked by git');
   });
 });

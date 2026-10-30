@@ -202,6 +202,8 @@ describe('what this slice is allowed to run', () => {
       // ADR-0024: the local credentials file's two writes; `cred local show` is read-only.
       'cred local init',
       'cred local patch',
+      // ADR-0053 § 5: lists plaintext secrets, or with --apply moves them into the secret store.
+      'cred local secure',
       // Acknowledging a notification writes that project's seen marks — admitted as a
       // write rather than dressed up as a read.
       'notifications ack',
@@ -248,8 +250,11 @@ describe('what this slice is allowed to run', () => {
       'cred local copy-value',
       'cred local init',
       'cred local patch',
+      'cred local secure',
       'cred local show',
     ]);
+    // ADR-0053: a value is resolved only inside a child process, never in this app.
+    expect(flat).not.toContain('cred local exec');
   });
 
   it('classifies `cred local show` read-only and init/patch gated, patch needing a hash and no value flags', () => {
@@ -1310,6 +1315,17 @@ describe('credentialsOpsProblem — what `cred local patch` may be sent', () => 
   });
 
   it('refuses an unknown op', () => {
-    expect(credentialsOpsProblem([{ op: 'copy', from: '/c', pointer: '/d' }])).toMatch(/`set`, `unset` or `move`/);
+    expect(credentialsOpsProblem([{ op: 'copy', from: '/c', pointer: '/d' }])).toMatch(/`set`, `set-secret`, `unset` or `move`/);
+  });
+
+  it('accepts set-secret with a non-empty text value, and nothing else', () => {
+    expect(credentialsOpsProblem([{ op: 'set-secret', pointer: '/a', value: 'x' }])).toBeNull();
+    expect(credentialsOpsProblem([{ op: 'set-secret', pointer: '/a', value: '' }])).toMatch(/non-empty/);
+    expect(credentialsOpsProblem([{ op: 'set-secret', pointer: '/a', value: 1 }])).toMatch(/non-empty/);
+    expect(credentialsOpsProblem([{ op: 'set-secret', pointer: '/a' }])).toMatch(/non-empty/);
+  });
+
+  it('redacts a set-secret value from captured output', () => {
+    expect(secretValuesOf([{ op: 'set-secret', pointer: '/a/pw', value: 'hunter2' }])).toEqual(['hunter2']);
   });
 });
