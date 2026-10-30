@@ -29,7 +29,7 @@ cat ~/.ssh/id_ed25519_claude.pub
 
 Display it to the user and say: "Add this public key to `~/.ssh/authorized_keys` on the server."
 
-If `ssh-copy-id` is available and the user can provide the server address and a temporary password/key, offer to run it:
+If `ssh-copy-id` is available, the user can run it **in their own terminal** — it prompts for the server password, which never goes into the chat (`skills/shared/credentials/SKILL.md` § 3b):
 ```bash
 ssh-copy-id -i ~/.ssh/id_ed25519_claude.pub user@server-ip
 ```

@@ -25,7 +25,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 - Read `docs/backlog/` — task acceptance criteria and Definition of Done; if a spec is linked, load `skills/shared/spec-gate/SKILL.md` and validate against its Given/When/Then instead of a re-derived interpretation
 - Read `docs/development/api-contracts.md` — expected request/response shapes
-- Run `git diff main...HEAD` — scope validation to what actually changed before assessing regression risk; `git log --oneline -10` for where additional risk may be hiding
+- Run `git diff <base>...HEAD`, `<base>` being the base branch resolved per `skills/shared/worktree/SKILL.md` (never assume `main`) — scope validation to what actually changed before assessing regression risk; `git log --oneline -10` for where additional risk may be hiding
 - Read the changed/created code — understand what was built in detail
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
@@ -46,6 +46,7 @@ Load `skills/shared/scoped-test-execution/SKILL.md` before running any automated
 | Asking the user any question with a finite set of answers (see Browser Testing) | `skills/shared/interaction-patterns/SKILL.md` |
 | Reviewing commit history or branch conventions as part of QA | `skills/shared/git-workflow/SKILL.md` |
 | Reading or writing reproduction scripts, fixtures, or test helpers | `skills/shared/comments-policy/SKILL.md` |
+| Spawned by `/devteam:release-qa` (a release manifest and optional `STORAGE_STATE` in the prompt) | `skills/shared/release-qa/SKILL.md` — validate every scenario in the manifest, open authenticated pages with `STORAGE_STATE` |
 
 **Security checklist — QA column only.** When loaded: read its `## Ownership Boundary — Security Audit vs QA` section **first**, then cover only the QA column — A01 Broken Access Control, A04 Insecure Design, A07 Auth Failures, A09 Logging Failures, and API behavior — verified by **executing** the feature, not by reading code. Anything on the security-audit side gets one line flagged `[cross-boundary → security-specialist]`, never a full analysis.
 

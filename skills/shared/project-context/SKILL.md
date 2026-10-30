@@ -346,11 +346,11 @@ container, which compose form to use, and the explicit-host exception.
 
 ## Remote Environment Credentials
 
-When a task requires accessing a remote environment (staging, production, QA, etc.):
+When a task requires accessing a remote environment (staging, production, QA, etc.) or needs any secret — a password, token, passphrase or signed-in session:
 
 1. **Load** `skills/shared/credentials/SKILL.md` and follow its instructions
-2. **Read** credentials from `.dev-team-agents/credentials.local.json` in the main checkout (resolve its path as `skills/shared/credentials/SKILL.md` § How to Use describes)
-3. If fields are empty, ask the user for access details
+2. **Read** the non-secret fields of `.dev-team-agents/credentials.local.json` in the main checkout (resolve its path as `skills/shared/credentials/SKILL.md` § How to Use describes); secrets are used only through its § 3b paths, never asked for in the chat
+3. Empty fields follow its § 4
 4. **Read-only by default** — ask permission before any write/execute operation
 
 This applies to SSH, database, HTTP/HTTPS, Docker, Kubernetes, and any other remote access.

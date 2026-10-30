@@ -2,9 +2,9 @@
 
 Guide the user through project-level setup when the Atlassian MCP is unavailable. Registers the MCP server in the CLI's local, project-scoped MCP settings — no files added to the repository, no global configuration touched.
 
-> The commands below use the **Claude Code** CLI (`claude mcp add`). On opencode, add the same server to the `mcp` block of the project's `opencode.json`; on Codex CLI, add it to that CLI's MCP config. The credential computation in Step 2 is identical for all three.
+> The commands below use the **Claude Code** CLI (`claude mcp add`). On opencode, add the same server to the `mcp` block of the project's `opencode.json`; on Codex CLI, add it to that CLI's MCP config. For those, the user builds the header value in their own terminal with the first and last lines of Step 2 and `printf '%s:%s' "$E" "$T" | base64 | tr -d '\n'`, and writes it into that config themselves.
 
-**Authentication method: email + API token only.** OAuth is never used. Before any setup step, you must have both the user's Atlassian **email** and **API token** — if either is missing, stop and ask explicitly.
+**Authentication method: email + API token only.** OAuth is never used. The token never enters the conversation (`skills/shared/credentials/SKILL.md` § 3b): the user creates it and registers the server **in their own terminal**, with the command below.
 
 ## Step 1 — Generate an API token
 
@@ -18,25 +18,20 @@ Instructions:
 1. Click **Create API token**
 2. Give it a label (e.g., `claude-code`)
 3. Copy the token immediately — it will not be shown again
-4. Paste the token here, along with the associated Atlassian account email
+4. Keep it for Step 2 — never paste it into the chat
 
 ## Step 2 — Register the MCP server locally (Claude Code)
 
-Compute the Base64-encoded credential yourself:
+Show the user this command to run **in their own terminal**, from the target project. It asks for the email and the token (hidden), builds the header, and keeps both out of the chat and the shell history:
 
 ```bash
-echo -n "{email}:{api_token}" | base64
-```
-
-Show the user the ready-to-run command with the computed Base64 value already filled in:
-
-```bash
-cd path/to/target/project
-
+printf 'Atlassian email: '; read -r E
+printf 'API token: '; stty -echo; read -r T; stty echo; echo
 claude mcp add atlassian https://mcp.atlassian.com/v1/sse \
   --transport http \
-  --header "Authorization: Basic <computed-base64-string>" \
+  --header "Authorization: Basic $(printf '%s:%s' "$E" "$T" | base64 | tr -d '\n')" \
   --scope local
+unset E T
 ```
 
 The `--scope local` flag stores the configuration in the user's local Claude Code settings for that project only — nothing is written to the repository. Other CLIs: use their project-scoped MCP config so the credential stays out of the repo.
