@@ -44,6 +44,9 @@ class CanonicalFactsTest(unittest.TestCase):
             "google-extended-affects-search": "Block Google-Extended to leave AI Overviews.",
             "sitemap-priority-changefreq-used": "Set the sitemap priority to 1.0 so Google crawls it first.",
             "sitelinks-search-box-benefit": "Add SearchAction to get a sitelinks search box.",
+            "llms-txt-helps-google": "Publish llms.txt to rank in AI Overviews.",
+            "chunking-for-google-ai": "Chunk every page into short blocks for AI Overviews.",
+            "ai-specific-structured-data": "Add structured data for AI Overviews.",
         }
         ids = {f["id"] for f in json.loads(CONFIG.read_text(encoding="utf-8"))["facts"]}
         self.assertEqual(ids, set(wrong), "every fact needs a wrong-claim case here")
@@ -65,6 +68,13 @@ class CanonicalFactsTest(unittest.TestCase):
             "Google-Extended has no effect on Search.",
             "Google ignores priority and changefreq.",
             "The sitelinks search box was removed.",
+            "llms.txt is not used by Google Search.",
+            "Chunking is not needed for AI Overviews.",
+            "There is no special structured data for AI Overviews.",
+            # near misses: topic word without the wrong claim
+            "Chunk size for the embedding index is 512 tokens.",
+            "Serve llms.txt as text/plain at the site root.",
+            '| "llms.txt", "GEO", "AEO", "AI Overviews" | `seo-specialist` |',
             # near misses: correct, adjacent wording
             "P1 priority: improve Google ranking of the landing page.",
             "Google-Extended is separate from Googlebot, which serves Search.",

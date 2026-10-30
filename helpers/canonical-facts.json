@@ -63,6 +63,33 @@
       ],
       "why": "Google removed the sitelinks search box from results in November 2024",
       "source": "https://developers.google.com/search/blog/2024/10/sitelinks-search-box"
+    },
+    {
+      "id": "llms-txt-helps-google",
+      "pattern": "llms\\.txt.{0,80}\\b(helps?|improves?|boosts?|rank(s|ing)?|increases?|wins?)\\b.{0,60}\\b(Google|AI Overviews?|AI Mode|Search)\\b",
+      "allow": [
+        "\\b(no|not|neither|nor|never|none|doesn't|does not|isn't|unnecessary|without)\\b"
+      ],
+      "why": "Google Search does not use llms.txt; it neither helps nor hurts visibility in Search or its AI features",
+      "source": "https://developers.google.com/search/docs/fundamentals/ai-optimization-guide"
+    },
+    {
+      "id": "chunking-for-google-ai",
+      "pattern": "\\bchunk(s|ing|ed)?\\b.{0,80}\\b(AI Overviews?|AI Mode|Google)\\b|\\b(AI Overviews?|AI Mode|Google)\\b.{0,80}\\bchunk(s|ing|ed)?\\b",
+      "allow": [
+        "\\b(no|not|neither|nor|never|none|doesn't|does not|isn't|unnecessary|without)\\b"
+      ],
+      "why": "Google states content does not need to be chunked for its AI features and there is no ideal page length",
+      "source": "https://developers.google.com/search/docs/fundamentals/ai-optimization-guide"
+    },
+    {
+      "id": "ai-specific-structured-data",
+      "pattern": "\\b(schema(\\.org)?|structured data|markup|JSON-LD)\\b.{0,40}\\b(for|specific to|targeting)\\s+(AI Overviews?|AI Mode|generative AI|AI search|LLMs?)\\b",
+      "allow": [
+        "\\b(no|not|neither|nor|never|none|doesn't|does not|isn't|unnecessary|without)\\b"
+      ],
+      "why": "There is no special schema.org markup for Google's generative AI features, and structured data is not required for them",
+      "source": "https://developers.google.com/search/docs/fundamentals/ai-optimization-guide"
     }
   ]
 }
