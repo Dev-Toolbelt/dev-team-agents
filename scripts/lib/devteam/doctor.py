@@ -22,6 +22,8 @@ from . import providers as providers_module
 OK = "ok"
 WARN = "warn"
 FAIL = "fail"
+#: Advisory only: never counts toward the overall status or the exit code.
+INFO = "info"
 
 
 def _points_into(target, version):
@@ -773,7 +775,44 @@ def check_credentials_local(root):
                 "chmod 600 {}".format(target),
             )
         )
+    findings.extend(_plaintext_secret_findings(root))
     return findings, actions, report
+
+
+def _plaintext_secret_findings(root):
+    """ADR-0053 § 5: one finding per plaintext secret (pointer only, never a value).
+
+    Under ``$production`` it is a FAIL; elsewhere an INFO, which leaves the status and the
+    exit code alone. An insecure-backend reference under ``$production`` is a FAIL too. A
+    missing or unreadable file yields nothing here: relocation and validity are reported by
+    their own checks.
+    """
+    try:
+        document = credentials_local.load_document(root)
+        found = credentials_local.plaintext_secrets(document)
+    except (EnvError, ConflictError, OSError):
+        return []
+    findings = [
+        _finding(
+            FAIL if item["production"] else INFO,
+            "plaintext-secret",
+            "{} holds a plaintext secret{}".format(
+                item["pointer"], " under $production" if item["production"] else ""
+            ),
+            "Run `devteam cred local secure --apply` to move it into the OS secret store.",
+        )
+        for item in found
+    ]
+    for pointer in sorted(credentials_local.insecure_refs_in_production(document)):
+        findings.append(
+            _finding(
+                FAIL,
+                "insecure-backend",
+                "{} is kept in the plain-file backend under $production".format(pointer),
+                "Store it again on a machine with an OS secret store, or use an op:// or bw:// reference.",
+            )
+        )
+    return findings
 
 
 def run(project_root=None, reassign_identity=False):
