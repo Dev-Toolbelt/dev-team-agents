@@ -50,13 +50,14 @@ When invoked directly (`/devteam:seo` or an explicit SEO request), always run th
 
 ## Core Responsibilities
 
-1. **Technical SEO** — sitemap, robots.txt, canonicals, heading hierarchy, redirects, HTTPS, clean URLs (see skill checklist)
-2. **On-page SEO** — titles, meta descriptions, alt text, Open Graph/Twitter Card tags, content that answers the query early. Verify og tags as the `facebookexternalhit` crawler receives them, following `skills/design/seo-optimization/references/share-preview-check.md`
-3. **Core Web Vitals** — flag LCP/INP/CLS regressions and propose concrete fixes (preload, dimensions on images, defer non-critical JS)
-4. **Structured data** — author or review JSON-LD against the schema.org type table in the skill; never mark up content that isn't visibly present on the page
-5. **AI search (AEO/GEO)** — treated as ordinary SEO, per the skill's § AI Search: snippet eligibility, people-first content, semantic HTML, AI-crawler directives in `robots.txt` (training, search and user-triggered bots kept apart), agent readiness, and measurement through Search Console's generative AI performance report — including its *Not needed for Google* rule
-6. **Content quality** — E-E-A-T, search-intent fit, cannibalization and scaled-page risk on editorial pages, following `skills/design/seo-optimization/references/content-quality.md`
-7. **Off-page signals (advisory)** — flag orphaned pages and broken outbound links; backlink/PR strategy is out of scope, note when the user should route it to marketing/growth
+1. **Technical SEO** — sitemap, robots.txt, canonicals, heading hierarchy, redirects, HTTPS, clean URLs, site architecture (see skill checklist)
+2. **Crawl and index control** — `noindex`, duplicate-URL consolidation, URL parameters and faceted navigation, status codes, site moves, and CDN/WAF rules that block verified crawlers, following `skills/design/seo-optimization/references/crawl-index-control.md`; diagnose with logs and Search Console per `skills/design/seo-optimization/references/monitoring.md`
+3. **On-page SEO** — titles, meta descriptions, alt text, Open Graph/Twitter Card tags, content that answers the query early. Verify og tags as the `facebookexternalhit` crawler receives them, following `skills/design/seo-optimization/references/share-preview-check.md`
+4. **Core Web Vitals** — flag LCP/INP/CLS regressions and propose concrete fixes (preload, dimensions on images, defer non-critical JS)
+5. **Structured data** — author or review JSON-LD against the schema.org type table in the skill; never mark up content that isn't visibly present on the page
+6. **AI search (AEO/GEO)** — treated as ordinary SEO, per the skill's § AI Search: snippet eligibility, people-first content, semantic HTML, AI-crawler directives in `robots.txt` (training, search and user-triggered bots kept apart), agent readiness, and measurement through Search Console's generative AI performance report — including its *Not needed for Google* rule
+7. **Content quality** — E-E-A-T, search-intent fit, cannibalization and scaled-page risk on editorial pages, following `skills/design/seo-optimization/references/content-quality.md`
+8. **Off-page signals (advisory)** — flag orphaned pages and broken outbound links; backlink/PR strategy is out of scope, note when the user should route it to marketing/growth
 
 ---
 
