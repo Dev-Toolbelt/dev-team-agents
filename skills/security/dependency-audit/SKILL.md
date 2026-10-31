@@ -22,9 +22,9 @@ Depth beyond execution lives elsewhere:
 
 | Goal | Command | Notes |
 |------|---------|-------|
-| Secrets in git history | `gitleaks detect --source . --log-opts="HEAD~50..HEAD"` | Widen the range for a first full audit (`--log-opts=""`) |
+| Secrets in git history | `gitleaks git --redact --log-opts="HEAD~50..HEAD" .` | Drop `--log-opts` for a first full audit. `detect`/`protect` are the pre-8.19 spellings |
 | Secrets, alternative engine | `trufflehog git file://. --since-commit HEAD~50` | Verifies live credentials; slower — use when gitleaks reports candidates |
-| Broad SAST | `semgrep --config=auto .` | Language-agnostic; the `auto` ruleset resolves per detected language |
+| Broad SAST | `semgrep scan --metrics=off --config p/owasp-top-ten --config p/secrets .` | Add the ruleset of each detected language (`p/python`, `p/typescript`, `r/bash` — `p/bash` does not exist). `--config=auto` refuses `--metrics=off`: it sends repository context to semgrep.dev |
 
 **A secret removed from current code but still present in git history is a live exposure — rotate it.** Deleting the line does not revoke the credential.
 

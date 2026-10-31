@@ -28,8 +28,8 @@ git log --all -S "password" --oneline     # Generic passwords
 # Use trufflehog for deeper scanning
 trufflehog git file://. --only-verified
 
-# Use gitleaks
-gitleaks detect --source . --log-level warn
+# Use gitleaks (8.19+: `detect`/`protect` are deprecated)
+gitleaks git --redact --log-level warn .
 ```
 
 If a secret is found in history: **rotate it immediately**, then use `git filter-repo` or BFG to purge — but assume the secret is already compromised.

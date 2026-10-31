@@ -103,7 +103,7 @@ It asks the user nothing, so the guards below stand in for the approval it skips
    file already in the commit.
 4. Any path refused by item 2 or flagged by item 3 → one `AskUserQuestion`: keep only the allowed learn docs
    (recommended), also stage the flagged paths, or drop every learn doc. A clean run asks nothing.
-5. Secret scan over the learn-staged files before the pre-commit gate: `gitleaks protect --staged` when installed,
+5. Secret scan over the learn-staged files before the pre-commit gate: `gitleaks git --pre-commit --staged --redact` when installed,
    otherwise grep for `AKIA[0-9A-Z]{16}`, `gh[pousr]_[A-Za-z0-9]{36}`, `xox[abpr]-`, `-----BEGIN [A-Z ]*PRIVATE KEY`,
    `(password|secret|token)\s*[:=]\s*\S{8,}`. A hit unstages that file and is reported in one line.
 6. A pre-commit gate failure caused only by a learn doc is advisory: unstage that doc, say so, keep committing the work.

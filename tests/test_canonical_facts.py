@@ -51,6 +51,9 @@ class CanonicalFactsTest(unittest.TestCase):
             "crawl-delay-honoured-by-google": "Set Crawl-delay: 10 to slow Googlebot down.",
             "url-parameters-tool": "Configure the URL Parameters tool in Search Console.",
             "410-faster-than-404": "Return 410 so Google drops the page faster.",
+            "gitleaks-pre-8-19-subcommands": "Run gitleaks detect --source . before pushing.",
+            "semgrep-returntocorp-action-or-image": "uses: returntocorp/semgrep-action@v1",
+            "graphify-wrong-package-name": "Install it with npm install -g graphify.",
         }
         ids = {f["id"] for f in json.loads(CONFIG.read_text(encoding="utf-8"))["facts"]}
         self.assertEqual(ids, set(wrong), "every fact needs a wrong-claim case here")

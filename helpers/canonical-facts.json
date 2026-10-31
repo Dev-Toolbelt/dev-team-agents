@@ -127,6 +127,34 @@
       ],
       "why": "Google treats all 4xx responses except 429 the same way for indexing; 410 is not documented as faster than 404",
       "source": "https://developers.google.com/search/docs/crawling-indexing/http-network-errors#4xx-client-errors"
+    },
+    {
+      "id": "gitleaks-pre-8-19-subcommands",
+      "pattern": "gitleaks\\s+(detect|protect)\\b",
+      "allow": [
+        "\\b(deprecated|pre-8\\.19|instead of|replaced)\\b"
+      ],
+      "why": "gitleaks 8.19 replaced `detect`/`protect` with `gitleaks git` / `gitleaks dir` / `gitleaks git --pre-commit --staged`; the old ones are hidden and deprecated",
+      "source": "https://github.com/gitleaks/gitleaks#usage"
+    },
+    {
+      "id": "semgrep-returntocorp-action-or-image",
+      "pattern": "returntocorp/semgrep",
+      "allow": [
+        "\\b(deprecated|moved)\\b"
+      ],
+      "why": "returntocorp/semgrep-action is deprecated and the image is published as semgrep/semgrep",
+      "source": "https://semgrep.dev/docs/semgrep-ci/sample-ci-configs"
+    },
+    {
+      "id": "graphify-wrong-package-name",
+      "pattern": "(npm|pip|pipx|uv tool)\\s+install\\s+(-g\\s+|--user\\s+)?graphify\\b",
+      "allow": [
+        "\\bnever install\\b",
+        "\\bdifferent project\\b"
+      ],
+      "why": "the graphify CLI ships as the PyPI distribution `graphifyy`; `graphify` on PyPI and npm is an unrelated project (typosquat risk)",
+      "source": "https://pypi.org/project/graphifyy/"
     }
   ]
 }

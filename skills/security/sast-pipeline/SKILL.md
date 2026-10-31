@@ -47,25 +47,25 @@ on: [pull_request]
 jobs:
   semgrep:
     runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
     steps:
       - uses: actions/checkout@v4
-      - uses: returntocorp/semgrep-action@v1
-        with:
-          config: >-
-            p/owasp-top-ten
-            p/secrets
-            .semgrep/custom-rules.yml
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+      - run: >-
+          semgrep scan --metrics=off --error --severity ERROR
+          --config p/owasp-top-ten --config p/secrets
+          --config .semgrep/custom-rules.yml
 ```
+
+`returntocorp/semgrep-action` is deprecated and the image moved from `returntocorp/semgrep` to `semgrep/semgrep`. Pin the image by digest in a real pipeline (`skills/security/supply-chain/SKILL.md`).
 
 ### GitLab CI example
 
 ```yaml
 semgrep:
-  image: returntocorp/semgrep
+  image: semgrep/semgrep
   script:
-    - semgrep --config p/owasp-top-ten --config .semgrep/custom-rules.yml
+    - semgrep scan --metrics=off --config p/owasp-top-ten --config .semgrep/custom-rules.yml
       --error --severity ERROR --severity WARNING
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
