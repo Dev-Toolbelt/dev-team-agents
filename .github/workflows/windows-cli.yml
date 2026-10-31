@@ -22,6 +22,15 @@ on:
         description: "Attach the installers to the tag's GitHub release"
         required: true
         type: boolean
+    secrets:
+      WIN_ESIGNER_USERNAME:
+        required: false
+      WIN_ESIGNER_PASSWORD:
+        required: false
+      WIN_ESIGNER_CREDENTIAL_ID:
+        required: false
+      WIN_ESIGNER_TOTP_SECRET:
+        required: false
   pull_request:
     paths:
       - "packaging/windows-cli/**"
@@ -53,6 +62,9 @@ jobs:
   windows-cli-installer:
     name: Build and smoke-test the Windows CLI installers
     runs-on: windows-latest
+    # ADR-0055: a build whose installers will be attached is the one that signs, and it runs in
+    # the environment that holds the production eSigner secrets; every other run uses none.
+    environment: ${{ (inputs.attach && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')) && 'esigner-production' || '' }}
     permissions:
       contents: read
     outputs:
@@ -111,6 +123,74 @@ jobs:
             version="${installer#dist/devteam-setup-}"
             echo "VERSION=${version%-x64.exe}" >> "$GITHUB_ENV"
           fi
+
+      # ADR-0055: only a build whose installers will be attached signs (the attach job's own rule:
+      # a release call, or a dispatch from main). A pull request or a rebuild that attaches nothing
+      # never signs, since each signature is billed, and never sees the secrets. Signing rewrites
+      # the files, so SHA256SUMS.txt is written again from the signed installers.
+      - name: Detect the eSigner credentials
+        id: esigner
+        if: ${{ inputs.attach && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main') }}
+        env:
+          WIN_ESIGNER_USERNAME: ${{ secrets.WIN_ESIGNER_USERNAME }}
+          WIN_ESIGNER_PASSWORD: ${{ secrets.WIN_ESIGNER_PASSWORD }}
+          WIN_ESIGNER_CREDENTIAL_ID: ${{ secrets.WIN_ESIGNER_CREDENTIAL_ID }}
+          WIN_ESIGNER_TOTP_SECRET: ${{ secrets.WIN_ESIGNER_TOTP_SECRET }}
+        run: |
+          set -euo pipefail
+          count=0
+          for name in WIN_ESIGNER_USERNAME WIN_ESIGNER_PASSWORD WIN_ESIGNER_CREDENTIAL_ID WIN_ESIGNER_TOTP_SECRET; do
+            [ -n "${!name:-}" ] && count=$((count + 1))
+          done
+          # A rebuild of a tag older than ADR-0055 has no signing scripts in its tree.
+          if [ ! -f app/build/sign-windows.cjs ] || [ ! -f .github/scripts/release/install-codesigntool.sh ]; then
+            echo "::warning::This tree predates eSigner signing (ADR-0055): the installers stay unsigned."
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+          elif [ "$count" -eq 4 ]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          elif [ "$count" -gt 0 ]; then
+            echo "::error::Only $count of the 4 WIN_ESIGNER_* secrets are set. Set all four, or remove them for an unsigned build."
+            exit 1
+          else
+            echo "::notice::No WIN_ESIGNER_* secrets: the installers are built unsigned."
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install CodeSignTool (production eSigner)
+        if: ${{ steps.esigner.outputs.sign == 'true' }}
+        run: bash .github/scripts/release/install-codesigntool.sh PROD
+
+      - name: Sign the installers
+        if: ${{ steps.esigner.outputs.sign == 'true' }}
+        env:
+          WIN_ESIGNER_USERNAME: ${{ secrets.WIN_ESIGNER_USERNAME }}
+          WIN_ESIGNER_PASSWORD: ${{ secrets.WIN_ESIGNER_PASSWORD }}
+          WIN_ESIGNER_CREDENTIAL_ID: ${{ secrets.WIN_ESIGNER_CREDENTIAL_ID }}
+          WIN_ESIGNER_TOTP_SECRET: ${{ secrets.WIN_ESIGNER_TOTP_SECRET }}
+        run: |
+          set -euo pipefail
+          node app/build/sign-windows.cjs "dist/devteam-setup-$VERSION-x64.exe" "dist/devteam-setup-$VERSION-arm64.exe"
+          # The same two installers and line format build.py writes (build.py's SHA256SUMS.txt);
+          # Git Bash's sha256sum may mark binary mode with '*'. Change both together.
+          python - "$VERSION" <<'PY'
+          import hashlib, pathlib, sys
+          dist = pathlib.Path("dist")
+          names = ["devteam-setup-{}-{}.exe".format(sys.argv[1], arch) for arch in ("x64", "arm64")]
+          sums = "".join("{}  {}\n".format(hashlib.sha256((dist / n).read_bytes()).hexdigest(), n) for n in names)
+          (dist / "SHA256SUMS.txt").write_text(sums, encoding="utf-8")
+          PY
+
+      - name: Verify the Authenticode signature of both installers
+        if: ${{ steps.esigner.outputs.sign == 'true' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($arch in 'x64', 'arm64') {
+            $path = "dist\devteam-setup-$env:VERSION-$arch.exe"
+            $sig = Get-AuthenticodeSignature -LiteralPath $path
+            Write-Host "$path : $($sig.Status)"
+            if ($sig.Status -ne 'Valid') { throw "$path has no valid Authenticode signature after signing" }
+          }
 
       - name: Smoke-test a silent install of the x64 installer
         shell: pwsh

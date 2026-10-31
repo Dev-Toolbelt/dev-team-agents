@@ -1,0 +1,121 @@
+name: Windows signing (eSigner sandbox)
+
+# Proves the Windows signing chain of ADR-0055 end to end against SSL.com's eSigner SANDBOX,
+# before (and without) a paid certificate: the app's installers through electron-builder's
+# hook, and the CLI installers through the same script windows-cli.yml runs on a tag.
+#
+# Manual only. The credentials are the `esigner-sandbox` environment's WIN_ESIGNER_SANDBOX_*
+# secrets, SSL.com's published demo account. They have names of their own on purpose: an
+# environment secret that is missing falls back to the repository secret of the same name,
+# and those hold the production account. A sandbox signature chains to a test root, so
+# Windows reports it untrusted: this checks a signature is there, and nothing it builds is
+# uploaded, attached or published.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Sign the app installers (sandbox)
+    runs-on: windows-latest
+    environment: esigner-sandbox
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: app/.nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build
+        working-directory: app
+        run: npm run build
+
+      # After every dependency script has run, as in release.yml.
+      - name: Install CodeSignTool (sandbox)
+        run: bash .github/scripts/release/install-codesigntool.sh TEST
+
+      - name: Package and sign
+        working-directory: app
+        env:
+          WIN_ESIGNER_USERNAME: ${{ secrets.WIN_ESIGNER_SANDBOX_USERNAME }}
+          WIN_ESIGNER_PASSWORD: ${{ secrets.WIN_ESIGNER_SANDBOX_PASSWORD }}
+          WIN_ESIGNER_CREDENTIAL_ID: ${{ secrets.WIN_ESIGNER_SANDBOX_CREDENTIAL_ID }}
+          WIN_ESIGNER_TOTP_SECRET: ${{ secrets.WIN_ESIGNER_SANDBOX_TOTP_SECRET }}
+        run: npm exec --no -- electron-builder --win --publish never
+
+      - name: Check every installer carries a sandbox signature
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installers = Get-ChildItem -Path 'app/release' -Filter 'dev-team-agents-Setup-*.exe'
+          if ($installers.Count -eq 0) { throw 'no installer was produced' }
+          foreach ($file in $installers) {
+            $sig = Get-AuthenticodeSignature -LiteralPath $file.FullName
+            Write-Host "$($file.Name) : $($sig.Status) : $($sig.SignerCertificate.Subject)"
+            if ($null -eq $sig.SignerCertificate -or $sig.Status -in 'NotSigned', 'HashMismatch') {
+              throw "$($file.Name) carries no intact signature"
+            }
+          }
+
+  cli:
+    name: Sign the CLI installers (sandbox)
+    runs-on: windows-latest
+    environment: esigner-sandbox
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install NSIS
+        run: choco install nsis --version 3.13.0 -y --no-progress
+
+      - name: Build the installers
+        run: python packaging/windows-cli/build.py --out dist
+
+      - name: Install CodeSignTool (sandbox)
+        run: bash .github/scripts/release/install-codesigntool.sh TEST
+
+      - name: Sign the installers
+        env:
+          WIN_ESIGNER_USERNAME: ${{ secrets.WIN_ESIGNER_SANDBOX_USERNAME }}
+          WIN_ESIGNER_PASSWORD: ${{ secrets.WIN_ESIGNER_SANDBOX_PASSWORD }}
+          WIN_ESIGNER_CREDENTIAL_ID: ${{ secrets.WIN_ESIGNER_SANDBOX_CREDENTIAL_ID }}
+          WIN_ESIGNER_TOTP_SECRET: ${{ secrets.WIN_ESIGNER_SANDBOX_TOTP_SECRET }}
+        run: node app/build/sign-windows.cjs dist/devteam-setup-*-x64.exe dist/devteam-setup-*-arm64.exe
+
+      - name: Check both installers carry a sandbox signature
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($file in Get-ChildItem -Path 'dist' -Filter 'devteam-setup-*.exe') {
+            $sig = Get-AuthenticodeSignature -LiteralPath $file.FullName
+            Write-Host "$($file.Name) : $($sig.Status) : $($sig.SignerCertificate.Subject)"
+            if ($null -eq $sig.SignerCertificate -or $sig.Status -in 'NotSigned', 'HashMismatch') {
+              throw "$($file.Name) carries no intact signature"
+            }
+          }

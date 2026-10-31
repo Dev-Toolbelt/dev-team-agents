@@ -442,6 +442,12 @@ jobs:
     with:
       tag: ${{ github.ref_name }}
       attach: true
+    # ADR-0055: the installers are signed through eSigner when all four are set.
+    secrets:
+      WIN_ESIGNER_USERNAME: ${{ secrets.WIN_ESIGNER_USERNAME }}
+      WIN_ESIGNER_PASSWORD: ${{ secrets.WIN_ESIGNER_PASSWORD }}
+      WIN_ESIGNER_CREDENTIAL_ID: ${{ secrets.WIN_ESIGNER_CREDENTIAL_ID }}
+      WIN_ESIGNER_TOTP_SECRET: ${{ secrets.WIN_ESIGNER_TOTP_SECRET }}
 
   # The winget manifests for the CLI at this release's real version, URLs and digests,
   # validated, as a workflow artifact. Submission to microsoft/winget-pkgs is manual.
@@ -600,8 +606,10 @@ jobs:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          WIN_ESIGNER_USERNAME: ${{ secrets.WIN_ESIGNER_USERNAME }}
+          WIN_ESIGNER_PASSWORD: ${{ secrets.WIN_ESIGNER_PASSWORD }}
+          WIN_ESIGNER_CREDENTIAL_ID: ${{ secrets.WIN_ESIGNER_CREDENTIAL_ID }}
+          WIN_ESIGNER_TOTP_SECRET: ${{ secrets.WIN_ESIGNER_TOTP_SECRET }}
         run: |
           set -euo pipefail
           mac_sign=false
@@ -613,9 +621,18 @@ jobs:
               echo "::warning::MAC_CSC_LINK is set but no notarisation credentials are (APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID, or APPLE_API_KEY_P8 + APPLE_API_KEY_ID + APPLE_API_ISSUER). A signed-but-unnotarised dmg still triggers Gatekeeper, so the macOS build stays unsigned."
             fi
           fi
+          # ADR-0055: all four eSigner secrets, or none. A partial set is a configuration mistake
+          # (a mistyped secret), so it stops the release instead of shipping it unsigned.
           win_sign=false
-          if [ -n "${WIN_CSC_LINK:-}" ] && [ -n "${WIN_CSC_KEY_PASSWORD:-}" ]; then
+          win_count=0
+          for name in WIN_ESIGNER_USERNAME WIN_ESIGNER_PASSWORD WIN_ESIGNER_CREDENTIAL_ID WIN_ESIGNER_TOTP_SECRET; do
+            [ -n "${!name:-}" ] && win_count=$((win_count + 1))
+          done
+          if [ "$win_count" -eq 4 ]; then
             win_sign=true
+          elif [ "$win_count" -gt 0 ]; then
+            echo "::error::Only $win_count of the 4 WIN_ESIGNER_* secrets are set. Set all four, or remove them for an unsigned build."
+            exit 1
           fi
           echo "mac_sign=$mac_sign" >> "$GITHUB_OUTPUT"
           echo "win_sign=$win_sign" >> "$GITHUB_OUTPUT"
@@ -715,6 +732,9 @@ jobs:
     name: Build the NSIS installers (Authenticode-signed when credentials exist)
     needs: app-prepare
     runs-on: windows-latest
+    # ADR-0055: holds the production eSigner secrets once they are moved there, so the
+    # environment's tag rule decides which refs can sign (packaging/README.md).
+    environment: esigner-production
     permissions:
       contents: read
     defaults:
@@ -727,23 +747,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4 # not SHA-pinned: same as ci.yml; pin after verifying the SHA
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0: pinned, this job holds the signing credentials
         with:
           node-version-file: app/.nvmrc
           cache: npm
           cache-dependency-path: app/package-lock.json
-
-      - name: Export signing credentials to the build, only when both are present
-        if: needs.app-prepare.outputs.win_sign == 'true'
-        env:
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          {
-            echo "WIN_CSC_LINK=$WIN_CSC_LINK"
-            echo "WIN_CSC_KEY_PASSWORD=$WIN_CSC_KEY_PASSWORD"
-          } >> "$GITHUB_ENV"
 
       - name: Stamp CODE_SIGNED for a credentialed build (working copy only)
         if: needs.app-prepare.outputs.win_sign == 'true'
@@ -753,9 +761,28 @@ jobs:
         working-directory: app
         run: npm ci
 
+      # The JS build runs every bundler and plugin dependency, so it gets no credentials.
       - name: Build
         working-directory: app
-        run: npm run dist:win
+        run: npm run build
+
+      # ADR-0055: app/build/sign-windows.cjs signs each executable through SSL.com eSigner.
+      # Installed only now, after every dependency script has run, so none of them can swap
+      # the checksum-verified jar or point its config at another host.
+      - name: Install CodeSignTool (production eSigner)
+        if: needs.app-prepare.outputs.win_sign == 'true'
+        run: bash .github/scripts/release/install-codesigntool.sh PROD
+
+      # The one step that holds the credentials: electron-builder and the hook it calls.
+      - name: Package and sign
+        working-directory: app
+        env:
+          WIN_ESIGNER_USERNAME: ${{ needs.app-prepare.outputs.win_sign == 'true' && secrets.WIN_ESIGNER_USERNAME || '' }}
+          WIN_ESIGNER_PASSWORD: ${{ needs.app-prepare.outputs.win_sign == 'true' && secrets.WIN_ESIGNER_PASSWORD || '' }}
+          WIN_ESIGNER_CREDENTIAL_ID: ${{ needs.app-prepare.outputs.win_sign == 'true' && secrets.WIN_ESIGNER_CREDENTIAL_ID || '' }}
+          WIN_ESIGNER_TOTP_SECRET: ${{ needs.app-prepare.outputs.win_sign == 'true' && secrets.WIN_ESIGNER_TOTP_SECRET || '' }}
+        # npm exec --no: the local electron-builder only, never a registry download with the credentials set.
+        run: npm exec --no -- electron-builder --win --publish never
 
       - name: Verify the Authenticode signature of every installer
         id: verify
