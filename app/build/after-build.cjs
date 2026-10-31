@@ -20,6 +20,8 @@ const { spawnSync } = require('node:child_process');
 const { existsSync, readdirSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 
+const { esignerCredentials } = require('./sign-windows.cjs');
+
 const present = (name) => typeof process.env[name] === 'string' && process.env[name].trim() !== '';
 
 /** Credentials for macOS signing; notarisation has its own, so the two are reported apart. */
@@ -31,10 +33,15 @@ function macCredentials() {
   return { sign, notarize };
 }
 
+/**
+ * Windows signs through eSigner (`sign-windows.cjs`). `sandbox` is the eSigner test
+ * environment: its certificate chains to a test root, so Windows never reports it Valid.
+ */
 function winCredentials() {
-  const link = present('WIN_CSC_LINK') || present('CSC_LINK');
-  const password = present('WIN_CSC_KEY_PASSWORD') || present('CSC_KEY_PASSWORD');
-  return { sign: link && password };
+  return {
+    sign: esignerCredentials().state === 'complete',
+    sandbox: process.env.WIN_ESIGNER_ENVIRONMENT === 'TEST',
+  };
 }
 
 function run(command, args) {
@@ -77,7 +84,10 @@ function inspectMac(outDir) {
   return { state: 'signed-notarised', detail: apps.join(', ') };
 }
 
-function inspectWin(artifactPaths) {
+// A sandbox signature is real but untrusted: Windows reports it as one of these, never Valid.
+const SANDBOX_STATUSES = new Set(['Valid', 'UnknownError', 'NotTrusted']);
+
+function inspectWin(artifactPaths, sandbox) {
   const installers = artifactPaths.filter((path) => path.endsWith('.exe'));
   if (process.platform !== 'win32' || installers.length === 0) {
     return { state: 'unverified', detail: 'no installer to inspect on this host' };
@@ -85,11 +95,12 @@ function inspectWin(artifactPaths) {
   for (const installer of installers) {
     const script = `(Get-AuthenticodeSignature -LiteralPath '${installer.replace(/'/g, "''")}').Status`;
     const result = run('powershell', ['-NoProfile', '-NonInteractive', '-Command', script]);
-    if (result.output.trim() !== 'Valid') {
-      return { state: 'unsigned', detail: `${installer}: Authenticode status ${result.output.trim() || 'unknown'}` };
+    const status = result.output.trim();
+    if (sandbox ? !SANDBOX_STATUSES.has(status) : status !== 'Valid') {
+      return { state: 'unsigned', detail: `${installer}: Authenticode status ${status || 'unknown'}` };
     }
   }
-  return { state: 'signed', detail: installers.join(', ') };
+  return { state: sandbox ? 'signed-sandbox' : 'signed', detail: installers.join(', ') };
 }
 
 function unsignedBanner(context, reasons) {
@@ -146,14 +157,17 @@ module.exports = function afterAllArtifactBuild(context) {
     const credentials = winCredentials();
     if (!credentials.sign) {
       status.win = 'unsigned';
-      unsignedReasons.push('Windows: WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD not set — built unsigned');
+      unsignedReasons.push('Windows: WIN_ESIGNER_* not set — built unsigned');
     } else {
-      const verdict = inspectWin(context.artifactPaths || []);
+      const verdict = inspectWin(context.artifactPaths || [], credentials.sandbox);
       status.win = verdict.state;
-      if (verdict.state !== 'signed') {
+      if (verdict.state === 'signed-sandbox') {
+        unsignedReasons.push(`Windows: signed by the eSigner SANDBOX — a test certificate, never shippable (${verdict.detail})`);
+      } else if (verdict.state !== 'signed') {
         throw new Error(`Windows signing credentials were provided, but the installers are ${verdict.state}: ${verdict.detail}`);
+      } else {
+        verifiedLines.push(`Windows: Authenticode Valid (${verdict.detail})`);
       }
-      verifiedLines.push(`Windows: Authenticode Valid (${verdict.detail})`);
     }
   }
 

@@ -16,7 +16,9 @@
 # macOS  CSC_LINK (base64 .p12 or path) + CSC_KEY_PASSWORD   -> Developer ID Application signing
 #        APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID
 #          or APPLE_API_KEY + APPLE_API_KEY_ID + APPLE_API_ISSUER   -> notarisation (notarytool)
-# Windows WIN_CSC_LINK + WIN_CSC_KEY_PASSWORD (Authenticode .pfx)  -> installer signing
+# Windows WIN_ESIGNER_USERNAME + WIN_ESIGNER_PASSWORD + WIN_ESIGNER_CREDENTIAL_ID
+#          + WIN_ESIGNER_TOTP_SECRET, with CodeSignTool installed   -> Authenticode signing
+#          through SSL.com eSigner (ADR-0055), by `build/sign-windows.cjs`
 #
 # `mac.identity` and `mac.notarize` are therefore deliberately NOT set: `identity: null`
 # would switch signing off for everyone, including the release workflow that holds the
@@ -157,11 +159,11 @@ dmg:
 # Update/uninstall: NSIS's generated uninstaller is what Add/Remove Programs calls; nothing
 # here implements auto-update (electron-updater is not wired — out of scope for this decision).
 #
-# Signing is environment-driven here too (header): WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD sign the
-# installers; without them the build is unsigned and says so. A `.pfx` can only be exported
-# from certificates issued before the 2023 CA/B Forum hardware-key rule — a certificate held
-# on an HSM or in a cloud service (for example Azure Trusted Signing, which electron-builder
-# supports through `win.azureSignOptions`) needs a different mechanism, not wired here.
+# Signing is environment-driven here too (header). Since the 2023 CA/B Forum hardware-key
+# rule a new certificate cannot be exported to a `.pfx`, so the key stays in SSL.com's cloud
+# HSM and `build/sign-windows.cjs` sends each executable to eSigner (ADR-0055). The hook runs
+# for every executable — the app's, its uninstaller and the installers — and does nothing when
+# no WIN_ESIGNER_* variable is set, so the build is unsigned and says so.
 # `forceCodeSigning: false` keeps a build with no credentials from failing.
 win:
   target:
@@ -169,8 +171,13 @@ win:
       arch:
         - x64
         - arm64
-  # No certificateFile / certificatePassword in the file: they come from the environment.
   forceCodeSigning: false
+  signtoolOptions:
+    sign: build/sign-windows.cjs
+    # One signature per file. The sha1 pass electron-builder adds by default would double the
+    # signings eSigner bills for, and no supported Windows version needs it.
+    signingHashAlgorithms:
+      - sha256
 
 nsis:
   oneClick: false
