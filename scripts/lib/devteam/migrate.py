@@ -55,8 +55,10 @@ from . import credentials_local, project, providers, quarantine, registry, versi
 from .errors import ConflictError, UsageError
 
 #: Everything a v2 install placed under ``.dev-team-agents/`` that a bind
-#: replaces. Anything else found there is reported and left alone.
-VENDORED_TREES = versions.CORE_TREES + ("CLAUDE-md",)
+#: replaces. Anything else found there is reported and left alone. ``plugins``
+#: shipped with v2 from ADR-0019 on, and the bind refuses a real tree there
+#: (`bind.RUNTIME_TREES`), so leaving it out made every such migration fail.
+VENDORED_TREES = versions.CORE_TREES + ("CLAUDE-md", "plugins")
 VENDORED_FILES = ("VERSION", "CHANGELOG.md", "CLAUDE.md", "README.md")
 
 #: Never quarantined, never rewritten.

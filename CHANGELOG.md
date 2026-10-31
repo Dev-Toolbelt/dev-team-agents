@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **graphify was installed under the wrong package name.** `tool-installers` said `npm install -g graphify` / `pip install graphify`; the CLI is the PyPI distribution `graphifyy`, and `graphify` is an unrelated project.
+- **`devteam migrate` looped on a v2 install with a `plugins/` tree.** The bind refused the vendored `.dev-team-agents/plugins` and pointed at `migrate`, which did not move it, so `migrate --apply` failed with exit 4 every time. `migrate` now quarantines `plugins/` with the other vendored trees; `plugin-settings/` stays in place. In `migrate --json`, `plugins` moves from `detected.unrecognised` to `detected.vendored_trees`.
 - **Deprecated scanner commands in the security skills.** `gitleaks detect`/`protect` → `gitleaks git`, `returntocorp/semgrep-action` → the `semgrep/semgrep` image, `semgrep --config=auto` → explicit rulesets with `--metrics=off`.
 
 ### Changed

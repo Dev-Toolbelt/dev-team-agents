@@ -460,8 +460,63 @@ class DualLayoutMigrationTest(StoreTestCase):
         os.environ["HOME"] = str(fake_home)
         self.addCleanup(lambda: os.environ.__setitem__("HOME", home) if home is not None else os.environ.pop("HOME", None))
 
+    _legacy_project = MigrationTest._legacy_project
+    _install_sh_project = MigrationTest._install_sh_project
+
     def test_every_provider_has_a_tools_case(self):
         self.assertEqual(set(DUAL_LAYOUT_TOOLS), set(providers.ALL_PROVIDERS))
+
+    def test_apply_quarantines_a_v2_plugins_tree_for_every_provider(self):
+        # A v2 install from ADR-0019 on vendored `plugins/`, and the bind refuses a
+        # real tree where it links one: migrate has to move it or it can never finish.
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                missing = [t for t in DUAL_LAYOUT_TOOLS[provider] if shutil.which(t) is None]
+                if missing:
+                    self.skipTest("{} needs {}".format(provider, ", ".join(missing)))
+                root = self._install_sh_project("plugins-" + provider)
+                plugins = root / project.PROJECT_DIR / "plugins"
+                if os.path.islink(str(plugins)):
+                    plugins.unlink()
+                plugins.mkdir(exist_ok=True)
+                (plugins / "README.md").write_text("v2 plugins\n", encoding="utf-8")
+                settings = root / project.PROJECT_DIR / "plugin-settings" / "graphify.json"
+                settings.parent.mkdir()
+                settings.write_text('{"enabled": true}\n', encoding="utf-8")
+                # A v2 install committed its vendored tree.
+                subprocess.run(["git", "add", "-f", str(plugins)], cwd=str(root), check=True)
+                subprocess.run(["git", "commit", "-qm", "plugins"], cwd=str(root), check=True, env=self._git_env())
+                found = migrate.detect(root)
+                self.assertIn("plugins", found["vendored_trees"])
+                self.assertNotIn("plugins", found["unrecognised"])
+                self.assertIn(".dev-team-agents/plugins", migrate.plan(root, provider_names=[provider], mode="link")["git_tracked"])
+                result = migrate.apply(root, provider_names=[provider], mode="link")
+                moved = {item["from"]: item["to"] for item in result["quarantined"]}
+                self.assertIn(".dev-team-agents/plugins", moved)
+                self.assertEqual(
+                    (Path(moved[".dev-team-agents/plugins"]) / "README.md").read_text(encoding="utf-8"),
+                    "v2 plugins\n",
+                )
+                self.assertTrue(os.path.islink(str(plugins)))
+                # The settings sit beside the tree, never inside it, and stay put.
+                self.assertEqual(settings.read_text(encoding="utf-8"), '{"enabled": true}\n')
+
+    def test_every_tree_bind_refuses_is_one_migrate_moves(self):
+        # The bind refuses a real tree at each runtime path and names `migrate` as the fix;
+        # a path migrate does not move turns that advice into a loop.
+        self.assertLessEqual(set(bind.RUNTIME_TREES), set(migrate.VENDORED_TREES))
+
+    def test_a_symlinked_plugins_tree_outside_the_project_is_not_vendored(self):
+        root = self._install_sh_project("plugins-link")
+        outside = self.tmp / "outside-plugins"
+        outside.mkdir()
+        (outside / "README.md").write_text("not ours\n", encoding="utf-8")
+        plugins = root / project.PROJECT_DIR / "plugins"
+        if os.path.islink(str(plugins)):
+            plugins.unlink()
+        plugins.symlink_to(outside)
+        self.assertNotIn("plugins", migrate.detect(root)["vendored_trees"])
+        self.assertEqual((outside / "README.md").read_text(encoding="utf-8"), "not ours\n")
 
     def test_apply_quarantines_both_installs_for_every_provider(self):
         for provider in providers.ALL_PROVIDERS:
@@ -520,7 +575,7 @@ class BindOverV2Test(StoreTestCase):
         parked = {}
         for name in bind.RUNTIME_TREES:
             if not (install_dir / name).exists():
-                # A tree v2's installer never shipped (`plugins/`, ADR-0019).
+                # A v2 install made before ADR-0019 has no `plugins/` tree.
                 continue
             parked[name] = install_dir.parent / ("parked-" + name)
             (install_dir / name).rename(parked[name])
