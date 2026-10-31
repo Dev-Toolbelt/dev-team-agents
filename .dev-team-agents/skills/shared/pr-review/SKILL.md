@@ -112,6 +112,7 @@ Applies when the review target is a pull/merge request (not a local branch or pa
 | Items | Only BLOCKING and SUGGESTION; drop NITPICK, QUESTION, and anything already fixed in the diff |
 | Per item | Label, `path:line`, a short fenced excerpt of the offending code, the fix in one sentence, the violated rule's source |
 | Tone | One friendly opening line, then the list; no praise filler, no closing summary |
+| Wording | Load `skills/shared/third-party-writing-skills/SKILL.md` for the opening line and each fix sentence; the item format above stays as shown |
 | Language | The PR description's language; fallback `language` in `.dev-team-agents/resolved/preferences.json` |
 | Attribution | None — same rules as PR Creation Standards above |
 

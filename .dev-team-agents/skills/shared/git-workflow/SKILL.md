@@ -120,3 +120,16 @@ Canonical pre-flight for `/devteam:push`, `/devteam:merge` and `/devteam:pr`, an
    - The commit flow was aborted or a gate failed unresolved → stop and say so; never push, merge or open a PR on top of a failed commit
 
 The questions the commit flow itself asks (worktree commit action, files that do not look like this session's, pre-commit gate failure) still apply — "automatic" removes only the "commit now?" question.
+
+## Decision Check Pre-flight (push / pr)
+
+Canonical pre-flight for `/devteam:push` and `/devteam:pr`: the branch diff against the decisions the base branch already holds (ADRs and reuse rules). Run it after the Dirty-Tree Pre-flight and before anything is pushed or opened.
+
+1. Skip when `check_active` is `false` in `.dev-team-agents/resolved/preferences.json` (absent means on) or `devteam` is not on `PATH`.
+2. Run `devteam --json check` (add `--base <branch>` when `$ARGUMENTS` gives one) and read `findings`:
+   - Exit 3, or any failure to run → say the check was skipped and why, then continue.
+   - Only `lead` findings → list them and continue without a question.
+   - Any `conflict` → show every finding (source, `path:line`, reason), then ask with `AskUserQuestion`: **Fix it first** (stop so the user can change the code), a justification option, **Abort**. Nothing is pushed or opened before the answer.
+3. The justification option is the command's variant: **Justify in the PR body** for `/devteam:pr` (the justification goes into the PR body), **Justify in the commit message** for `/devteam:push` (it goes into the commit message). Then continue.
+
+The Stop-hook ADR reminder is independent of this check.

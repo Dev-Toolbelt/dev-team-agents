@@ -667,7 +667,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
     ],
     "PostToolUse": [
       {
-        "matcher": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request",
+        "matcher": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|Edit|MultiEdit|Write|NotebookEdit|mcp__.*create_pull_request|mcp__.*merge_pull_request",
         "hooks": [
           {
             "type": "command",
@@ -729,8 +729,8 @@ import sys, json
 settings_file, check_str = sys.argv[1], sys.argv[2]
 with open(settings_file, 'r') as f:
     data = json.load(f)
-wanted = "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request"
-previous = ("TodoWrite|TaskCreate|TaskUpdate", "TodoWrite|TaskCreate|TaskUpdate|Agent|Task")
+wanted = "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|Edit|MultiEdit|Write|NotebookEdit|mcp__.*create_pull_request|mcp__.*merge_pull_request"
+previous = ("TodoWrite|TaskCreate|TaskUpdate", "TodoWrite|TaskCreate|TaskUpdate|Agent|Task", "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request")
 changed = False
 for entry in data.get('hooks', {}).get('PostToolUse', []):
     if not isinstance(entry, dict):
@@ -769,7 +769,7 @@ new_entry = {"hooks": [{"type": "command", "command": hook_cmd}]}
 if hook_type == "PreToolUse":
     new_entry["matcher"] = ".*"
 elif hook_type == "PostToolUse":
-    new_entry["matcher"] = "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request"
+    new_entry["matcher"] = "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|Edit|MultiEdit|Write|NotebookEdit|mcp__.*create_pull_request|mcp__.*merge_pull_request"
 
 entries.append(new_entry)
 
@@ -1264,7 +1264,7 @@ else:
     # An install whose preferences.json predates one of these fields never had
     # the chance to accept it, so the absent key means "no", not "use the
     # default". Only a brand-new file gets the schema's enabled default.
-    for key in ("telemetry", "auto_update"):
+    for key in ("telemetry", "auto_update", "branch_overlap_active"):
         if key not in existing:
             merged[key] = False
     # …unless the legacy .auto-update flag records an explicit earlier opt-in.
@@ -1307,7 +1307,11 @@ else
   "worktree_docker_isolate": true,
   "qa_browser": null,
   "review_gate_mode": "ask",
-  "ci_cd_detected": null
+  "ci_cd_detected": null,
+  "recall_active": true,
+  "check_active": true,
+  "repair_hints_active": true,
+  "branch_overlap_active": true
 }
 EOF
         echo "→ User preferences: .dev-team-agents/user-data/preferences.json"

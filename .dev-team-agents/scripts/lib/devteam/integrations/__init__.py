@@ -432,6 +432,20 @@ def _require_ready(adapter):
     return account, token, raw
 
 
+def ready(name, project_root=None):
+    """``(adapter, values, token)`` for an adapter's own network call.
+
+    ``values`` is the account config plus the project's valid bound fields. Raises
+    ``UsageError`` when the integration is not connected or its token is not on this machine.
+    """
+    adapter = get_adapter(name)
+    account, token, _snapshot = _require_ready(adapter)
+    values = dict(account)
+    if project_root is not None:
+        values.update(valid_project_values(adapter, read_project(project_root, name)))
+    return adapter, values, token
+
+
 # ── view ──────────────────────────────────────────────────────────────────────
 
 

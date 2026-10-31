@@ -159,6 +159,10 @@ def _safe(value):
 
 
 def main(argv):
+    # Callers are shell command substitutions: a Windows text-mode "\r\n" would leave a
+    # carriage return in the captured path.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(newline="\n")
     args = list(argv)
     if not args or not args[0].startswith("--"):
         print(write_root(args[0] if args else "."))

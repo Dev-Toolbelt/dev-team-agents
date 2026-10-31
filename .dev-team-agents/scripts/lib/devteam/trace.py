@@ -42,8 +42,9 @@ SETTLE_BYTES = 256 * 1024 * 1024
 RUNNING_MAX_AGE = tasks.PENDING_MAX_AGE
 
 ENDED = ("completed", "failed", "cancelled", "interrupted")
-#: An agent name a span may carry; the same charset `insights` reads back (ADR-0042).
-_AGENT_NAME = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+#: An agent name a span may carry; the same charset `insights` reads back (ADR-0042) and the board's
+#: spawn names use (`review_triggers.AGENT_NAME_RE`).
+_AGENT_NAME = review_triggers.AGENT_NAME_RE
 #: The public name of that charset: insights.py reads trace content back through it.
 SAFE_NAME = _AGENT_NAME
 #: A semver version a trace may carry (a pre-release suffix allowed).
@@ -123,7 +124,7 @@ def _write_alias(root, project_id, child, top):
 def _provider_and_tool(payload):
     tool_name = payload.get("tool_name") if isinstance(payload.get("tool_name"), str) else ""
     bare_tool = payload.get("tool") if isinstance(payload.get("tool"), str) else ""
-    bare = tool_name.split(".")[-1]
+    bare = tasks.codex_tool(tool_name)
     if tool_name in tasks.CLAUDE_AGENT_TOOLS:
         return "claude", tool_name
     if bare in tasks.CODEX_AGENT_TOOLS:

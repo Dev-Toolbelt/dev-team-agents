@@ -66,6 +66,7 @@ Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over fu
 ### 4. Performance & Rendering
 - **Unnecessary re-renders**: unstable object/array/function references passed as props trigger re-renders on every parent render — flag missing `useMemo`/`useCallback`/`memo` where the cost is measurable
 - **Missing code splitting**: large components or routes imported synchronously that should be lazy-loaded
+- **Deferred runtime racing a failsafe**: a lazy runtime whose download waits for `window.load` while a failsafe can disable it — severity per `skills/architecture/frontend-patterns/SKILL.md` § Deferred Runtime Boot & Failsafes
 - **N+1 fetch pattern**: fetching inside a loop or rendering a list item that triggers its own request per item
 - **Blocking render**: synchronous operations in the render path; heavy computation without `useMemo`
 - **Bundle bloat**: new dependencies without checking their weight (`import-cost`, `bundlephobia`); barrel imports that defeat tree-shaking

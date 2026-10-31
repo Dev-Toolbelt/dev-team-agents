@@ -23,8 +23,8 @@ TITLE="$(printf '%s' "${1:-}" | tr -d '\000-\037')"
 # send the new ADR and its index row anywhere on disk. index_lint.py:adr_dir()
 # applies the same rule, so the writer and the checker agree on the directory.
 DOCS_ROOT="docs"
-# shellcheck source=scripts/lib/docs-root.sh
 DOCS_ROOT_SH="$(dirname "${BASH_SOURCE[0]}")/lib/docs-root.sh"
+# shellcheck source=scripts/lib/docs-root.sh
 if [ -f "$DOCS_ROOT_SH" ] && . "$DOCS_ROOT_SH"; then
     DOCS_ROOT="$(devteam_docs_root "$PWD")"
 fi

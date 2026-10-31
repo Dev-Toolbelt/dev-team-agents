@@ -36,8 +36,9 @@
 #   6. Symlinks skills/ → <project>/.codex/skills/dev-team-agents/.
 #   7. Writes a hooks.json file at <project>/.codex/hooks.json that wires
 #      scripts/hooks/{pre-tool-use,post-tool-use,user-prompt-submit,session-start,
-#      pre-compact,stop,session-end}.sh to the Codex PreToolUse/PostToolUse/
-#      UserPromptSubmit/SessionStart/PreCompact/Stop/SessionEnd events. Idempotent: only
+#      pre-compact,stop,session-end,subagent-start,subagent-stop}.sh to the Codex
+#      PreToolUse/PostToolUse/UserPromptSubmit/SessionStart/PreCompact/Stop/SessionEnd/
+#      SubagentStart/SubagentStop events (the event list: scripts/lib/codex_hooks_merge.py). Idempotent: only
 #      dev-team-managed hook entries are touched.
 #   7b. Writes .codex/rules/devteam.rules, the integration-write ask rule (ADR-0032).
 #   8. Records the installed version.

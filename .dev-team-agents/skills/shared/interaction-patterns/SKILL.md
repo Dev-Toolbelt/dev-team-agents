@@ -290,6 +290,8 @@ The single browser-selection rule — `qa-specialist` Browser Testing follows it
 2. `preferences.json → qa_browser` holds a saved choice → use it, no question.
 3. Otherwise → ask with `AskUserQuestion`: the drivers available in the environment (Playwright, Puppeteer, the system browser, a driver the project already uses) plus Other, and a follow-up option to save the choice as the default. On opt-in write it to `qa_browser`. Never pick a non-in-app browser silently.
 
+One exception: a scenario that needs a signed-in session from `devteam qa auth` runs in Playwright with its `storageState`, which the in-app browser cannot load (`skills/shared/release-qa/SKILL.md` § Step 4).
+
 ### Options
 
 Built from the session (max 4 incl. Other, in the user's language):

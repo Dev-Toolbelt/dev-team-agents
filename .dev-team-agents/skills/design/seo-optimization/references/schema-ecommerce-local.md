@@ -2,6 +2,8 @@
 
 Load when a page carries `Product`/`Offer`, a cart or checkout, a physical location, or a service area. Sources: Google Search Central product (merchant listing, product snippet) and local business documentation.
 
+**Getting into AI answers.** Products and business details reach Google's AI responses through [Merchant Center](https://merchants.google.com/) feeds and a [Google Business Profile](https://business.google.com/), per the [AI optimization guide](https://developers.google.com/search/docs/fundamentals/ai-optimization-guide). Markup below earns rich results; it is not a separate AI channel. When a store or location has neither, recommend them as an `ISSUE`; confirming they exist needs the user, not the code.
+
 ## Product and Offer
 
 | Field | Rule |

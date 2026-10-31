@@ -429,6 +429,8 @@ MUTATING = {
     ("cred", "local", "init"): "creates .dev-team-agents/credentials.local.json from the "
     "canonical template (ADR-0024)",
     ("cred", "local", "patch"): "rewrites .dev-team-agents/credentials.local.json (ADR-0024)",
+    ("cred", "local", "secure"): "lists plaintext secrets and, with --apply, moves them into the OS "
+    "secret store and rewrites credentials.local.json (ADR-0053); one leaf, classified by what it can do",
     ("cred", "import"): "writes references, stores values, and quarantines the v2 file",
     ("notifications", "ack"): "writes notifications-seen.json in each project's machine-local "
     "state directory",
@@ -495,6 +497,8 @@ READ_ONLY = {
     ("cred", "check"): "reports references with no value or an insecure backend",
     ("cred", "local", "show"): "reads credentials.local.json with every secret replaced by a "
     "marker; never a value (ADR-0024)",
+    ("cred", "local", "exec"): "resolves a group's values into the environment of a child command and "
+    "appends audit lines (ADR-0053); refuses --json like `cred get`",
     ("cred", "local", "copy-value"): "reads one hidden value of credentials.local.json for the "
     "app's copy button and appends to the machine-local audit log (ADR-0046)",
     ("notifications", "list"): "reads each project's queue and seen marks",
@@ -511,6 +515,9 @@ READ_ONLY = {
     ("backlog", "ready"): "reads the sprint files and the machine-local claims record; writes nothing",
     ("backlog", "lint"): "reads the sprint files; writes nothing",
     ("backlog", "prime"): "reads the sprint files, the claims record and `git worktree list`; writes nothing",
+    ("check",): "reads git and the ADR and reuse sources on the base branch; writes nothing",
+    ("mine", "sessions"): "reads this project's local provider transcripts; writes nothing, no network",
+    ("mine", "reviews"): "reads merged-PR review threads through the GitHub integration or `gh`; writes nothing",
     ("detect",): "reads a folder, `git` and `PATH`; writes nothing and creates no identity",
     ("catalog",): "read-only browse — asserted to create nothing, machine id included",
     ("catalog", "agents"): "read-only browse",
@@ -535,6 +542,8 @@ STORE_NEUTRAL = {
     "token; with --allow-write it can change the remote account. It writes no declared "
     "store shape (only an audit line), so a client's schema declaration has nothing to "
     "protect here; the remote write is gated by --allow-write (ADR-0031)",
+    ("qa", "auth"): "writes a browser session file (or removes them with `clean`) in the machine-local "
+    "qa-sessions directory and appends audit lines (ADR-0054); no declared store shape",
     ("auth", "login"): "signs in; writes the machine-local session and entitlement records, "
     "which are not declared store shapes",
     ("auth", "logout"): "removes the machine-local session and entitlement records",

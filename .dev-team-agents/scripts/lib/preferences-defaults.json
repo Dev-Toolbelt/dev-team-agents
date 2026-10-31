@@ -19,5 +19,9 @@
   "worktree_docker_isolate": true,
   "qa_browser": null,
   "review_gate_mode": "ask",
-  "ci_cd_detected": null
+  "ci_cd_detected": null,
+  "recall_active": true,
+  "check_active": true,
+  "repair_hints_active": true,
+  "branch_overlap_active": true
 }

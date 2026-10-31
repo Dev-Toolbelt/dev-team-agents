@@ -113,15 +113,11 @@ When the user describes a task on a remote server, offer SSH setup. Load `skills
 
 ## Security — Credentials Protocol
 
-Load `skills/shared/credentials/SKILL.md` — remote environment credentials, read-only access enforcement.
+Load `skills/shared/credentials/SKILL.md` — every secret you use goes through its § 3b paths. Deploy-specific additions:
 
-**Always** follow this protocol when credentials or secrets are needed:
-
-1. **Never ask for credentials in plain text in the chat** — secrets must not appear in conversation history
-2. Instruct the user to store credentials in the appropriate secret store (GitHub Secrets, environment variables, .env file outside git)
-3. When generating configs that need secrets, use placeholder names: `$DB_PASSWORD`, `$DEPLOY_KEY`, `$API_TOKEN`
-4. Document which secrets are needed and where to configure them in the README or CLAUDE.md
-5. Never commit `.env` files — verify `.gitignore` includes them
+1. Secrets a pipeline needs live in that platform's secret store (GitHub Secrets, CI variables); generated configs name them with placeholders — `$DB_PASSWORD`, `$DEPLOY_KEY`, `$API_TOKEN`
+2. Document which secrets are needed and where to configure them in the README or CLAUDE.md
+3. Never commit `.env` files — verify `.gitignore` includes them
 
 ---
 

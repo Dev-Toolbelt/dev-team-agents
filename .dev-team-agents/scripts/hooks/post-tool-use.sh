@@ -3,11 +3,11 @@
 # Reads stdin once (Claude Code sends hook JSON here) and pipes it to each sub-script.
 # Sub-scripts run in alphabetical order; a non-zero exit from any sub-script is propagated (exit 2 wins over exit 1).
 # Registered with a narrow matcher on every provider — Claude Code: the todo tools, the
-# subagent tool (`Agent`/`Task`), `Bash` and the pull-request MCP tools (`create_pull_request`,
-# `merge_pull_request`), plus a `PostToolUseFailure` entry for the subagent tool; Codex: the agent
-# tools (`spawn_agent`, `wait_agent`, `close_agent`), `Bash` and the same MCP tools; opencode: the
-# plugin forwards `task`, and `bash` / the MCP tools only when their call could be a PR/MR
-# creation or merge — so it does not run for other tools at all. The sub-scripts still gate on the
+# subagent tool (`Agent`/`Task`), `Bash`, the edit tools (`Edit`, `MultiEdit`, `Write`, `NotebookEdit`)
+# and the pull-request MCP tools (`create_pull_request`, `merge_pull_request`), plus a `PostToolUseFailure` entry for the subagent tool; Codex: the agent
+# tools (`spawn_agent`, `wait_agent`, `close_agent`), `Bash`, `apply_patch` and the same MCP tools;
+# opencode: the plugin forwards `task`, every `bash` call, the edit tools (`edit`, `write`,
+# `multiedit`, `patch`) and the MCP tools — so it does not run for other tools at all. The sub-scripts still gate on the
 # payload themselves (a `Bash` call forks nothing unless its command names `gh pr`, `glab mr` or
 # `git merge`).
 

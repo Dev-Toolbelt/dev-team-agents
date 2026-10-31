@@ -422,6 +422,15 @@ def _frontmatter_name(skill_file):
     return None
 
 
+#: Frontmatter `name` values a framework skill shipped under before `name` had to
+#: equal its directory. A v2 copy made then still carries the old value
+#: (`shadcn` was `shadcn-ui` from v1.0.0 to v2.18.x). A project's own skill under an
+#: alias at that exact path is quarantined, not refused: moved, never deleted.
+V2_SKILL_NAME_ALIASES = {
+    "shadcn": ("shadcn-ui",),
+}
+
+
 def v2_copy(rel, dest, version_dir, project_root):
     """True when ``dest`` is a v2 install's ``rel`` link, materialized as real content.
 
@@ -431,8 +440,8 @@ def v2_copy(rel, dest, version_dir, project_root):
     which `_is_managed_path` cannot vouch for. Only content that is recognisably the
     framework's counts — the agents or commands directory holding nothing but `.md`
     files, at least one named like the framework's own; a skill whose frontmatter
-    `name` is the framework skill's — so a project's own directory at the same path is
-    still refused as foreign.
+    `name` is the framework skill's, or one it shipped under (`V2_SKILL_NAME_ALIASES`)
+    — so a project's own directory at the same path is still refused as foreign.
     """
     dest = Path(dest)
     if dest.is_symlink() or not dest.exists():
@@ -453,7 +462,8 @@ def v2_copy(rel, dest, version_dir, project_root):
             and any(item.name in known for item in entries)
         )
     if parts[1] == "skills":
-        return _frontmatter_name(dest / "SKILL.md") == parts[2]
+        name = _frontmatter_name(dest / "SKILL.md")
+        return name == parts[2] or name in V2_SKILL_NAME_ALIASES.get(parts[2], ())
     return False
 
 
@@ -462,12 +472,39 @@ def v2_copies(version_dir, project_root):
     root = Path(project_root)
     found = [
         rel_path.as_posix()
-        for rel_path, _source in providers.claude_artifacts(version_dir)
-        if v2_copy(rel_path.as_posix(), root / rel_path, version_dir, project_root)
+        for rel_path, source in providers.claude_artifacts(version_dir)
+        # A real directory at a third-party skill's path is the project's own copy:
+        # v2 never shipped that category, so it cannot be a v2 install's (ADR-0047).
+        if not providers.is_third_party_skill(source)
+        and v2_copy(rel_path.as_posix(), root / rel_path, version_dir, project_root)
     ]
     # The Codex / opencode skills link a v2 install made, written as a file.
     found += [rel for rel in providers.V2_SKILL_LINKS if _v2_link_file(root / rel, project_root)]
     return found
+
+
+def kept_project_skills(version_dir, project_root, previous_paths):
+    """Claude paths of vendored third-party skills the project already has its own copy of.
+
+    A project that installed `impeccable` itself has a real `.claude/skills/impeccable`
+    the framework did not create. Refusing the bind over it would break every sync of
+    that project, and replacing it would swap the project's chosen version for ours —
+    so the project's copy is kept, the framework's link is not written, and the bind
+    warns (ADR-0047). Only the third-party category gets this: a framework skill name
+    collision is still refused.
+    """
+    root = Path(project_root)
+    kept = []
+    for rel_path, source in providers.claude_artifacts(version_dir):
+        if not providers.is_third_party_skill(source):
+            continue
+        rel = rel_path.as_posix()
+        dest = root / rel_path
+        if (dest.exists() or dest.is_symlink()) and not _is_managed_path(
+            rel, dest, previous_paths, project_root
+        ):
+            kept.append(rel)
+    return kept
 
 
 def _provider_ledger(provider, project_root):
@@ -568,10 +605,11 @@ def _preflight(
     root = Path(project_root)
     # Vendored links the Claude tree whatever the selection (`_vendored_tree`).
     if "claude" in selected or mode == "vendored":
+        kept = set(kept_project_skills(version_dir, project_root, previous_paths))
         for rel_path, _source in providers.claude_artifacts(version_dir):
             rel = rel_path.as_posix()
             dest = root / rel_path
-            if rel in vacated or not (dest.exists() or dest.is_symlink()):
+            if rel in vacated or rel in kept or not (dest.exists() or dest.is_symlink()):
                 continue
             if _is_managed_path(rel, dest, previous_paths, project_root):
                 continue
@@ -697,9 +735,12 @@ def _vendored_tree(version_dir, project_root, previous_paths, project_id, retire
         shutil.copytree(str(source), str(dest), symlinks=False)
         created.append({"path": rel, "kind": "copy"})
 
+    kept = set(kept_project_skills(install_dir, project_root, previous_paths))
     for rel_path, source in providers.claude_artifacts(install_dir):
         dest = Path(project_root) / rel_path
         rel = rel_path.as_posix()
+        if rel in kept:
+            continue
         require_inside(dest, project_root, what="artifact")
         if dest.exists() or dest.is_symlink():
             action, destination = _retire_artifact(dest, project_id, project_root)
@@ -965,6 +1006,16 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
     artifacts = []
     retired = []
     merged = []
+    if "claude" in selected or resolved_mode == "vendored":
+        kept = kept_project_skills(version_dir, project_root, previous_paths)
+        for rel in kept:
+            if emitter:
+                emitter.warn(
+                    "{} is the project's own copy of a vendored third-party skill; kept it "
+                    "and did not link the framework's (ADR-0047)".format(rel)
+                )
+    else:
+        kept = []
     if resolved_mode == "vendored":
         artifacts.extend(
             _vendored_tree(version_dir, project_root, previous_paths, project_id, retired)
@@ -973,6 +1024,8 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
         for rel_path, source in providers.claude_artifacts(version_dir):
             # `.as_posix()`: see the comment on the same pattern in `_vendored_tree`.
             rel = rel_path.as_posix()
+            if rel in kept:
+                continue
             kind = _materialize(
                 source,
                 Path(project_root) / rel_path,

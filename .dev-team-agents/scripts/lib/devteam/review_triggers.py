@@ -28,6 +28,10 @@ BUILTIN_AGENTS = {
     "opencode": ("general", "explore"),
 }
 
+#: An agent name written to disk (a task, a span): the one charset every spawn name and the execution
+#: trace's reader (`trace.SAFE_NAME`, `insights`, ADR-0042) share.
+AGENT_NAME_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+
 #: Slash commands (Claude Code, opencode) and the Codex skill aliases that run a review.
 COMMANDS = ("/devteam:review", "/devteam:qa", "/review", "$devteam-review", "$devteam-qa")
 
@@ -80,7 +84,8 @@ def spawn_name(value):
     if not isinstance(value, str):
         return None
     name = value.strip().rsplit(":", 1)[-1].strip()
-    return name or None
+    # A name is written to disk as-is: anything that is not a plain identifier is not one.
+    return name if AGENT_NAME_RE.fullmatch(name) else None
 
 
 def is_builtin(provider, name):

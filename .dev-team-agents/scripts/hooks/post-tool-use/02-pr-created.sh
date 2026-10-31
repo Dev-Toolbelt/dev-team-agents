@@ -22,6 +22,9 @@ MCP_RE='"(tool_name|tool)"[[:space:]]*:[[:space:]]*"[^"]*(create|merge)_pull_req
 COMMAND_RE='^[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)"'
 
 HEAD="${INPUT:0:4096}"
+EDIT_TOOL_RE='"(tool_name|tool)"[[:space:]]*:[[:space:]]*"([A-Za-z_]+\.)?(Edit|MultiEdit|Write|NotebookEdit|apply_patch|edit|write|multiedit|patch)"'
+# A file edit is never a PR/MR call, whatever text the edited file holds.
+[[ "$HEAD" =~ $EDIT_TOOL_RE ]] && exit 0
 if ! [[ "$HEAD" =~ $MCP_RE ]]; then
     # The substring test first: `${INPUT#*…}` is quadratic when the key is absent.
     case "$INPUT" in *'"command"'*) ;; *) exit 0 ;; esac

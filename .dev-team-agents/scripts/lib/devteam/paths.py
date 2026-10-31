@@ -507,6 +507,14 @@ def locks_dir():
 #:
 #: `backlog-claims.json` records which orchestrator on this machine is working which sprint
 #: task right now (ADR-0044). A claim expires and names an owner token minted here.
+#:
+#: `repair-ledger.json` records shell commands that failed on this machine and the delta
+#: (env var, flag, wrapper, step) that made the same signature succeed (ADR-0051). The fix
+#: belongs to this host's toolchain.
+#:
+#: `qa-sessions/` holds the browser sessions `devteam qa auth` signed in for a release QA run
+#: (ADR-0054): one 0600 Playwright storageState file per credentials group, a credential
+#: that means nothing on another host.
 MACHINE_LOCAL_RECORDS = (
     "state.json",
     "bind-manifest.json",
@@ -547,6 +555,15 @@ MACHINE_LOCAL_RECORDS = (
     # Which orchestrator on THIS machine holds which sprint task, until when (ADR-0044). The
     # sprint file in git carries the status; a claim is a live fact about this host only.
     "backlog-claims.json",
+    # Shell commands that failed on THIS machine and the delta that made the same command
+    # signature succeed (ADR-0051): an env var, a flag, a wrapper, a step. The fix belongs to
+    # this host's toolchain, so it is neither committed nor carried to another machine.
+    "repair-ledger.json",
+    # Browser sessions `devteam qa auth` signed in for a release QA run (ADR-0054): one 0600
+    # Playwright storageState file per credentials group. A directory, so everything under it
+    # is machine-local. A cookie jar from this host's run means nothing, and is a credential,
+    # elsewhere.
+    "qa-sessions",
 )
 
 #: Records that belong to the **project**, not to the user's personal memory:

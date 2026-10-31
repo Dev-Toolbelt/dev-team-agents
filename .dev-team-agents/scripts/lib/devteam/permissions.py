@@ -216,18 +216,30 @@ def codex_rules_current(project_root, callable_names):
         return False
 
 
+def codex_config_dir(home=None):
+    """Codex's user config directory: ``<home>/.codex`` for an explicit ``home``, else ``$CODEX_HOME``,
+    else ``~/.codex``. The one resolver every read of the user's Codex config goes through."""
+    if home:
+        return Path(home) / ".codex"
+    return Path(os.environ.get("CODEX_HOME") or os.path.join(os.path.expanduser("~"), ".codex"))
+
+
 def codex_project_trusted(project_root, home=None):
-    """True / False when ``~/.codex/config.toml`` says, ``None`` when it cannot tell.
+    """True / False when the user's Codex ``config.toml`` says, ``None`` when it cannot tell.
 
     Codex loads project rules only for a trusted project. Read with a regex rather than a
     TOML parser: ``tomllib`` is not in the Python 3.9 this CLI supports.
     """
-    home = Path(home) if home else Path(os.path.expanduser("~"))
-    config = home / ".codex" / "config.toml"
+    config = codex_config_dir(home) / "config.toml"
     try:
         text = config.read_text(encoding="utf-8")
     except OSError:
         return None
+    return _trusted_in(text, project_root)
+
+
+def _trusted_in(text, project_root):
+    """Whether one Codex config's text marks ``project_root`` as trusted."""
     root = str(Path(project_root).resolve())
     header = re.compile(r'^\[projects\.(?:"([^"]+)"|\'([^\']+)\')\]\s*$', re.M)
     for match in header.finditer(text):
@@ -242,28 +254,112 @@ def codex_project_trusted(project_root, home=None):
     return False
 
 
+_TOML_NOISE = re.compile(r'"(?:[^"\\]|\\.)*"|\'[^\']*\'|#.*')
+
+
+def _toml_sections(text):
+    """``[(table, body)]`` of a TOML text: ``""`` for the lines before the first header.
+
+    An array of tables or a quoted header is listed as ``None``: no key looked up here lives there.
+    A line that opens with ``[`` while a multi-line array value is still open (``  [1, 2],``) is a
+    value, never a header.
+    """
+    simple = re.compile(r"^[ \t]*\[[ \t]*([A-Za-z0-9_-]+(?:[ \t]*\.[ \t]*[A-Za-z0-9_-]+)*)[ \t]*\][ \t]*(?:#.*)?$")
+    sections, table, body, depth, fence = [], "", [], 0, None
+    for line in text.splitlines(True):
+        if fence:
+            # Inside a multi-line string nothing is a header or a bracket, until its closing quotes.
+            body.append(line)
+            if fence in line:
+                fence = None
+            continue
+        if depth == 0 and line.lstrip(" \t").startswith("["):
+            sections.append((table, "".join(body)))
+            name = simple.match(line.rstrip("\r\n"))
+            table = re.sub(r"[ \t]", "", name.group(1)) if name else None
+            body = []
+            continue
+        body.append(line)
+        opened = next((d for d in ('"""', "'''") if line.count(d) % 2), None)
+        if opened:
+            line, fence = line[:line.index(opened)], opened
+        bare = _TOML_NOISE.sub("", line)
+        depth = max(0, depth + bare.count("[") - bare.count("]"))
+    sections.append((table, "".join(body)))
+    return sections
+
+
+def _toml_bool(text, dotted):
+    """True when the TOML ``text`` sets the boolean at ``dotted`` to true, else False (see :func:`_toml_value`)."""
+    return _toml_value(text, dotted) is True
+
+
+def _toml_value(text, dotted):
+    """The boolean the TOML ``text`` sets at ``dotted`` (``a.b.c``): True, False, or ``None`` when it sets none.
+
+    Finds it in a ``[a.b]`` table, as a dotted key (``b.c = true`` under ``[a]``, ``a.b.c`` at the
+    top), or in an inline table (``b = { c = true }``). Regex-based: ``tomllib`` is not in the
+    Python 3.9 this CLI supports.
+    """
+    parts = dotted.split(".")
+    for table, body in _toml_sections(text):
+        if table is None:
+            continue
+        prefix = table.split(".") if table else []
+        rest = parts[len(prefix):]
+        if parts[:len(prefix)] != prefix or not rest:
+            continue
+        key = r"\s*\.\s*".join(re.escape(p) for p in rest)
+        found = re.search(r"^\s*{}\s*=\s*(true|false)\b".format(key), body, re.M)
+        if found:
+            return found.group(1) == "true"
+        if len(rest) > 1:
+            owner = r"\s*\.\s*".join(re.escape(p) for p in rest[:-1])
+            inline = re.search(r"^\s*{}\s*=\s*\{{([^}}]*)\}}".format(owner), body, re.M)
+            value = inline and re.search(r"(?:^|[\s,]){}\s*=\s*(true|false)\b".format(re.escape(rest[-1])), inline.group(1))
+            if value:
+                return value.group(1) == "true"
+    return None
+
+
 def codex_default_mode_questions_enabled(home=None):
-    """Whether ``[features] default_mode_request_user_input = true`` is set in ``~/.codex/config.toml``.
+    """Whether ``[features] default_mode_request_user_input = true`` is set in the user's Codex ``config.toml``.
 
     True when enabled, False when the file is readable but the key is absent or false,
-    ``None`` when the file cannot be read. Regex-based for the same reason as
-    ``codex_project_trusted``. devteam only reads this file; it never writes it.
+    ``None`` when the file cannot be read. devteam only reads this file; it never writes it.
     """
-    home = Path(home) if home else Path(os.path.expanduser("~"))
-    config = home / ".codex" / "config.toml"
+    config = codex_config_dir(home) / "config.toml"
     try:
         text = config.read_text(encoding="utf-8")
     except OSError:
         return None
-    key = "default_mode_request_user_input"
-    dotted = re.search(r"^\s*features\.{}\s*=\s*(true|false)\b".format(key), text, re.M)
-    if dotted and dotted.group(1) == "true":
-        return True
-    header = re.search(r"^\[features\]\s*(?:#.*)?$", text, re.M)
-    if not header:
-        return False
-    body = text[header.end():]
-    nxt = re.search(r"^\s*\[", body, re.M)
-    body = body[: nxt.start()] if nxt else body
-    value = re.search(r"^\s*{}\s*=\s*(true|false)\b".format(key), body, re.M)
-    return bool(value) and value.group(1) == "true"
+    return _toml_bool(text, "features.default_mode_request_user_input")
+
+
+def codex_update_plan_enabled(project_root=None, home=None):
+    """Whether Codex's ``update_plan`` tool is switched on (``[tools.update_plan] enabled = true``).
+
+    Looks in the user config (:func:`codex_config_dir`) and in ``<project_root>/.codex/config.toml``
+    when Codex trusts the project (it ignores the file otherwise). The project's own setting overrides
+    the user's, so a project ``enabled = false`` wins over a user ``true``; a file that sets nothing
+    defers to the other. True when the effective value is on, False when a config is readable and
+    the effective value is off or unset, ``None`` when no config can be read. Codex 0.160 ships with
+    the tool off, and without it an approved plan cannot reach the task board. devteam only reads these files.
+    """
+    try:
+        user_text = (codex_config_dir(home) / "config.toml").read_text(encoding="utf-8")
+    except OSError:
+        user_text = None
+    project_text = None
+    if project_root and user_text is not None and _trusted_in(user_text, project_root):
+        try:
+            project_text = (Path(project_root) / ".codex" / "config.toml").read_text(encoding="utf-8")
+        except OSError:
+            pass
+    if user_text is None and project_text is None:
+        return None
+    for text in (project_text, user_text):
+        value = _toml_value(text, "tools.update_plan.enabled") if text is not None else None
+        if value is not None:
+            return value
+    return False

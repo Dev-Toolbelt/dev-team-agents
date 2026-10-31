@@ -141,7 +141,7 @@ model-identity skill — the orchestrator never names a model.
 | `technical-writer` | `repetitive` | Documentation |
 | `product-analyst` | `reasoning` | Business requirements |
 | `ui-ux-designer` | `frontend` | Design system, UX |
-| `seo-specialist` | `frontend` | SEO quality gate, GEO/LLM readiness |
+| `seo-specialist` | `frontend` | SEO quality gate, AI search (AEO/GEO) |
 
 Canonical agent path: `.claude/agents/dev-team/<agent-name>.md` for every row above.
 

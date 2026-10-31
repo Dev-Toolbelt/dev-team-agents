@@ -25,8 +25,15 @@ CONFLICT_EXIT = 4
 #   { "hooks": { "<Event>": [ { "matcher": "...", "hooks": [ { type, command, ... } ] } ] } }
 # — an OBJECT keyed by event name, each value an array of matcher groups.
 # Each hook `command` is a STRING, not an array.
+#
+# `SubagentStart` / `SubagentStop` are Codex-only: the task board links a child's agent id to the
+# task its spawn recorded and settles that task, and a review agent's window, the moment the child
+# stops. Claude Code is deliberately not given these events — its `Agent`/`Task` tool calls already
+# reach PreToolUse/PostToolUse, so a second source would settle every spawn twice — and opencode has
+# no such event. Neither hook feeds the execution trace (ADR-0041): the spawn's own hooks do.
 MANAGED_EVENTS = (
     "SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "PreCompact", "Stop", "SessionEnd",
+    "SubagentStart", "SubagentStop",
 )
 MANAGED_MARKER = "_dev_team_agents_managed"
 
@@ -38,14 +45,18 @@ SCRIPTS = {
     "PreCompact": "pre-compact.sh",
     "Stop": "stop.sh",
     "SessionEnd": "session-end.sh",
+    "SubagentStart": "subagent-start.sh",
+    "SubagentStop": "subagent-stop.sh",
 }
 
 # PostToolUse is narrowed to `spawn_agent` (its response names the agent id a later wait settles),
 # `wait_agent` (the agents' final states, and a review agent's report) and `close_agent` (an agent
 # closed before it reported), `Bash` (an `exec_command` that finished: a PR/MR creation or merge is
-# confirmed from its output) and the pull-request MCP tools — the only Codex tools
-# whose result the task board reads. Codex feeds the todo list from PreToolUse (`update_plan`).
-MATCHERS = {"PostToolUse": ".*(wait_agent|spawn_agent|close_agent|Bash|mcp__.*(create_pull_request|merge_pull_request))"}
+# confirmed from its output; the repair ledger reads it too), `apply_patch` (every Codex file edit: the
+# branch-overlap hint, ADR-0052) and the pull-request MCP tools. Tool names checked against openai/codex
+# codex-rs/core/src/tools/hook_names.rs at commit 970111f: the shell tool is `Bash`, the edit tool
+# `apply_patch`. The tools the task board reads are the agent tools and the PR ones. Codex feeds the todo list from PreToolUse (`update_plan`).
+MATCHERS = {"PostToolUse": ".*(wait_agent|spawn_agent|close_agent|Bash|apply_patch|mcp__.*(create_pull_request|merge_pull_request))"}
 
 # Codex runs a hook through the user's own shell (`$SHELL -lc`) in the session's working
 # directory, which is not the project root when Codex was started in a subdirectory: a relative
@@ -139,6 +150,11 @@ def load_existing(hooks_file):
     return existing
 
 
+def _is_managed(hook):
+    message = hook.get("statusMessage") if isinstance(hook, dict) else None
+    return isinstance(message, str) and MANAGED_MARKER in message
+
+
 def merge(existing, groups):
     hooks_obj = existing["hooks"]
     # Strip any previously-managed entries (idempotent refresh) — detect ours by
@@ -149,13 +165,16 @@ def merge(existing, groups):
             continue
         kept = []
         for grp in entries:
-            hook_list = grp.get("hooks", []) if isinstance(grp, dict) else []
-            is_managed = any(
-                isinstance(h, dict) and MANAGED_MARKER in (h.get("statusMessage", "") or "")
-                for h in hook_list
-            )
-            if not is_managed:
+            hook_list = grp.get("hooks") if isinstance(grp, dict) else None
+            if not isinstance(hook_list, list):
                 kept.append(grp)
+                continue
+            # Ours are dropped hook by hook: a hook the user added to the same group survives.
+            theirs = [h for h in hook_list if not _is_managed(h)]
+            if len(theirs) == len(hook_list):
+                kept.append(grp)
+            elif theirs:
+                kept.append(dict(grp, hooks=theirs))
         if kept:
             hooks_obj[event] = kept
         else:

@@ -2,7 +2,15 @@
 
 Load for editorial pages — blog posts, guides, comparisons, location pages, and any page generated from a template at scale. Source: Google Search Central "Creating helpful, reliable, people-first content" and the spam policies.
 
-Google publishes **no minimum word count, readability score or keyword density**. Never raise a finding on those numbers alone.
+Google publishes **no minimum word count, readability score or keyword density**, and states there is no ideal page length for its AI features. Never raise a finding on those numbers alone.
+
+The test Google gives: *would this content leave my users satisfied?*
+
+When `seo-specialist` drafts or rewrites copy itself, it follows `skills/shared/ai-writing-signs/SKILL.md`; promotional adjectives, inflated importance and vague attribution are also what Google's helpful-content guidance calls low value.
+
+## Non-commodity content
+
+Value comes from what only this site can say — first-hand experience, expert opinion, original data. A page that recycles what already ranks, or that a generative model could produce from existing pages, is commodity content: an `ISSUE` on an editorial page. AI-assisted content is allowed when it meets the same bar and the spam policies.
 
 ## E-E-A-T — Who, How, Why
 
@@ -36,7 +44,7 @@ This needs a live search; when none is available, state the intent you assumed.
 
 ## Scaled and programmatic pages
 
-Google's spam policies (2024) target scaled content abuse and site reputation abuse, however the pages were produced.
+Google's spam policies (2024) target scaled content abuse and site reputation abuse, however the pages were produced. Generating a page for each query variation or *fan-out* query to win AI answers is scaled content abuse too ([AI optimization guide](https://developers.google.com/search/docs/fundamentals/ai-optimization-guide)).
 
 | Check | Rule |
 |---|---|

@@ -149,6 +149,9 @@ never reaches it.
 | `update_plan` | Codex | Whole list on every call | Omit it from the list |
 | `todowrite` | opencode | Whole list on every call; each step with `id: "step-N"` and `priority: "medium"` | Omit it from the list |
 
+- **Codex without `update_plan`** — Codex ships with that tool off. If it is not in your tool list,
+  say once that the plan cannot be mirrored (`devteam doctor` explains) and continue; never invent
+  a substitute list.
 - **When** — create the list once the plan is approved **and** the Execution Strategy Gate (if it
   applies) has cleared, immediately before step 1; never before, so a rejected or cancelled plan
   leaves no task behind. Where the rendered body has no plan gate, the start of execution is the

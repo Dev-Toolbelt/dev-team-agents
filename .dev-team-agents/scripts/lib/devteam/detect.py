@@ -68,13 +68,23 @@ def _run(argv, cwd=None):
     return result.stdout.decode("utf-8", "replace")
 
 
-def binary_version(binary):
-    """First line of ``<binary> --version``, or None when it does not answer."""
+def probe(binary):
+    """``(answered, version)`` for ``<binary> --version`` — the one rule for "this tool starts".
+
+    ``answered`` is an exit code of 0 within ``_PROBE_TIMEOUT`` seconds; a binary that is slower
+    than that counts as not starting. ``version`` is the first non-empty line of its output, or
+    None — an answer with no output still counts as answered.
+    """
     out = _run([binary, "--version"])
     if out is None:
-        return None
+        return False, None
     lines = out.strip().splitlines()
-    return lines[0].strip() if lines and lines[0].strip() else None
+    return True, (lines[0].strip() if lines and lines[0].strip() else None)
+
+
+def binary_version(binary):
+    """First line of ``<binary> --version``, or None when it does not answer."""
+    return probe(binary)[1]
 
 
 def _git(root, *args):
@@ -85,17 +95,22 @@ def _git(root, *args):
 # ── providers ─────────────────────────────────────────────────────────────────
 
 def installed_providers():
-    """Provider CLIs on ``PATH``, in ``ALL_PROVIDERS`` order. The binary name is the provider's."""
+    """Provider CLIs on ``PATH``, in ``ALL_PROVIDERS`` order. The binary name is the provider's.
+
+    ``usable`` is whether the binary answered ``--version`` (``probe``). One that is on ``PATH``
+    but does not start (a broken install) is still listed — it is installed — but never suggested.
+    """
     found = []
     for name in providers.ALL_PROVIDERS:
         if shutil.which(name):
-            found.append({"name": name, "binary": name, "version": binary_version(name)})
+            answered, version = probe(name)
+            found.append({"name": name, "binary": name, "version": version, "usable": answered})
     return found
 
 
 def detect_providers(root):
     installed = installed_providers()
-    names = [item["name"] for item in installed]
+    names = [item["name"] for item in installed if item["usable"]]
     in_project = providers.detect_in_project(root)
     both = [name for name in in_project if name in names]
     suggested = both[0] if both else (names[0] if names else None)

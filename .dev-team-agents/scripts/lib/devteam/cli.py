@@ -18,7 +18,7 @@ from pathlib import Path
 from . import auth, bind as bind_module
 from . import auth_gate as gate
 from . import detect
-from . import backlog, catalog, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, store, tasks, trace, insights, update, upgrade, versions
+from . import qa_auth, backlog, catalog, check as check_module, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, repairs, store, tasks, trace, insights, mining, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .console import stdin_is_console as _stdin_is_console
@@ -537,7 +537,7 @@ def cmd_doctor(args, emitter):
         result = doctor.run(project_root=target, reassign_identity=args.reassign_identity)
     lines = []
     for item in result["findings"]:
-        marker = {"ok": "ok  ", "warn": "WARN", "fail": "FAIL"}[item["level"]]
+        marker = {"ok": "ok  ", "info": "info", "warn": "WARN", "fail": "FAIL"}[item["level"]]
         lines.append("{} [{}] {}".format(marker, item["category"], item["message"]))
         if item.get("hint"):
             lines.append("        hint: {}".format(item["hint"]))
@@ -581,16 +581,38 @@ def _featured_commands():
     return [name for name, meta in entries.items() if isinstance(meta, dict) and meta.get("featured")]
 
 
+def cmd_check(args, emitter):
+    result = check_module.run(args.path, args.base)
+    return result, check_module.render(result)
+
+
+def cmd_mine_sessions(args, emitter):
+    result = mining.sessions(project.resolve_root(args.path))
+    return result, mining.render_sessions(result)
+
+
+def cmd_mine_reviews(args, emitter):
+    result = mining.reviews(project.resolve_root(args.path))
+    return result, mining.render_reviews(result)
+
+
 def cmd_start(args, emitter):
     """Detect, then set the project up with the defaults. The user never sees how."""
     root = project.resolve_root(args.path)
     found = detect.run(str(root), provider=args.provider, project_type=args.type)
-    chosen = args.provider
-    if chosen is None and not found["providers"]["in_project"] and found["providers"]["suggested"]:
-        chosen = found["providers"]["suggested"]
+    # Without `--provider`: every provider the project already uses that starts (a project set
+    # up for several keeps all of them), else detect's `suggested` (only ever a tool that
+    # starts), else nothing — and the bind falls back to the project's own providers or the
+    # default. The app preselects the first of the same order.
+    info = found["providers"]
+    usable = {entry["name"] for entry in info["installed"] if entry["usable"]}
+    chosen = [args.provider] if args.provider else (
+        [name for name in info["in_project"] if name in usable]
+        or ([info["suggested"]] if info["suggested"] else None)
+    )
     bound, _human = cmd_bind(
         argparse.Namespace(
-            path=str(root), provider=[chosen] if chosen else None, mode="auto", pin=None
+            path=str(root), provider=chosen, mode="auto", pin=None
         ),
         emitter,
     )
@@ -601,6 +623,11 @@ def cmd_start(args, emitter):
             ", ".join("/devteam:{}".format(name) for name in featured)
         )
     ]
+    if not any(entry["usable"] for entry in found["providers"]["installed"]):
+        lines.append("")
+        lines.append(
+            "No AI coding tool on this computer starts. Run `devteam doctor --machine` to see how to fix it."
+        )
     if task:
         lines.append("")
         lines.append("Suggested first task, read-only: {}".format(task["label"]))
@@ -1705,6 +1732,71 @@ def cmd_cred_local_copy_value(args, emitter):
     return result, None
 
 
+def cmd_cred_local_secure(args, emitter):
+    root, _project_id = _bound_project(getattr(args, "path", None))
+    result = credentials_local.secure(root, apply=args.apply, pointers=args.pointer)
+    lines = [result["path"]]
+    if args.apply:
+        backend = secrets_module.default_backend()
+        where = (
+            "the INSECURE plain-file backend (mode 600, not encrypted; this machine has no OS secret store)"
+            if backend == "insecure" else "the {} secret store".format(backend)
+        )
+        lines.append("  values were stored in {}; {} plaintext secret(s) remain".format(where, len(result["secrets"])))
+    elif result["secrets"]:
+        lines.append("  {} plaintext secret(s); `--apply` moves them into the secret store:".format(len(result["secrets"])))
+    else:
+        lines.append("  no plaintext secrets")
+    if not args.apply or result["secrets"]:
+        for item in result["secrets"]:
+            lines.append("    {}{}".format(item["pointer"], "  (production)" if item["production"] else ""))
+    return result, "\n".join(lines)
+
+
+def cmd_cred_local_exec(args, emitter):
+    # Like `cred get`: the child owns stdio, so a JSON document would put the child's
+    # environment (secrets) beside a client's log. Refused rather than honoured.
+    if emitter.as_json:
+        raise UsageError(
+            "`devteam cred local exec` does not support --json",
+            hint="The child command owns stdout and stderr and its exit code is returned as is.",
+        )
+    argv = list(args.command_argv or [])
+    if argv and argv[0] == "--":
+        argv = argv[1:]
+    if not argv:
+        raise UsageError(
+            "no command was given",
+            hint="devteam cred local exec [--path <dir>] <pointer> -- <command> [args...]",
+        )
+    root, project_id = _bound_project(getattr(args, "path", None))
+    values = credentials_local.group_environment(
+        root, args.pointer, project_id, allow_production=args.production
+    )
+    child_env = dict(os.environ)
+    child_env.update(values)
+    import subprocess as _subprocess
+
+    try:
+        code = _subprocess.call(argv, env=child_env)
+    except FileNotFoundError as exc:
+        raise EnvError("command not found: {}".format(argv[0]), details={"reason": "command-not-found"}) from exc
+    except PermissionError as exc:
+        raise EnvError("cannot run {}".format(argv[0]), details={"reason": "command-not-executable"}) from exc
+    if code < 0:
+        code = 128 - code
+    return {"exec_exit_code": code}, None
+
+
+def cmd_qa_auth(args, emitter):
+    root, project_id = _bound_project(getattr(args, "path", None))
+    if args.pointer == "clean":
+        result = qa_auth.clean(project_id)
+        return result, "removed {} QA session file(s)".format(result["removed"])
+    result = qa_auth.authenticate(root, project_id, args.pointer, interactive=args.interactive)
+    return result, "session {} (from {}, until {})".format(result["path"], result["source"], result["expires_at"])
+
+
 def cmd_cred_import(args, emitter):
     project_id = _cred_project_id(args)
     result = creds.import_file(args.file, project_id)
@@ -2328,8 +2420,40 @@ def build_parser():
     )
     cred_local_copy.set_defaults(func=cmd_cred_local_copy_value)
 
+    cred_local_secure = cred_local_leaf(
+        "secure", help="list plaintext secrets; --apply moves them into the OS secret store"
+    )
+    cred_local_secure.add_argument("--apply", action="store_true", help="move them (default: list only)")
+    cred_local_secure.add_argument(
+        "--pointer", action="append", help="only this value (repeatable); needs --apply"
+    )
+    cred_local_secure.set_defaults(func=cmd_cred_local_secure)
+    cred_local_exec = cred_local_leaf(
+        "exec", help="run a command with a group's values as DEVTEAM_<KEY> variables"
+    )
+    cred_local_exec.add_argument(
+        "--production", action="store_true", help="required when the group is under $production"
+    )
+    cred_local_exec.add_argument("pointer", help="JSON pointer of the group, e.g. /app/staging")
+    cred_local_exec.add_argument("command_argv", nargs=argparse.REMAINDER, help="-- <command> [args...]")
+    cred_local_exec.set_defaults(func=cmd_cred_local_exec)
+
     cred_backends = leaf(cred_parser, "backends", help="which secret stores this machine has")
     cred_backends.set_defaults(func=cmd_cred_backends)
+
+    qa_parser = leaf(
+        sub, "qa", help="release QA helpers"
+    ).add_subparsers(dest="qa_cmd")
+    qa_auth_parser = leaf(
+        qa_parser, "auth",
+        help="a browser session file for a credentials group; `auth clean` removes the cached ones",
+    )
+    qa_auth_parser.add_argument("pointer", help="JSON pointer of the group (or `clean`)")
+    qa_auth_parser.add_argument("--path", help="project directory (default: the current one)")
+    qa_auth_parser.add_argument(
+        "--interactive", action="store_true", help="open a browser for a person to sign in once"
+    )
+    qa_auth_parser.set_defaults(func=cmd_qa_auth)
 
     upgrade_parser = leaf(
         sub, "upgrade", help="move this project's memory into the store (asks first)"
@@ -2381,6 +2505,21 @@ def build_parser():
     detect_parser = leaf(sub, "detect", help="read a folder: providers, stack, project type, first task")
     detect_parser.add_argument("--path", help="project directory (default: the current one)")
     detect_parser.set_defaults(func=cmd_detect)
+
+    check_parser = leaf(sub, "check", help="compare the branch diff with the base branch's ADRs and reuse rules")
+    check_parser.add_argument("--base", help="base ref (default: origin's default branch)")
+    check_parser.add_argument("--path", help="project directory (default: the current one)")
+    check_parser.set_defaults(func=cmd_check)
+
+    mine_parser = leaf(
+        sub, "mine", help="candidate rules from local session transcripts and merged-PR review threads"
+    ).add_subparsers(dest="mine_cmd")
+    mine_sessions = leaf(mine_parser, "sessions", help="corrections and preferences typed on 2+ distinct days")
+    mine_sessions.add_argument("--path", help="project directory (default: the current one)")
+    mine_sessions.set_defaults(func=cmd_mine_sessions)
+    mine_reviews = leaf(mine_parser, "reviews", help="resolved or outdated review threads of the last 50 merged PRs")
+    mine_reviews.add_argument("--path", help="project directory (default: the current one)")
+    mine_reviews.set_defaults(func=cmd_mine_reviews)
 
     start_parser = leaf(sub, "start", help="set a folder up and suggest a first, read-only task")
     start_parser.add_argument("--path", help="project directory (default: the current one)")
@@ -2661,6 +2800,8 @@ def main(argv=None, stdout=None, stderr=None):
             return emitter.fail(
                 UsageError("cred needs a subcommand: list, get, set, unset, import, check, backends, local")
             )
+        if getattr(args, "command", None) == "qa":
+            return emitter.fail(UsageError("qa needs a subcommand: auth"))
         if getattr(args, "command", None) == "notifications":
             return emitter.fail(UsageError("notifications needs a subcommand: list, ack, watch"))
         if getattr(args, "command", None) == "tasks":
@@ -2728,6 +2869,10 @@ def main(argv=None, stdout=None, stderr=None):
         if payload.get("may_write") is False:
             ok = False
             exit_code = 1
+    elif payload.get("exec_exit_code") is not None:
+        # `cred local exec`: the child's exit code is the command's own.
+        exit_code = payload["exec_exit_code"]
+        ok = exit_code == 0
     elif payload.get("problems"):
         # Applies to sync AND update: an update that activates a version but fails
         # to sync N projects is not a success.

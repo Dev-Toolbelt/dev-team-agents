@@ -1,6 +1,6 @@
 # Agent Readiness
 
-Load when the site expects AI agents or agentic browsers to read or act on it, or when content may only exist after JavaScript runs. Many agentic browsers read pages through the accessibility tree and the DOM, so most of these checks are accessibility checks — for WCAG rules load `skills/architecture/accessibility-patterns/SKILL.md`.
+Load when the site expects AI agents or agentic browsers to read or act on it, or when content may only exist after JavaScript runs. Many agentic browsers read pages through the accessibility tree and the DOM, so most of these checks are accessibility checks — for WCAG rules load `skills/architecture/accessibility-patterns/SKILL.md`. Google points site owners to web.dev's [best practices for agent-compatible sites](https://web.dev/articles/ai-agent-site-ux).
 
 ## Content without JavaScript
 
@@ -30,6 +30,6 @@ A raw HTML page with fewer than about 150 visible words on a content page is a s
 ## Optional machine-readable delivery
 
 - A Markdown version of a page (a `.md` alternate or `Accept: text/markdown` negotiation) is optional; no major consumer is documented. If content is negotiated on `Accept`, the response must send `Vary: Accept` so caches do not serve Markdown to browsers
-- `llms.txt` rules live in the skill's GEO section
+- `llms.txt` rules live in the skill's § AI Search › Not needed for Google
 
-Emerging agent protocols (agent cards, commerce manifests, browser-exposed tool APIs) are drafts with no confirmed consumer: mention them only when the user asks, as "track, don't implement yet".
+Emerging agent protocols (agent cards, commerce manifests, browser-exposed tool APIs) are drafts with no confirmed consumer: mention them only when the user asks, as "track, don't implement yet". The [Universal Commerce Protocol](https://ucp.dev/) is the one Google names as letting its Search agents take more actions — on a store, flag it as worth tracking, not as a gap.

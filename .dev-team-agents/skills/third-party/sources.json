@@ -9,18 +9,35 @@
       "license_files": [
         "LICENSE"
       ],
-      "sha256": "803c2200236dce939f2d142ed0e25f725dcb9c7e7405fcd12ded4dccaabe796a"
+      "sha256": "ab97dea38a29d6794b44461bb46c7f43a654741d4800462b0d1eac441f4c0ea2"
     },
     "impeccable": {
       "repo": "pbakaus/impeccable",
       "commit": "3671d50f0ac9a662ce0615e85a256110c9cd720b",
       "path": ".claude/skills/impeccable",
+      "exclude": [
+        "scripts/**"
+      ],
       "license": "Apache-2.0",
       "license_files": [
         "LICENSE",
         "NOTICE.md"
       ],
-      "sha256": "b5efb0b096725a63a72c7132a49f7ebfde80be3d64d54546960a9add0245845f"
+      "sha256": "ee49fd5455606f49f2f162277e904da6e0eec2b661c674ed2fa0c9358badbfe7"
+    },
+    "stop-slop": {
+      "repo": "hardikpandya/stop-slop",
+      "commit": "8da1f030185bdfe8471220585162991eaeb970e9",
+      "path": ".",
+      "exclude": [
+        "README.md",
+        "CHANGELOG.md"
+      ],
+      "license": "MIT",
+      "license_files": [
+        "LICENSE"
+      ],
+      "sha256": "156e9854bdc1ca877adaac4f2389039540e5df3a28470c7a85895121de47427b"
     },
     "ui-ux-pro-max": {
       "repo": "nextlevelbuilder/ui-ux-pro-max-skill",
@@ -30,7 +47,7 @@
       "license_files": [
         "LICENSE"
       ],
-      "sha256": "5a183e517ca826c75f1fd13b476c2827a6adaefb8301bee02410a216f775f1f8"
+      "sha256": "1af60155c7e318bcf881d1ee170b788ec6de7996da623637d3439f761924814c"
     }
   }
 }

@@ -22,6 +22,8 @@ from . import providers as providers_module
 OK = "ok"
 WARN = "warn"
 FAIL = "fail"
+#: Advisory only: never counts toward the overall status or the exit code.
+INFO = "info"
 
 
 def _points_into(target, version):
@@ -98,6 +100,35 @@ def _ask_rule_findings(root, bound, manifest):
                 "Add `[features] default_mode_request_user_input = true` to `~/.codex/config.toml` "
                 "to get the interactive chooser.",
             ))
+    return findings
+
+
+def _task_board_findings(root, bound):
+    """Whether each bound provider can bring an approved plan to the task board."""
+    findings = []
+    if "codex" in bound:
+        state = permissions.codex_update_plan_enabled(root)
+        if state is True:
+            findings.append(_finding(OK, "task-board", "Codex update_plan tool is on (plans reach the task board)"))
+        else:
+            hint = (
+                "Add `[tools.update_plan]` / `enabled = true` to `~/.codex/config.toml` "
+                "(or to the project's `.codex/config.toml` in a trusted project)."
+            )
+            if state is None:
+                findings.append(_finding(
+                    WARN, "task-board",
+                    "Codex's config could not be read, so it is not confirmed that the `update_plan` tool is on; "
+                    "approved plans reach the task board as steps only when it is; devteam does not write Codex config",
+                    hint,
+                ))
+            else:
+                findings.append(_finding(
+                    WARN, "task-board",
+                    "Codex's `update_plan` tool is off, so approved plans cannot reach the task board as steps; "
+                    "devteam does not write Codex config",
+                    hint,
+                ))
     return findings
 
 
@@ -640,6 +671,7 @@ def check_project(project_root):
             )
 
     findings.extend(_ask_rule_findings(root, bound, manifest))
+    findings.extend(_task_board_findings(root, bound))
 
     if manifest.get("mode") and entry.get("mode") and manifest["mode"] != entry["mode"]:
         findings.append(
@@ -743,7 +775,44 @@ def check_credentials_local(root):
                 "chmod 600 {}".format(target),
             )
         )
+    findings.extend(_plaintext_secret_findings(root))
     return findings, actions, report
+
+
+def _plaintext_secret_findings(root):
+    """ADR-0053 § 5: one finding per plaintext secret (pointer only, never a value).
+
+    Under ``$production`` it is a FAIL; elsewhere an INFO, which leaves the status and the
+    exit code alone. An insecure-backend reference under ``$production`` is a FAIL too. A
+    missing or unreadable file yields nothing here: relocation and validity are reported by
+    their own checks.
+    """
+    try:
+        document = credentials_local.load_document(root)
+        found = credentials_local.plaintext_secrets(document)
+    except (EnvError, ConflictError, OSError):
+        return []
+    findings = [
+        _finding(
+            FAIL if item["production"] else INFO,
+            "plaintext-secret",
+            "{} holds a plaintext secret{}".format(
+                item["pointer"], " under $production" if item["production"] else ""
+            ),
+            "Run `devteam cred local secure --apply` to move it into the OS secret store.",
+        )
+        for item in found
+    ]
+    for pointer in sorted(credentials_local.insecure_refs_in_production(document)):
+        findings.append(
+            _finding(
+                FAIL,
+                "insecure-backend",
+                "{} is kept in the plain-file backend under $production".format(pointer),
+                "Store it again on a machine with an OS secret store, or use an op:// or bw:// reference.",
+            )
+        )
+    return findings
 
 
 def run(project_root=None, reassign_identity=False):
@@ -838,13 +907,17 @@ def _python_fix(platform, which):
     return None, False
 
 
-def check_prerequisites(platform=None, which=None, version_of=None, python_version=None):
+def check_prerequisites(platform=None, which=None, version_of=None, python_version=None, probe_of=None):
     """Git, Python and each provider CLI. Reports only; nothing here installs anything.
 
-    ``platform``, ``which``, ``version_of`` and ``python_version`` are seams for tests.
+    ``platform``, ``which``, ``version_of``, ``python_version`` and ``probe_of`` are seams for
+    tests; ``probe_of`` defaults to ``detect.probe``, the rule ``devteam detect`` uses for ``usable``.
     """
     platform = platform or sys.platform
     which = which or shutil.which
+    if probe_of is None:
+        # A test that seams only `version_of` keeps its old meaning: no version, no answer.
+        probe_of = (lambda name: (version_of(name) is not None, version_of(name))) if version_of else detect_module.probe
     version_of = version_of or detect_module.binary_version
     python_version = python_version or sys.version_info[:3]
     findings = []
@@ -895,9 +968,10 @@ def check_prerequisites(platform=None, which=None, version_of=None, python_versi
             )
             continue
         found_any = True
-        version = version_of(name)
-        if version:
-            findings.append(_machine_finding(OK, "provider", "{} {}".format(name, version)))
+        # The same rule `devteam detect` uses for `usable` (detect.probe).
+        answered, version = probe_of(name)
+        if answered:
+            findings.append(_machine_finding(OK, "provider", "{} {}".format(name, version or "(version unknown)")))
         else:
             findings.append(
                 _machine_finding(

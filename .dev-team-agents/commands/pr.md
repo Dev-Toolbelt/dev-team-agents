@@ -16,6 +16,12 @@ Load `skills/shared/git-workflow/SKILL.md` and run its **Dirty-Tree Pre-flight**
 
 ---
 
+## Step -0 — Decision check pre-flight
+
+Run the `git-workflow` skill (loaded above)'s **Decision Check Pre-flight** with the **Justify in the PR body** option, then continue to Step 0a.
+
+---
+
 ## Step 0a — Conventional Commits pre-flight
 
 Before drafting the PR body, detect the default branch and the project's commit pattern:
