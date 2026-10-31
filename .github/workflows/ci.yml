@@ -106,6 +106,28 @@ jobs:
       - name: README / docs sync check (EN ↔ pt-BR)
         run: bash .github/scripts/ci/02-readme-sync.sh
 
+  # Secrets in git history and static analysis (ADR-0059). The commit hook catches a secret
+  # before it is committed on a contributor's machine; this job is the backstop for every
+  # commit that reached a branch without it.
+  security-scan:
+    name: Security scan (gitleaks, semgrep)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks scans the whole history, not only the tip.
+          fetch-depth: 0
+          # The job runs a pip install; the token has no reason to sit in .git/config meanwhile.
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: gitleaks and semgrep
+        run: bash .github/scripts/ci/08-security-scan.sh
+
   # This is the highest-value cross-OS addition in the workflow: the CLI (`scripts/lib/devteam/`)
   # is the part of the repository that most directly claims Windows and macOS support — bind's
   # `copy` mode exists solely for a Windows host without symlink privilege, and `core/current` is

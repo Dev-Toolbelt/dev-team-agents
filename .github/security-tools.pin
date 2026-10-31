@@ -1,0 +1,10 @@
+# Pinned scanners for the security-scan CI job (ADR-0059).
+#
+# Same discipline as shellcheck.pin: the job downloads exactly this gitleaks build and refuses
+# to run it unless its sha256 matches, and installs exactly this semgrep. Keep the gitleaks
+# version equal to the one in scripts/lib/devteam/tool-pins.json, so CI and the commit hook a
+# contributor runs locally agree on what counts as a secret.
+gitleaks_version=8.30.1
+gitleaks_sha256_x86_64=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+gitleaks_sha256_aarch64=e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080
+semgrep_version=1.176.0

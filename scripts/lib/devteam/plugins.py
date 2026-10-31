@@ -676,6 +676,7 @@ def _kill_group(proc, job=None):
         taskkill = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "taskkill.exe")
         try:
             subprocess.run(
+                # nosemgrep: dangerous-subprocess-use-tainted-env-args -- an argv list, no shell; whoever sets SystemRoot already runs code as this user
                 [taskkill, "/F", "/T", "/PID", str(proc.pid)],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=KILL_GRACE_SECONDS, check=False,
             )

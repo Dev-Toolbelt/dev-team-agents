@@ -1,0 +1,7 @@
+# gitleaks configuration for this repository (ADR-0059): the default rules, plus one allowlist.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Supabase publishable keys are public by design (ADR-0029); a secret key is sb_secret_ and stays caught"
+regexes = ['''^sb_publishable_[A-Za-z0-9_-]+$''']

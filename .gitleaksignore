@@ -1,0 +1,39 @@
+# gitleaks baseline (ADR-0059). Every entry was reviewed on 2026-10-31 and is not a secret.
+# A new finding is never added here to make a build green: fix it, or justify it the same way.
+
+# test fixtures: fake credentials that exercise redaction and secret detection
+26a36b984c4e24a0ab226ad355591b71f77f6d84:tests/test_direct_work.py:stripe-access-token:96
+396a06c7e7d52e5ea467a3d43579d81778066a68:tests/test_repairs.py:generic-api-key:203
+396a06c7e7d52e5ea467a3d43579d81778066a68:tests/test_repairs.py:github-pat:222
+4b853e2d35cccc2b0d2ed32b635c92b2e4eddd76:tests/test_direct_work.py:curl-auth-header:119
+4b853e2d35cccc2b0d2ed32b635c92b2e4eddd76:tests/test_direct_work.py:curl-auth-header:121
+4b853e2d35cccc2b0d2ed32b635c92b2e4eddd76:tests/test_direct_work.py:generic-api-key:138
+bfaa46768271ffcb762e5fc33d606e75d7fc60a5:tests/test_direct_work.py:curl-auth-user:156
+bfaa46768271ffcb762e5fc33d606e75d7fc60a5:tests/test_direct_work.py:private-key:164
+
+# Supabase publishable (anon) key: public by design, shipped in every client (ADR-0029)
+0d3721412ad6261fdec81e21cd17b2d67505deb9:scripts/lib/auth-config.json:generic-api-key:10
+cd58999348e63e9d64a797cf8bbf525832b4fa98:scripts/lib/auth-config.dev.json:generic-api-key:8
+e987c056b748a03a707c3b83c489060b6c53b104:.dev-team-agents/scripts/lib/auth-config.json:generic-api-key:10
+
+# cPanel API reference: placeholder tokens and sample keys in documented request/response examples
+915eff3576f29b95973461bbced0fa9537b96b94:skills/integrations/cpanel/references/modules/commerce-integration.md:generic-api-key:260
+915eff3576f29b95973461bbced0fa9537b96b94:skills/integrations/cpanel/references/modules/commerce-integration.md:generic-api-key:574
+915eff3576f29b95973461bbced0fa9537b96b94:skills/integrations/cpanel/references/modules/contact-information.md:generic-api-key:122
+915eff3576f29b95973461bbced0fa9537b96b94:skills/integrations/cpanel/references/modules/dns.md:generic-api-key:532
+915eff3576f29b95973461bbced0fa9537b96b94:skills/integrations/cpanel/references/modules/dns.md:private-key:1055
+915eff3576f29b95973461bbced0fa9537b96b94:skills/integrations/cpanel/references/modules/notifications.md:generic-api-key:35
+915eff3576f29b95973461bbced0fa9537b96b94:skills/integrations/cpanel/references/modules/ssl-certificates.md:private-key:1136
+915eff3576f29b95973461bbced0fa9537b96b94:skills/integrations/cpanel/references/modules/website-configuration.md:generic-api-key:374
+915eff3576f29b95973461bbced0fa9537b96b94:skills/integrations/cpanel/references/modules/website-configuration.md:generic-api-key:530
+915eff3576f29b95973461bbced0fa9537b96b94:skills/integrations/cpanel/references/modules/website-configuration.md:generic-api-key:629
+95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/commerce-integration.md:generic-api-key:260
+95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/commerce-integration.md:generic-api-key:574
+95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/contact-information.md:generic-api-key:122
+95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/dns.md:generic-api-key:532
+95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/dns.md:private-key:1055
+95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/notifications.md:generic-api-key:35
+95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/ssl-certificates.md:private-key:1136
+95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/website-configuration.md:generic-api-key:374
+95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/website-configuration.md:generic-api-key:530
+95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/website-configuration.md:generic-api-key:629

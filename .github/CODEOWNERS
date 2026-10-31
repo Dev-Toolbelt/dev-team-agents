@@ -47,6 +47,13 @@ skills/skill-creator/     @Dev-Toolbelt/maintainers
 .github/scripts/ci/       @Dev-Toolbelt/maintainers
 .github/CODEOWNERS        @Dev-Toolbelt/maintainers
 
+# ── Secret-scan suppressions (ADR-0059) ─────────────────────────────────────
+# A fingerprint or allowlist entry silences the security-scan CI job; a PR adding
+# one next to a secret must not merge on its author's say-so.
+.gitleaksignore           @Dev-Toolbelt/maintainers
+.gitleaks.toml            @Dev-Toolbelt/maintainers
+.github/security-tools.pin @Dev-Toolbelt/maintainers
+
 # ── Documentation ───────────────────────────────────────────────────────────
 docs/                     @Dev-Toolbelt/maintainers
 
