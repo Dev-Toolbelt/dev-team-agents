@@ -72,7 +72,7 @@ Report each failed check with the fix; do not work around it.
    - compose: the services that will start, and a flag on `privileged`, host mounts of `/` or `docker.sock`, `network_mode: host`, `pid: host`, `cap_add`, and `build:` contexts (their Dockerfile `RUN` steps execute).
    - `.claude/launch.json` already present: the full entry that `preview_start` will run (executable, args, `env`, `url`, port).
 
-   Flag risky shapes — piping into a shell, `sudo`, downloads, writes outside the checkout, `rm` — and any port published on all interfaces (`"5432:5432"`, `--host 0.0.0.0`). Options: run (recommended), another documented mode when there is one, Other.
+   Flag risky shapes — piping into a shell, `sudo`, downloads, writes outside the checkout, `rm` — and any port published on all interfaces (`"5432:5432"`, `--host 0.0.0.0`). Options: run (recommended), another documented mode when there is one, Other — these replace the run-plan quiz options. The list and interactive steps follow `skills/shared/interaction-patterns/SKILL.md` § Command Run Plan; this step adds the source and wrapper detail, and its confirmation rules win over that section's.
 
    **Caller's confirmation.** A caller that already asked the user about exactly one quoted command (the Visual Check Gate) has satisfied this step only when that command is direct — not a wrapper, not compose, no risky shape, no pre-existing `launch.json` entry. Anything else gets this step in full.
 2. **Run** long-lived processes in the background, never blocking the conversation:
