@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Windows installers are signed through SSL.com eSigner (ADR-0055).** The `.pfx` path (`WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD`) is gone: no certificate issued since 2023 can be exported to one. `app/build/sign-windows.cjs` signs the app's executables as electron-builder's sign hook and the CLI installers in `windows-cli.yml`, sha256 only, when the four `WIN_ESIGNER_*` secrets exist; without them every build stays unsigned as before, and pull requests never sign. CodeSignTool is pinned by version and SHA-256. **Breaking for a local build that sets `WIN_CSC_LINK` without `WIN_ESIGNER_*`:** it now fails instead of signing. A partial `WIN_ESIGNER_*` set fails a release; only a build that attaches installers signs, and the production secrets go in a tag-restricted `esigner-production` environment. The new dispatch-only `windows-signing-sandbox.yml` proves the chain against the eSigner sandbox before a certificate is bought.
+
 ---
 
 ## [2.49.1] - 2026-10-30

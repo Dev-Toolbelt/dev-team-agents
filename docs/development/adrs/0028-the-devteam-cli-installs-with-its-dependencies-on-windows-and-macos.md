@@ -144,3 +144,7 @@ The CLI imports only the standard library, so any CPython 3.9+ runs it.
 | **The pinned Python ages.** A CPython security release does not reach installed CLIs by itself. | The pin is one file; re-running the installer replaces `python\`. | Depends on a maintainer bumping it. |
 | **Windows-only paths are not run on the maintainers' Macs.** The installer, the launcher and the PATH edit run only on Windows. | The release workflow installs the x64 installer silently on a Windows runner and checks `devteam.exe`, the store, the PATH and the uninstall. | The interactive wizard, the Git prompt, an upgrade over a running install and the arm64 installer are exercised only by a person. |
 | **`curl \| bash` asks the user to trust a script.** | The script is in the repository, served from `main`, wrapped so a truncated download runs nothing, and does nothing that needs `sudo`. | The same trust the existing `install.sh` already asks for. |
+
+> **Note (2026-10-31) — ADR-0055 decides the first row's signing.** The Windows CLI installers are
+> Authenticode-signed through SSL.com eSigner on a tag build once the `WIN_ESIGNER_*` secrets exist.
+> The row's residual closes when the first signed CLI installer ships; until then they stay unsigned.

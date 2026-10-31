@@ -101,21 +101,40 @@ the workflow has never run — read § What is unverified before relying on any 
 | `MAC_CSC_KEY_PASSWORD` | the `.p12`'s password | same |
 | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | notarisation, Apple-ID variant | no notarisation → the macOS build stays unsigned (a signed-but-not-notarised dmg still trips Gatekeeper) |
 | `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | notarisation, API-key variant (contents of the `.p8`, key id, issuer id) — use **either** this set or the Apple-ID set | same |
-| `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | Windows installer signing: base64 `.pfx` and its password | the installers are built **unsigned** |
+| `WIN_ESIGNER_USERNAME`, `WIN_ESIGNER_PASSWORD`, `WIN_ESIGNER_CREDENTIAL_ID`, `WIN_ESIGNER_TOTP_SECRET` | Windows signing through SSL.com eSigner (ADR-0055), for the app's installers and the CLI's: the SSL.com account, the certificate's credential id and the eSigner TOTP secret (the base32 text behind the enrollment QR code). Put them in the **`esigner-production` environment**, not the repository secrets (below) | the installers are built **unsigned**; a partial set **fails** the release |
 
 No secret is ever needed for an unsigned build: that is the ADR-0027 beta, published as a
-GitHub **prerelease**. Caveat on `WIN_CSC_*`: since the 2023 CA/B Forum rule new
-Authenticode certificates live on hardware or in a cloud HSM and **cannot be exported to a
-`.pfx`**. If that is the certificate you will hold, a `.pfx` secret does not apply and a
-different mechanism (for example Azure Trusted Signing through electron-builder's
-`win.azureSignOptions`) has to be wired — not done here.
+GitHub **prerelease**. Windows signing has no `.pfx` path: since the 2023 CA/B Forum rule a
+new certificate cannot be exported to one, so the key stays in SSL.com's cloud HSM and
+`app/build/sign-windows.cjs` signs through eSigner (ADR-0055).
+
+**Where the production eSigner secrets live.** Create a GitHub environment named
+`esigner-production` (Settings → Environments), add a deployment rule allowing only the tags
+`v*.*.*` and `app-v*.*.*`, and store the four `WIN_ESIGNER_*` secrets there. Add a tag ruleset
+(Settings → Rules → Rulesets) limiting who may create those tags. `app-build-win` and the CLI
+build that attaches installers run in that environment; with the secrets there and not in the
+repository, no branch, pull request or dispatch from another ref can reach them. Together the
+four values sign anything in the company's name, so rotate the password and re-enroll the TOTP
+on any suspicion.
+
+**Before buying, prove the chain against the sandbox.** Create a GitHub environment named
+`esigner-sandbox` (Settings → Environments) holding `WIN_ESIGNER_SANDBOX_USERNAME`,
+`WIN_ESIGNER_SANDBOX_PASSWORD`, `WIN_ESIGNER_SANDBOX_CREDENTIAL_ID` and
+`WIN_ESIGNER_SANDBOX_TOTP_SECRET` with SSL.com's published demo account (their guide *eSigner
+Demo Credentials and Certificates*), then run **Windows signing (eSigner sandbox)** from the
+Actions tab. It signs the app's and the CLI's installers with a test certificate and publishes
+nothing. The workflow file has to be on the default branch before it can be dispatched. Never
+put the demo account in the repository-level secrets, which the release jobs read.
 
 ### One-time: accounts
 
 - [ ] **Apple Developer Program** membership; a **Developer ID Application** certificate
       exported as `.p12`; an app-specific password or an App Store Connect API key
       for `notarytool`
-- [ ] **A code-signing certificate for Windows** (see the caveat above)
+- [ ] **An SSL.com OV code signing certificate with eSigner**, in the company's name
+      (ADR-0055). Bought when the Windows app is released for real: it is valid for at most
+      458 days. After issuance, enroll it in eSigner and keep the TOTP secret's text, not
+      only the QR code
 - [ ] **A GitHub personal access token with `public_repo`** for `wingetcreate`, kept on
       the machine that submits (`wingetcreate token --store`), never in this repository
 
@@ -279,10 +298,10 @@ prerequisites the repository owner holds; nothing in this session advanced any o
 - [x] **A build that produces it**: `windows-cli/build.py`, run by `release.yml`'s
       `windows-cli-installer` job, which also attaches the installers and their
       `SHA256SUMS.txt` to the tag's release
-- [ ] A code-signing certificate (Authenticode). winget does not require signing, but
-      the unsigned installer triggers SmartScreen for every user, as the app does.
-      The **CLI installer's signing is not wired** (`release.yml` builds it unsigned); only
-      the app's installers sign, from `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD`
+- [ ] Authenticode signing, through the `WIN_ESIGNER_*` secrets (ADR-0055). winget does
+      not require signing, but the unsigned installer triggers SmartScreen for every user,
+      as the app does. `windows-cli.yml` signs both installers on a tag build when the four
+      secrets exist, verifies them and rewrites `SHA256SUMS.txt`; pull requests never sign
 - [ ] A GitHub account able to open a pull request against
       `microsoft/winget-pkgs` (public repo, no special access needed — just review)
 
@@ -297,9 +316,9 @@ prerequisites the repository owner holds; nothing in this session advanced any o
       `app/electron-builder.yml` now has `win` and `nsis` blocks
 - [ ] A Windows build of the app. The `app-build-win` job builds it on `app-v*` tags; it
       has never run
-- [ ] Windows code-signing (Authenticode) via `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD`
-      (see the exportability caveat in § What is left). Without it the installers are
-      unsigned, SmartScreen warns, and **no app winget manifest is rendered**
+- [ ] Windows code-signing (Authenticode) via the `WIN_ESIGNER_*` secrets (ADR-0055).
+      Without them the installers are unsigned, SmartScreen warns, and **no app winget
+      manifest is rendered**
 - [ ] The rendered `winget-manifests-DevteamApp-<version>` artifact (real URLs and
       digests, from a verified-signed release) submitted with `wingetcreate submit`,
       after the CLI's package is accepted
@@ -686,7 +705,7 @@ belong in this table.
 | Whether the dmg filename the cask builds is the one the build produces | The two `version` values that decide it are hand-maintained in two files and no step derives either from the `app-v*` tag. Nothing compares them: `04-packaging.sh` runs `ruby -c` on the cask and never reads `app/package.json`, and `05-app.sh` never reads the cask. A release whose stamping step is missing produces a cask whose `url` 404s for a reason that looks like a mirror problem |
 | The app on winget, published | The manifest scaffold now exists (M4.3 closeout) — this row is no longer "there is no manifest", it is "the manifest has never been validated or installed". No Windows build of the app has ever been produced, so `InstallerUrl`/`InstallerSha256` are placeholders and there is nothing for `winget validate` to fetch yet |
 | Whether winget accepts `InstallerType: nullsoft` with this manifest's `Dependencies.PackageDependencies` shape | The schema permits both fields; nothing here has asked `winget validate` whether it accepts a `PackageDependencies` entry naming a **CLI** package (`DevToolbelt.Devteam`) from an app manifest the way this file writes it. That is a winget-behaviour question, not a schema question, and only a real Windows machine answers it |
-| Windows installer signing (CLI or app) | Needs an Authenticode code-signing certificate — same reasoning for both packages. Required outright by CLI candidate (a); recommended for the CLI's other candidates and for the app's NSIS installer |
+| Windows installer signing (CLI or app) | Wired through SSL.com eSigner (ADR-0055) and **never run**: not against production (no certificate yet) and not against the sandbox — `windows-signing-sandbox.yml` is the first proof and has not been dispatched. Unconfirmed until then: that `unzip` (or `python`) is on the Git Bash PATH of `windows-latest`, that `JAVA_HOME_17_X64` is set there, CodeSignTool's output on success (no harmless line containing `Error`), how many signatures electron-builder asks for per release, and that `windows-cli.yml`'s `environment:` expression resolving to an empty name on a pull request runs the job with no environment |
 | Anything winget accepts or rejects, for either package | `winget` runs on Windows only. `04-packaging.sh` checks the manifests against the schema's rules and against each other; it has never asked `winget validate` for its opinion, and the two are not the same authority. The CLI's installer shape is still undecided; the app's is decided (NSIS) but unbuilt |
 | The `InstallerSha256` values in both winget installer manifests | 64 zeros in each — no Windows installer, CLI or app, has ever been built, signed or hashed |
 | winget acceptance, for either package | Publication is itself a reviewed pull request to `microsoft/winget-pkgs`, against a real installer URL and hash that do not exist yet — review happens on Microsoft's infrastructure, not here |

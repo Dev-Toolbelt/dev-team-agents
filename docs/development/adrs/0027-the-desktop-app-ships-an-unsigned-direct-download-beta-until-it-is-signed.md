@@ -130,3 +130,9 @@ is worse, which is acceptable for a beta that is meant to reach few people.
 > published, and this ADR's conditions, including decision 1's "nothing unsigned goes to the cask or
 > winget", stay in force until a verified signed release has actually shipped. Operator steps:
 > `packaging/README.md` § What is left for the maintainer.
+
+> **Amended by ADR-0055 (2026-10-31) — Windows signs through SSL.com eSigner.** The Note's
+> `WIN_CSC_LINK`/`WIN_CSC_KEY_PASSWORD` path is removed: no certificate issued today can be exported
+> to a `.pfx`. The Windows installers sign when the four `WIN_ESIGNER_*` secrets exist, and a
+> `WIN_CSC_LINK` without them fails the build. Decision 1, the end condition and the macOS half of
+> the Note are unchanged.
