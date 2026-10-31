@@ -158,6 +158,25 @@ def store_install(where):
     return result.returncode
 
 
+def tools_install(where):
+    """The pinned helper tools (ADR-0060), into this install's own bin\\ — already on PATH.
+
+    Never fails the installer: a tool that cannot be installed is listed as skipped, and the
+    first `devteam bind` retries.
+    """
+    env = dict(os.environ, DEVTEAM_BIN_DIR=where["bin"])
+    result = subprocess.run(
+        [where["python"], where["cli"], "tools", "install"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+        env=env,
+    )
+    print((result.stdout or "").strip() or "tools: nothing to report")
+    if result.returncode != 0:
+        print("some tools were not installed; `devteam tools install` retries")
+
+
 def cmd_install(instdir):
     where = paths(instdir)
     with open(where["launcher"], "rb") as handle:
@@ -170,6 +189,7 @@ def cmd_install(instdir):
     status = store_install(where)
     if status == 0:
         hint_current(where)
+        tools_install(where)
     return status
 
 

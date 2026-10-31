@@ -8,7 +8,8 @@
 # Installs, for the current user only (no sudo):
 #   ~/.local/share/devteam/scripts/{cli,lib/devteam}   the CLI, laid out as the Homebrew formula does
 #   ~/.local/bin/devteam                               a launcher running it with the verified Python
-# then installs that release's framework into the store (`devteam store install`). An
+# then installs that release's framework into the store (`devteam store install`) and the
+# pinned helper tools (`devteam tools install`, ADR-0060; DEVTEAM_SKIP_TOOLS=1 skips them). An
 # already-installed version is left alone and an existing `current` is never moved. Safe to
 # re-run — which is also how the CLI itself is upgraded: `devteam update` moves the
 # framework, not the CLI. It replaces only the CLI directory it owns, never the store.
@@ -122,6 +123,11 @@ main() {
         *) printf '%s\n' "$output" >&2; die "devteam store install failed (exit $status)." ;;
     esac
     hint_current "$launcher" "$python" "$source"
+
+    # ── The helper tools (ADR-0060) ───────────────────────────────────────────
+    # Listed as they install. Never fatal: a tool that cannot be installed is reported as
+    # skipped, and DEVTEAM_SKIP_TOOLS=1 turns the step off.
+    "$launcher" tools install </dev/null || say "Some tools were not installed; \`devteam tools install\` retries."
 
     case ":$PATH:" in
         *":$bin_dir:"*) ;;

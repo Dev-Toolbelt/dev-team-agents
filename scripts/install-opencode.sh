@@ -291,6 +291,13 @@ if [[ $DRY_RUN -eq 0 && -z "$OWNED_FILE" ]]; then
   po_record_ledger "$PROJECT_ROOT" opencode "$TARGETS"
 fi
 
+# ── helper tools (ADR-0060) — a bind installs them itself ────────────
+if [[ $DRY_RUN -eq 0 && -z "$OWNED_FILE" ]]; then
+  # shellcheck source=scripts/lib/provision-tools.sh
+  source "$SCRIPT_DIR/lib/provision-tools.sh"
+  pt_provision install-opencode "$SCRIPT_DIR"
+fi
+
 echo ""
 echo "install-opencode: done."
 echo "  Next: restart opencode to load the new agents, commands, and plugin."

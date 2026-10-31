@@ -1324,6 +1324,14 @@ if [ -f "$USER_DATA_DIR/.auto-update" ]; then
     echo "→ Migrated .auto-update flag → preferences.json (auto_update field)"
 fi
 
+# ── Step 12b: Helper tools (ADR-0060) ────────────────────────────────────────
+# `devteam bind` installs them itself; this is the same step for the standalone install.
+if [ -f "$INSTALL_DIR/scripts/lib/provision-tools.sh" ]; then
+    # shellcheck source=scripts/lib/provision-tools.sh
+    source "$INSTALL_DIR/scripts/lib/provision-tools.sh"
+    pt_provision install "$INSTALL_DIR/scripts"
+fi
+
 # ── Step 13: Send install telemetry event ────────────────────────────────────
 _TELEMETRY_SEND="$INSTALL_DIR/scripts/helpers/telemetry-send.sh"
 if [ -f "$_TELEMETRY_SEND" ]; then
