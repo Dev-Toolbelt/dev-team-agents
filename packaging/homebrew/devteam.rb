@@ -78,6 +78,8 @@ class Devteam < Formula
     # CLI package itself needs.
     (libexec/"scripts/cli").install "scripts/cli/devteam"
     (libexec/"scripts/lib/devteam").install Dir["scripts/lib/devteam/*.py"]
+    # The sign-in script `devteam qa auth` runs on the project's Playwright (ADR-0054).
+    (libexec/"scripts/lib/devteam").install Dir["scripts/lib/devteam/*.mjs"]
     (libexec/"scripts/lib/devteam/integrations").install Dir["scripts/lib/devteam/integrations/*.py"]
     # The compiled account identity; entitlement.py resolves it as a sibling of the package.
     (libexec/"scripts/lib").install "scripts/lib/auth-config.json"

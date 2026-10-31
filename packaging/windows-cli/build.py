@@ -36,6 +36,9 @@ from devteam.versions import CORE_TREES, OPTIONAL_TREES, version_from_tree  # no
 
 #: Root files `store install` copies beside the trees (versions.install_from_tree).
 PAYLOAD_FILES = ("CHANGELOG.md", "CLAUDE.md")
+#: Files under scripts/lib the CLI loads as siblings of its package — the same list the
+#: Homebrew formula installs there: the account identity, and what `devteam check` imports.
+CLI_LIB_FILES = ("auth-config.json", "docs_root.py", "index_lint.py", "doc-layouts.json")
 
 
 def sha256(data):
@@ -101,8 +104,8 @@ def stage(arch, tree, pins, root):
         str(cli / "lib" / "devteam"),
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
     )
-    # The compiled account identity; entitlement.py resolves it as a sibling of the package.
-    shutil.copy2(str(tree / "scripts" / "lib" / "auth-config.json"), str(cli / "lib" / "auth-config.json"))
+    for name in CLI_LIB_FILES:
+        shutil.copy2(str(tree / "scripts" / "lib" / name), str(cli / "lib" / name))
 
     payload = root / "payload"
     payload.mkdir()
