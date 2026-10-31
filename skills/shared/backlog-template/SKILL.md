@@ -1,6 +1,6 @@
 ---
 name: backlog-template
-description: Backlog — epics, sprints, tasks, DoD, dependencies, estimates.
+description: Backlog — epics, sprints, tasks, DoD, dependencies, start/finish time tracking.
 ---
 
 # Backlog Template
@@ -92,7 +92,6 @@ A task is DONE when ALL of the following are true:
 **Goal**: [What this epic delivers]
 **Specs**: [`docs/specs/<feature>.md`, … — the epic's criteria live there, never restated here]
 
-**Estimated effort**: [S / M / L / XL]
 **Priority**: [High / Medium / Low]
 **Dependencies**: [Epic X, external system Y]
 
@@ -109,17 +108,19 @@ A task is DONE when ALL of the following are true:
 # Sprint <n> — [Theme]
 
 **Goal**: [What should be achievable at the end of this sprint]
-**Start**: YYYY-MM-DD
-**End**: YYYY-MM-DD
-**Estimated duration**: N weeks
+**Started**: —  <!-- § Time Tracking: set when the sprint's first task starts -->
+**Finished**: —  <!-- set when the sprint is set Done -->
+**Time spent**: —
+**Runs with**: [other sprints that may run at the same time as this one, or "none" — § Sprint Parallelism]
 **Agents**: [list of agents that will act in this sprint — see Agent Assignment table below]
 
 ## Parallel Execution Plan
 
-Tasks are grouped into **waves**. Every task in the same wave is mutually
-independent and can be built **in parallel**, each in its own git worktree
-(and its own isolated Docker stack when the project uses Docker — see below).
-A wave starts only after every task in the previous wave is done.
+Tasks are grouped into **waves**: the order they run in. Every task in the same
+wave is mutually independent; a wave starts only after every task in the
+previous wave is done. By default the sprint runs its tasks one at a time, in
+wave order; the waves are also what lets the per-task strategy of
+`/devteam:sprint` build a wave's tasks in parallel.
 
 | Wave | Tasks (parallel) | Blocks (why the next wave waits) |
 |------|------------------|----------------------------------|
@@ -127,13 +128,14 @@ A wave starts only after every task in the previous wave is done.
 | B | TASK-003, TASK-004 | — |
 
 **Isolation model:**
-- **Worktree per task** — always. Each task gets its own branch/worktree so
-  parallel tasks never touch the same working tree.
+- **Worktree per sprint** — always. The whole sprint runs in its own
+  integration worktree on `sprint/<scope-slug>-<n>`, so sprints running at the
+  same time never touch the same working tree.
 - **Isolated infra per worktree** — **only when the project uses Docker**
-  (a compose file exists). Then each worktree runs its own namespaced Docker
-  Compose stack (isolated containers, volumes, networks, host ports), so
-  parallel tasks don't collide on services or ports. **No Docker → skip this;
-  parallelism is achieved by worktree alone.**
+  (a compose file exists). Then the sprint's worktree runs its own namespaced
+  Docker Compose stack (isolated containers, volumes, networks, host ports), so
+  parallel sprints don't collide on services or ports. **No Docker → skip this;
+  isolation is achieved by worktree alone.**
 
 ## Tasks
 
@@ -141,13 +143,15 @@ A wave starts only after every task in the previous wave is done.
 **Epic**: Epic 1
 **Type**: [Feature | Fix | Chore | Spike]
 **Agent**: [agent name — see Agent Assignment table]
-**Estimate**: [hours or story points]
 **Wave**: A
-**Worktree branch**: [suggested `<context>/<brief-title>`, e.g. `feat/user-schema`]
+**Worktree branch**: [suggested `<context>/<brief-title>`, e.g. `feat/user-schema` — used only by the per-task strategy]
 **Spec**: [`docs/specs/<feature>.md` (+ `-contract.md` if the gate fired), or "none — see spec-gate skip reason"]
 **Covers**: [scenario IDs from the spec this task delivers, e.g. `S1, S3` — omit when Spec is "none"]
 **Depends on**: [TASK-XXX or "none"]
 **Status**: [ ] Pending  <!-- [ ] Pending → [~] In progress → [x] Done; the executing command updates it -->
+**Started**: —  <!-- § Time Tracking: set with [~] In progress -->
+**Finished**: —  <!-- set with [x] Done -->
+**Time spent**: —
 
 **Description**:
 [What needs to be done — technical enough for a developer to start]
@@ -168,25 +172,24 @@ A wave starts only after every task in the previous wave is done.
 | Chore | N |
 | Waves | N |
 | Max parallelism | N tasks (largest wave) |
-| Estimated total | Nh / N pts |
 ```
 
 **Covers rule**: every scenario of a linked spec is cited by at least one task's `Covers` — a scenario no task covers is a planning gap, not an implicit extra. Status flips are owned by the executing command (`skills/shared/spec-gate/SKILL.md` § Task Resolution).
 
 ### `sprints/sprints.md` — status index
 
-A single index at `docs/backlog/sprints/sprints.md` summarizing **every** sprint of every scope and its status. An existing index without the Scope column gets it added in place, with `legacy` on the rows already there — never a rewritten table. Create it when the first sprint is generated and **keep it current** — flip a sprint's status as it moves forward, and set it to `Done` in the same pass that finalizes the sprint.
+A single index at `docs/backlog/sprints/sprints.md` summarizing **every** sprint of every scope and its status. An existing index without the Scope column gets it added in place, with `legacy` on the rows already there; one without the Started, Finished and Time spent columns gets them added in place before `Status`, with `—` on the rows already there — never a rewritten table. `Status` stays the last column: `devteam backlog` reads it from there. Create it when the first sprint is generated and **keep it current** — flip a sprint's status as it moves forward, and set it to `Done` in the same pass that finalizes the sprint.
 
 ```markdown
 # Sprints
 
-| Scope | Sprint | Theme | Goal (one line) | Status |
-|-------|--------|-------|-----------------|--------|
-| [scope-slug] | [sprint-1]([scope-slug]-sprint-1.md) | [Theme] | [What it delivers] | Planned |
-| [scope-slug] | [sprint-2]([scope-slug]-sprint-2.md) | [Theme] | [What it delivers] | Planned |
+| Scope | Sprint | Theme | Goal (one line) | Started | Finished | Time spent | Status |
+|-------|--------|-------|-----------------|---------|----------|------------|--------|
+| [scope-slug] | [sprint-1]([scope-slug]-sprint-1.md) | [Theme] | [What it delivers] | — | — | — | Planned |
+| [scope-slug] | [sprint-2]([scope-slug]-sprint-2.md) | [Theme] | [What it delivers] | — | — | — | Planned |
 ```
 
-Status values: **Planned → In progress → Done**.
+Status values: **Planned → In progress → Done**. The three time columns mirror the sprint file's header fields (§ Time Tracking).
 
 ### Agent Assignment Table
 
@@ -250,9 +253,9 @@ Ready holds — the list lives there, never copied here.
 - [Project-specific readiness items, or "none"]
 
 ## Sprints
-| Scope | Sprint | Theme | Goal (one line) | Status |
-|-------|--------|-------|-----------------|--------|
-| [scope-slug] | [sprint-1](backlog/sprints/[scope-slug]-sprint-1.md) | [Theme] | [What it delivers] | Planned |
+| Scope | Sprint | Theme | Goal (one line) | Started | Finished | Time spent | Status |
+|-------|--------|-------|-----------------|---------|----------|------------|--------|
+| [scope-slug] | [sprint-1](backlog/sprints/[scope-slug]-sprint-1.md) | [Theme] | [What it delivers] | — | — | — | Planned |
 ```
 
 Status values and the keep-it-current rule are those of the `sprints.md` index above.
@@ -283,24 +286,36 @@ followed by this sprint's own additions, or none. Each task block adds two field
 Every task cites spec, contract (when the gate fired), flow and ADRs — a path or `none` each, never
 blank — and must pass doc-flow § Definition of Ready before its wave starts.
 
-## Time Estimation Guidelines
+## Time Tracking
 
-Use these benchmarks as starting points — adjust based on team familiarity with the stack:
+Every task and every sprint records when it actually ran. The command that flips a status writes the time in the same edit — never a guess, never back-filled from memory.
 
-| Size | Description | Typical range |
-|------|-------------|---------------|
-| XS | Config change, minor text fix | 0.5–1h |
-| S | Simple CRUD endpoint or UI form | 2–4h |
-| M | Feature with business logic + tests | 4–8h |
-| L | Complex feature, multiple components | 1–3 days |
-| XL | Epic-level effort, architectural impact | 1–2 weeks |
+| Event | Task fields | Sprint (file header + index row) |
+|-------|-------------|----------------------------------|
+| Task → `[~] In progress` | `Started` — only when it is `—`; a reopened task keeps its first start and resets `Finished` and `Time spent` to `—` | `Started` and index `In progress` — only on the sprint's first started task; a reopened `Done` sprint resets `Finished` and `Time spent` to `—` |
+| Task → `[x] Done` | `Finished` and `Time spent` | — |
+| Sprint → `Done` in the index | — | `Finished` and `Time spent` |
 
-**Always add buffer**: multiply raw estimate × 1.3 for unknowns.
+- **Timestamp**: the machine's local time as `YYYY-MM-DD HH:MM`, read from the shell at the moment of the flip (e.g. `date '+%Y-%m-%d %H:%M'`).
+- **Unknown start**: a task or sprint reaching Done with `Started` still `—` (marked Done without running, or a legacy entry) gets `Finished` and `Time spent: —` — a start time is never invented.
+- **Time spent**: wall-clock `Finished` − `Started`, written as `Nd Nh Nm` (`0d 3h 12m`). It includes waits — a question left open overnight counts.
+- A sprint stopped early keeps `Finished` and `Time spent` at `—`; a resumed run never rewrites `Started`.
+- A sprint or task created before these fields existed gets them added in place when it is next flipped, with `—` for what is unknown — and so does the index row, in `sprints.md` or the gated `docs/backlog.md` `## Sprints` table alike.
+- Sprint summaries and status reports show these real times — never a projection.
 
-When generating sprint estimates, also provide:
-- **Sprint total**: sum of all task estimates
-- **Delivery forecast**: start date + total duration = expected completion date
-- **Risk callout**: tasks with external dependencies or high uncertainty
+## Estimates
+
+Never produce, show or store time estimates — hours, story points, effort sizes, buffers or margins, delivery forecasts, duration or end-date projections — in a backlog file, sprint file, index or summary. Only when the user explicitly asks for one in the current conversation, give it in the chat and do not write it to any file.
+
+## Sprint Parallelism
+
+The sprint is the unit that runs in parallel: each one in its own worktree and infra, its tasks in sequence. Plan sprints so as many as possible can run at the same time:
+
+- **No cross-sprint waits inside a group.** Two sprints run together only when no task of one depends on a task of the other, directly or through another task. A real dependency puts the sprints in sequence.
+- **No shared ground.** Sprints that run together touch disjoint files, schema and migrations, so their branches merge without conflict. Splitting the work by area beats serializing it.
+- **`**Runs with**:` names the group.** List every other sprint, by file stem (`<scope-slug>-sprint-<n>`), that may run at the same time as this one — symmetric: each sprint of a group lists all the others. `none` when the sprint must run alone.
+- **Check before presenting the sprints**: every sprint a `Runs with` lists lists this one back, and no task of a group depends on a task of another sprint in it.
+- `/devteam:sprint` runs several sprints in parallel only when their `Runs with` lists agree; otherwise it recommends running one.
 
 ## Dependency Notation
 

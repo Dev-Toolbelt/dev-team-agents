@@ -99,7 +99,8 @@ no BLOCKER is open (`fix`: after its review gate; a declined review leaves `[~]`
 on the first task, `Done` on the last). `/devteam:sprint` sets `[x] Done` after the task's merge
 instead (its Step 5). `qa` and `tester` read the task and never flip it. Right after marking a task
 Done, the same command checks its spec against the `implemented` row of § Spec Status and sets
-`status: implemented` when it holds.
+`status: implemented` when it holds. Every flip — by any command — stamps the task's and the
+sprint's times in the same edit, per `skills/shared/backlog-template/SKILL.md` § Time Tracking.
 
 When a spec was resolved, every `qa-specialist` prompt carries the spec path, the contract path when
 one exists, and the task's `**Covers**:` IDs — that is what the Spec Sync Gate runs on.

@@ -143,24 +143,25 @@ When the user asks to turn an approved scope into sprints (with several overview
 
 ### Design for Parallel Execution (mandatory)
 
-Sprints must be **structured for maximum parallelism** so tasks can run
-concurrently — each in its own git worktree, and (only when the project uses
-Docker) its own isolated Docker stack. When decomposing scope into tasks:
+Sprints must be **structured for maximum parallelism**. Sprints run in parallel, each in its
+own worktree (and isolated Docker stack when the project uses Docker): first split the scope into
+sprints that can run together, per `backlog-template` § Sprint Parallelism (including its check), filling
+each sprint's `**Runs with**:`. Then, inside each sprint, when decomposing it into tasks:
 
 1. **Minimize dependencies.** Break work so tasks are mutually independent
    wherever possible. Only chain a task behind another when the dependency is
    real (needs its output, touches the same schema/file). Splitting to avoid a
    collision beats serializing.
 2. **Group tasks into waves.** Fill the sprint's **Parallel Execution Plan**
-   table (from `backlog-template`): every task in a wave is independent and runs
-   in parallel; the next wave starts only after the current one finishes. Push
+   table (from `backlog-template`): every task in a wave is independent (built in
+   parallel under the per-task strategy); the next wave starts only after the current one finishes. Push
    as many tasks as possible into the earliest wave.
 3. **Assign a worktree branch per task.** Suggest `<context>/<brief-title>` for
-   each task's `Worktree branch` field — this is a *suggestion* for the coding
-   agent, not a worktree you create. The coding agents own the worktree decision
+   each task's `Worktree branch` field — this is a *suggestion* used by the per-task
+   strategy, not a worktree you create. The coding agents own the worktree decision
    cascade; you only plan the branches and waves.
 4. **Gate isolated infra on Docker.** State the isolation model explicitly:
-   worktree-per-task always; **isolated Docker stack per worktree only when the
+   worktree-per-sprint always; **isolated Docker stack per worktree only when the
    project uses Docker** (a compose file exists). If the project has no Docker,
    the plan must say parallelism is achieved by worktree alone — do not imply
    isolated infra. Detect quickly: `ls docker-compose.yml docker-compose.yaml compose.yml compose.yaml 2>/dev/null | head -1`.
@@ -176,7 +177,7 @@ The index format (one row per sprint of every scope) is defined in `backlog-temp
 - every scenario of every in-scope spec is covered by at least one task;
 - every task passes doc-flow § Definition of Ready, and `devteam backlog lint <sprint> --json` reports no problems (acyclic graph).
 
-Status values: **Planned → In progress → Done**. Whenever a sprint is finalized, flip its row to `Done` in the `backlog-index` doc in the same pass. A sprint is executed by `/devteam:sprint`, never by you — end the sprint report with that pointer.
+Status values: **Planned → In progress → Done**. Whenever a sprint is finalized, flip its row to `Done` in the `backlog-index` doc in the same pass, with its times per `backlog-template` § Time Tracking. A sprint is executed by `/devteam:sprint`, never by you — end the sprint report with that pointer.
 
 ## Backlog Management Mode
 

@@ -155,6 +155,15 @@
       ],
       "why": "the graphify CLI ships as the PyPI distribution `graphifyy`; `graphify` on PyPI and npm is an unrelated project (typosquat risk)",
       "source": "https://pypi.org/project/graphifyy/"
+    },
+    {
+      "id": "backlog-time-estimates",
+      "pattern": "\\*\\*(Estimate|Estimated (duration|effort|total))\\*\\*|\\| *Estimated total *\\||\\bestimate\\b.{0,40}[x\u00d7] ?1\\.3\\b",
+      "allow": [
+        "\\bnever (produce|show|store|write)\\b"
+      ],
+      "why": "sprint and backlog files carry real Started/Finished/Time spent, never hour estimates, buffers or delivery forecasts; an estimate is given in chat only when the user asks",
+      "source": "skills/shared/backlog-template/SKILL.md \u00a7 Estimates"
     }
   ]
 }

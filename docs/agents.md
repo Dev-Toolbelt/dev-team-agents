@@ -16,7 +16,7 @@ Every agent presents a plan for approval before executing anything. You review, 
 
 | Agent | Role | Phase | Tier |
 |-------|------|-------|------|
-| `product-analyst` | Closes scope, generates backlog with estimates | DISCOVERY | `reasoning` |
+| `product-analyst` | Closes scope, generates the backlog | DISCOVERY | `reasoning` |
 | `software-architect` | Architecture decisions, tech stack, code standards | DISCOVERY + QUALITY GATE | `reasoning` |
 | `backend-developer` | Server-side implementation (API + monolith) | DEVELOPMENT | `backend-exec` |
 | `frontend-developer` | Client-side implementation (SPA + templates) | DEVELOPMENT | `frontend` |
@@ -46,7 +46,7 @@ For the Claude provider the mapping is `reasoning` → `opus`, `backend-exec` / 
 ## Agent Descriptions
 
 ### `product-analyst`
-Handles scope definition and backlog generation. Works directly with requirements documents, PRDs, or raw user descriptions. Produces sprint-ready backlog items with effort estimates. Iterates through clarification Q&A until scope is 100% closed before committing to estimates.
+Handles scope definition and backlog generation. Works directly with requirements documents, PRDs, or raw user descriptions. Produces sprint-ready backlog items without time estimates — sprints record real start, finish and time spent instead. Iterates through clarification Q&A until scope is 100% closed before generating them.
 
 ### `software-architect`
 Owns architecture decisions, technology stack selection, and code standards. Produces `architecture.md`, `tech-stack.md`, and `code-standards.md`. Also acts as quality gate — reviews implementation for conformance to established decisions. Creates Architecture Decision Records (ADRs) for hard-to-reverse choices.

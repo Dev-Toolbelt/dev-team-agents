@@ -16,7 +16,7 @@ Cada agente apresenta um plano para aprovação antes de executar qualquer coisa
 
 | Agente | Papel | Fase | Tier |
 |--------|-------|------|------|
-| `product-analyst` | Fecha escopo, gera backlog com estimativas | DISCOVERY | `reasoning` |
+| `product-analyst` | Fecha escopo, gera o backlog | DISCOVERY | `reasoning` |
 | `software-architect` | Decisões de arquitetura, stack tecnológico, padrões de código | DISCOVERY + QUALITY GATE | `reasoning` |
 | `backend-developer` | Implementação server-side (API + monolito) | DEVELOPMENT | `backend-exec` |
 | `frontend-developer` | Implementação client-side (SPA + templates) | DEVELOPMENT | `frontend` |
@@ -46,7 +46,7 @@ Para o provedor Claude, o mapeamento é `reasoning` → `opus`, `backend-exec` /
 ## Descrições dos Agentes
 
 ### `product-analyst`
-Responsável pela definição do escopo e geração de backlog. Trabalha diretamente com documentos de requisitos, PRDs ou descrições brutas do usuário. Produz itens de backlog prontos para sprint com estimativas de esforço. Itera por Q&A de clarificação até que o escopo esteja 100% fechado antes de confirmar as estimativas.
+Responsável pela definição do escopo e geração de backlog. Trabalha diretamente com documentos de requisitos, PRDs ou descrições brutas do usuário. Produz itens de backlog prontos para sprint sem estimativas de tempo — as sprints registram o início, o fim e o tempo gasto reais. Itera por Q&A de clarificação até que o escopo esteja 100% fechado antes de gerá-los.
 
 ### `software-architect`
 Dono das decisões de arquitetura, seleção de stack tecnológico e padrões de código. Produz `architecture.md`, `tech-stack.md` e `code-standards.md`. Também atua como quality gate — revisa implementações para conformidade com as decisões estabelecidas. Cria Architecture Decision Records (ADRs) para escolhas difíceis de reverter.

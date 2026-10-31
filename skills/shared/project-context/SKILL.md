@@ -36,7 +36,7 @@ loading any other context or answering the original prompt — and load the full
 
 This applies to:
 - Architecture documents (`docs/development/`)
-- Backlog items, sprint plans, and estimates (`docs/backlog/`)
+- Backlog items and sprint plans (`docs/backlog/`) — no time estimates, per `skills/shared/backlog-template/SKILL.md` § Estimates
 - API contracts, code standards, design system docs
 - Changelog entries and PR descriptions
 
