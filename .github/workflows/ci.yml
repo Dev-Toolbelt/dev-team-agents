@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The runner image ships its own shellcheck and bumps it without telling anyone.
       # That made this gate's verdict depend on the image: 0.9.0 on the runner against
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # gitleaks scans the whole history, not only the tip.
           fetch-depth: 0
@@ -157,7 +157,7 @@ jobs:
           - os: macos-latest
             python: "3.x"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up python ${{ matrix.python }}
         uses: actions/setup-python@v5
@@ -225,7 +225,7 @@ jobs:
       # write, and no secret is referenced here, so this removes the token from the
       # runner's git config rather than fixing an exploit. Nothing in this job pushes
       # or fetches again, so it costs nothing.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -261,7 +261,7 @@ jobs:
         provider: [claude, opencode, codex]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up python3
         uses: actions/setup-python@v5
@@ -304,7 +304,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up python3
         uses: actions/setup-python@v5
@@ -339,7 +339,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up python3
         uses: actions/setup-python@v5
@@ -365,7 +365,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up deno
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
@@ -392,7 +392,7 @@ jobs:
       GITHUB_CLIENT_SECRET: ci
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up the Supabase CLI
         uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
