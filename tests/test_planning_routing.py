@@ -230,7 +230,7 @@ class SprintCommandTest(unittest.TestCase):
         self.assertEqual(set(rendered), set(providers.ALL_PROVIDERS))
         for provider, text in rendered.items():
             with self.subTest(provider=provider):
-                self.assertIn("Run the waves, in order", text)
+                self.assertIn("Step 4 — Run the tasks", text)
                 self.assertIn("sprint/<scope-slug>-<n>", text)
 
     def test_plan_offers_the_sprint_command_without_starting_it(self):

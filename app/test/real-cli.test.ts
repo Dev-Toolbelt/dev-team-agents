@@ -113,7 +113,7 @@ afterEach(async () => {
 });
 
 function context() {
-  return { binary: REAL_CLI, env: { DEVTEAM_HOME: home }, cwd: work };
+  return { binary: REAL_CLI, env: { DEVTEAM_HOME: home, DEVTEAM_SKIP_TOOLS: '1' }, cwd: work };
 }
 
 /** The version installed into the throwaway store when a test needs a bound project. */
@@ -134,7 +134,8 @@ afterEach(async () => {
 function runCliDirectly(...args: string[]): void {
   const result = spawnSync(REAL_CLI, [...args, '--json'], {
     cwd: work,
-    env: { ...process.env, DEVTEAM_HOME: home },
+    // `bind` installs the pinned helper tools by default (ADR-0060); a fixture must not download them.
+    env: { ...process.env, DEVTEAM_HOME: home, DEVTEAM_SKIP_TOOLS: '1' },
     encoding: 'utf8',
     timeout: 60_000,
   });
