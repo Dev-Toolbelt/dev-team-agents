@@ -121,7 +121,7 @@ jobs:
           # The job runs a pip install; the token has no reason to sit in .git/config meanwhile.
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -160,7 +160,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up python ${{ matrix.python }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
 
@@ -264,7 +264,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up python3
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 
@@ -307,7 +307,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up python3
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 
@@ -342,7 +342,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up python3
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 
