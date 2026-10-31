@@ -24,5 +24,5 @@ type Shape = {
 /** Keyed like `COMMAND_SHAPES`: the command words joined with a space. */
 export const ONBOARDING_SHAPES: Readonly<Record<string, Shape>> = Object.freeze({
   detect: { operands: 0, flags: { '--path': 'value' } },
-  start: { operands: 0, flags: { '--path': 'value', '--provider': 'value', '--type': 'value' } },
+  start: { operands: 0, flags: { '--path': 'value', '--provider': 'value', '--type': 'value', '--no-tools': 'bare' } },
 });

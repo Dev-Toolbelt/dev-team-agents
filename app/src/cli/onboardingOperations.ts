@@ -115,7 +115,8 @@ export interface StartOptions {
 export function start(context: CliContext, path: string, options: StartOptions = {}): Promise<OperationResult<StartReport>> {
   const problem = folderProblem(path);
   if (problem !== null) return refused('start', problem);
-  const args = ['start', '--path', path];
+  // `--no-tools`: the install runs as its own step with its own deadline (ADR-0060).
+  const args = ['start', '--path', path, '--no-tools'];
   if (options.provider !== undefined) {
     if (!PROVIDERS.includes(options.provider as (typeof PROVIDERS)[number])) {
       return refused('start', `\`${options.provider}\` is not a provider this app knows`);

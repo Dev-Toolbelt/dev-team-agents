@@ -104,6 +104,9 @@ import type {
   SkillRecord,
   SkillRemoveReport,
   SyncAllReport,
+  ToolRecord,
+  ToolsReport,
+  ToolStatus,
   UnbindReport,
   UpgradePlan,
   UpgradeReport,
@@ -161,6 +164,8 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['skills', 'show'],
   ['tasks', 'list'],
   ['tasks', 'watch'],
+  // ADR-0060. Read-only: reports which helper tools are present on this machine.
+  ['tools', 'list'],
   // ADR-0029. Every `auth` leaf is `compat.STORE_NEUTRAL`; see `accountCommands.ts`.
   ...ACCOUNT_COMMANDS,
   // ADR-0030. `detect` inspects a folder and the PATH and writes nothing.
@@ -246,6 +251,9 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
   ['notifications', 'ack'],
   ['skills', 'install'],
   ['skills', 'remove'],
+  // ADR-0060. Downloads helper tools into the user's machine-local bin directory, which is a
+  // write outside the store. `tools` is exempt from the CLI's account gate, but not from this one.
+  ['tools', 'install'],
   // ADR-0030: the first-run action. It sets the chosen folder up, which is a write.
   ...ONBOARDING_GATED_COMMANDS,
 ]);
@@ -257,6 +265,18 @@ export const GATED_COMMANDS: readonly (readonly string[])[] = Object.freeze([
  * window passes and the store half-written. Still finite, so a wedged lock wait ends.
  */
 export const GATED_TIMEOUT_MS = 5 * 60_000;
+
+/**
+ * Deadline for `tools install` (ADR-0060). A first run downloads up to nine tools, `semgrep` alone
+ * over 100 MB, and `GATED_TIMEOUT_MS` would kill it mid-download. `bind` and `start` pass
+ * `--no-tools` so they keep the short deadline; this step carries the long one. Still finite, so a
+ * wedged download ends.
+ */
+export const TOOLS_INSTALL_TIMEOUT_MS = 30 * 60_000;
+
+function isToolsInstallArgv(args: readonly string[]): boolean {
+  return args[0] === 'tools' && args[1] === 'install';
+}
 
 function isGatedArgv(args: readonly string[]): boolean {
   return GATED_COMMANDS.some((command) => command.every((word, index) => args[index] === word));
@@ -318,7 +338,11 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   doctor: { operands: 0, flags: { '--machine': 'bare' } },
   // The one positional is the directory to bind — the path `chooseProjectDirectory`
   // offered, never one the renderer typed. See `main/ipc.ts` -> `resolveProject`.
-  bind: { operands: 1, flags: { '--provider': 'repeatable', '--mode': 'value', '--pin': 'value' } },
+  // `--no-tools`: always passed, so a bind never waits on downloads; `installTools` runs apart (ADR-0060).
+  bind: {
+    operands: 1,
+    flags: { '--provider': 'repeatable', '--mode': 'value', '--pin': 'value', '--no-tools': 'bare' },
+  },
   // The positional `path` this app never passes: every unbind names its target by
   // `--project-id`, resolved against `list` in `main/ipc.ts` first.
   unbind: { operands: 1, flags: { '--project-id': 'value', '--keep-artifacts': 'bare' } },
@@ -393,6 +417,9 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   'tasks list': { operands: 0, flags: { '--stale-after': 'value', '--since': 'value' } },
   'tasks watch': { operands: 0, flags: { '--stale-after': 'value' } },
   // ADR-0029: the account. No flag carries a secret; a code or password goes over stdin.
+  // ADR-0060. `tools install` and `tools list` take no operand: every missing tool, never a named one.
+  'tools list': { operands: 0, flags: {} },
+  'tools install': { operands: 0, flags: {} },
   ...ACCOUNT_SHAPES,
   ...ONBOARDING_SHAPES,
 });
@@ -582,7 +609,9 @@ export async function run<T>(
   }
   // The caller's own `timeoutMs` wins; otherwise a write gets the long deadline and a read
   // keeps `invokeDevteam`'s default.
-  const timeoutMs = context.timeoutMs ?? (isGatedArgv(args) ? GATED_TIMEOUT_MS : undefined);
+  const timeoutMs =
+    context.timeoutMs ??
+    (isToolsInstallArgv(args) ? TOOLS_INSTALL_TIMEOUT_MS : isGatedArgv(args) ? GATED_TIMEOUT_MS : undefined);
   return toOperationResult(
     await invokeDevteam({
       ...context,
@@ -813,7 +842,7 @@ export function bindProject(
   path: string,
   options: BindOptions = {},
 ): Promise<OperationResult<BindReport>> {
-  const args: string[] = ['bind', path];
+  const args: string[] = ['bind', path, '--no-tools'];
   for (const provider of options.providers ?? []) {
     args.push('--provider', provider);
   }
@@ -823,6 +852,52 @@ export function bindProject(
   // beyond omitting the flag.
   if (typeof options.pin === 'string') args.push('--pin', options.pin);
   return run(context, args, asBindReport);
+}
+
+const TOOL_STATUSES: readonly ToolStatus[] = Object.freeze(['present', 'installed', 'skipped', 'failed', 'missing']);
+
+/** `tools install --json` and `tools list --json`, which share one document (ADR-0060). */
+export function asToolsReport(body: Record<string, unknown>): ToolsReport | string {
+  if (!Array.isArray(body['tools'])) return 'no `tools` array';
+  const tools: ToolRecord[] = [];
+  for (const raw of body['tools']) {
+    if (!isRecord(raw)) return 'a tool entry is not an object';
+    if (typeof raw['name'] !== 'string') return 'a tool entry has no string `name`';
+    const status = raw['status'];
+    if (typeof status !== 'string' || !TOOL_STATUSES.includes(status as ToolStatus)) {
+      return `tool \`${raw['name']}\` has an unknown \`status\``;
+    }
+    tools.push({
+      name: raw['name'],
+      version: asNullableString(raw['version']),
+      purpose: asNullableString(raw['purpose']) ?? '',
+      status: status as ToolStatus,
+      method: asNullableString(raw['method']),
+      path: asNullableString(raw['path']),
+      reason: asNullableString(raw['reason']),
+    });
+  }
+  return {
+    bin_dir: asNullableString(body['bin_dir']),
+    platform: asNullableString(body['platform']),
+    skipped_all: asNullableString(body['skipped_all']),
+    on_path: typeof body['on_path'] === 'boolean' ? body['on_path'] : null,
+    tools,
+  };
+}
+
+/**
+ * Installs every missing helper tool (ADR-0060). Runs apart from `bindProject` with its own long
+ * deadline; the CLI reports a failed tool in the payload and exits 0, so a tool that could not be
+ * installed is data here, not a failed operation.
+ */
+export function installTools(context: CliContext): Promise<OperationResult<ToolsReport>> {
+  return run(context, ['tools', 'install'], asToolsReport);
+}
+
+/** Which helper tools are present on this machine. Read-only. */
+export function listTools(context: CliContext): Promise<OperationResult<ToolsReport>> {
+  return run(context, ['tools', 'list'], asToolsReport);
 }
 
 /**

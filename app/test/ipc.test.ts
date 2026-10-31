@@ -283,11 +283,27 @@ describe('chooseProjectDirectory and the offered-directory set', () => {
       { path: '/chosen/dir', providers: ['claude', 'codex'], mode: 'link' },
     )) as { readonly command: string };
 
-    expect(result.command).toContain('bind /chosen/dir --provider claude --provider codex --mode link --json');
+    expect(result.command).toContain('bind /chosen/dir --no-tools --provider claude --provider codex --mode link --json');
   });
 });
 
 // ── project names — the app's own record, stored only after a successful bind ──────────
+
+describe('installTools (ADR-0060)', () => {
+  it.skipIf(skipOnWindowsWithoutLauncher)('spawns `tools install` with no operand, and reads a failed tool as data', async () => {
+    const { handlers, registerIpc, CHANNELS } = await loadIpc();
+    await registerAgainstFake(registerIpc);
+    const result = (await handlers.get(CHANNELS.installTools)?.(TRUSTED, '--force', 'semgrep')) as {
+      readonly ok: boolean;
+      readonly command: string;
+      readonly data: { readonly tools: readonly { readonly status: string }[] };
+    };
+    expect(result.ok).toBe(true);
+    expect(result.command).toContain('tools install --json');
+    expect(result.command).not.toContain('semgrep');
+    expect(result.data.tools.map((tool) => tool.status)).toEqual(['installed', 'failed']);
+  });
+});
 
 describe('bindProject stores a name only after the bind succeeds, and never in the CLI argv', () => {
   it.skipIf(skipOnWindowsWithoutLauncher)('stores the name and projectNames() reflects it afterward', async () => {
@@ -717,6 +733,7 @@ describe('buildInfo reports write actions honestly', () => {
         'skills install',
         'skills remove',
         'start',
+        'tools install',
         'sync',
         'unbind',
         'upgrade',
@@ -771,6 +788,7 @@ describe('environment withholds every gated command when the declaration could n
           'skills install',
           'skills remove',
           'start',
+        'tools install',
           'sync',
           'unbind',
           'upgrade',

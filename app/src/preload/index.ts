@@ -83,6 +83,7 @@ const bridge: DevteamBridge = {
       ...(request.type !== undefined ? { type: String(request.type) } : {}),
     }),
   launchFirstTask: (path: string) => ipcRenderer.invoke(CHANNELS.launchFirstTask, String(path)),
+  installTools: () => ipcRenderer.invoke(CHANNELS.installTools),
   onboardingState: () => ipcRenderer.invoke(CHANNELS.onboardingState),
   completeOnboarding: () => ipcRenderer.invoke(CHANNELS.completeOnboarding),
 

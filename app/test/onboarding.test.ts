@@ -111,6 +111,7 @@ describe('the first-run operations', () => {
     expect(argvProblem(['start', '--path', '/p', '--provider', 'claude', '--type', 'new'])).toBeNull();
     expect(argvProblem(['doctor', '--machine'])).toBeNull();
     expect(argvProblem(['detect', '/p'])).not.toBeNull();
+    expect(argvProblem(['start', '--path', '/p', '--no-tools'])).toBeNull();
     expect(argvProblem(['start', '--path', '/p', '--force'])).not.toBeNull();
     expect(argvProblem(['doctor', '--reassign-identity'])).not.toBeNull();
   });

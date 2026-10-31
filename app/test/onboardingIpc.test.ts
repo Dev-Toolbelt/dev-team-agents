@@ -99,6 +99,8 @@ describe.skipIf(skip)('detectProject and startProject', () => {
     });
     expect(started.command).toContain('--provider codex');
     expect(started.command).toContain('--type new');
+    // ADR-0060: start never waits on the tool downloads; the tools install is its own step.
+    expect(started.command).toContain('--no-tools');
 
     expect(await call(CHANNELS.startProject, { path: '/work/my app', provider: 'rm -rf /' })).toMatchObject({ ok: false, kind: 'refused' });
     expect(await call(CHANNELS.startProject, { path: '/work/my app', type: 'sideways' })).toMatchObject({ ok: false, kind: 'refused' });

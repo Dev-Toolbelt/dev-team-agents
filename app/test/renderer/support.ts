@@ -508,6 +508,7 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     detectProject: vi.fn(() => Promise.resolve(ok(detectReport()))),
     startProject: vi.fn(() => Promise.resolve(ok(startReport()))),
     launchFirstTask: vi.fn(() => Promise.resolve({ launched: true as const })),
+    installTools: vi.fn(() => Promise.resolve(ok({ bin_dir: null, platform: null, skipped_all: null, on_path: null, tools: [] }))),
     // Completed by default: the existing screens' tests mount the tabbed app, not the wizard.
     onboardingState: vi.fn(() => Promise.resolve({ completed: true })),
     completeOnboarding: vi.fn(() => Promise.resolve({ completed: true })),

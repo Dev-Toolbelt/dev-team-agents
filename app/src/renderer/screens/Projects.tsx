@@ -23,6 +23,7 @@ import { ProjectList, useProjectSyncs } from './ProjectList.js';
 import { basename, displayName, settingsButtonId } from './ProjectRow.js';
 import { ProjectSettings } from './ProjectSettings.js';
 import { useAction, useOperation } from '../useOperation.js';
+import { runToolsInstall } from '../toolsInstall.js';
 import { toastFailure, toastPartialFailure, toastResult } from '../toasts.js';
 import { Notice, WriteButton } from '../WriteButton.js';
 import { ProviderIcon, providerChoiceLabel } from '../providers/ProviderIcon.js';
@@ -917,7 +918,10 @@ function BindDialog({
               }
               onClick={() => {
                 void bind.run().then((result) => {
-                  if (result.ok) onBound();
+                  if (!result.ok) return;
+                  onBound();
+                  // ADR-0060: the bind skips helper tools; they install as a step of their own.
+                  void runToolsInstall();
                 });
               }}
             >

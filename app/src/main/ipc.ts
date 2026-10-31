@@ -28,6 +28,7 @@ import {
   planMigration,
   type MigrateOptions,
   bindProject,
+  installTools,
   catalogEntry,
   catalogListing,
   catalogSummary,
@@ -118,6 +119,7 @@ import {
   type OnboardingState,
   type ProjectType,
   type StartReport,
+  type ToolsReport,
   PROJECT_TYPES,
   type HandshakeView,
   type OperationResult,
@@ -855,6 +857,14 @@ export function registerIpc(deps: IpcDependencies): IpcHandle {
     if (problem !== null) return { launched: false, message: problem };
     if (deps.launchTerminal === undefined) return { launched: false, message: 'This build cannot open a terminal.' };
     return deps.launchTerminal(path, launch.argv);
+  });
+
+  // ADR-0060. Takes no argument: it installs every missing helper tool, never a named one. Apart
+  // from bind and start (which pass `--no-tools`) so its long deadline never holds a bind open.
+  handle(CHANNELS.installTools, async (): Promise<OperationResult<ToolsReport>> => {
+    const gated = await gatedContext('tools install');
+    if (!gated.ready) return gated.problem;
+    return installTools(gated.ctx);
   });
 
   handle(CHANNELS.onboardingState, async (): Promise<OnboardingState> => {

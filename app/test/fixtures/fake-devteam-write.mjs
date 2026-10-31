@@ -217,6 +217,21 @@ switch (command) {
     break;
   }
 
+  case 'tools':
+    emit({
+      ok: true,
+      bin_dir: '/home/u/.local/bin',
+      platform: 'linux-x86_64',
+      skipped_all: null,
+      on_path: true,
+      tools: [
+        { name: 'jq', version: '1.7', purpose: 'JSON', status: 'installed', method: 'download', path: '/home/u/.local/bin/jq', reason: null },
+        { name: 'semgrep', version: '1.0', purpose: 'SAST', status: 'failed', method: null, path: null, reason: 'offline' },
+      ],
+    });
+    process.exit(0);
+    break;
+
   case 'unbind':
     emit({
       ok: true,

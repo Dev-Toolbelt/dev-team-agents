@@ -47,6 +47,9 @@ import {
   asUpgradePlan,
   asUpgradeReport,
   bindProject,
+  installTools,
+  listTools,
+  asToolsReport,
   catalogEntry,
   catalogListing,
   listProjects,
@@ -209,6 +212,8 @@ describe('what this slice is allowed to run', () => {
       'notifications ack',
       'skills install',
       'skills remove',
+      // ADR-0060: downloads helper tools onto the machine; the only gated command with its own deadline.
+      'tools install',
       // ADR-0030: `start` sets the chosen folder up for the framework. `detect` only reads and
       // is in READ_ONLY_COMMANDS.
       'start',
@@ -426,16 +431,37 @@ describe('the write actions build the argv the CLI documents', () => {
       pin: '3.0.0',
     });
     expect(result.command).toContain(
-      'bind /tmp/project --provider claude --provider codex --mode link --pin 3.0.0 --json',
+      'bind /tmp/project --no-tools --provider claude --provider codex --mode link --pin 3.0.0 --json',
     );
   });
 
   it('bindProject omits every flag it was not given', async () => {
     const result = await bindProject(unspawnable(), '/tmp/project');
-    expect(result.command).toContain('bind /tmp/project --json');
+    expect(result.command).toContain('bind /tmp/project --no-tools --json');
     expect(result.command).not.toContain('--provider');
     expect(result.command).not.toContain('--mode');
     expect(result.command).not.toContain('--pin');
+  });
+
+  it('bindProject always passes --no-tools, after the path and before any other flag', async () => {
+    const result = await bindProject(unspawnable(), '/tmp/project', { providers: ['claude'] });
+    expect(result.command).toContain('bind /tmp/project --no-tools --provider claude --json');
+  });
+
+  it('installTools and listTools take no operand and no flag', async () => {
+    expect((await installTools(unspawnable())).command).toContain('tools install --json');
+    expect((await listTools(unspawnable())).command).toContain('tools list --json');
+    expect(argvProblem(['tools', 'install', 'semgrep'])).not.toBeNull();
+    expect(argvProblem(['tools', 'install', '--force'])).not.toBeNull();
+    expect(argvProblem(['tools', 'list', '--path', '/p'])).not.toBeNull();
+    expect(argvProblem(['tools', 'install'])).toBeNull();
+    expect(argvProblem(['tools', 'list'])).toBeNull();
+    expect(argvProblem(['tools', 'remove'])).not.toBeNull();
+  });
+
+  it('bind accepts --no-tools as a bare flag only', () => {
+    expect(argvProblem(['bind', '/p', '--no-tools'])).toBeNull();
+    expect(argvProblem(['bind', '/p', '--no-tools', 'x'])).not.toBeNull();
   });
 
   it('unbindProject names its target by --project-id, never a path', async () => {
@@ -1327,5 +1353,35 @@ describe('credentialsOpsProblem — what `cred local patch` may be sent', () => 
 
   it('redacts a set-secret value from captured output', () => {
     expect(secretValuesOf([{ op: 'set-secret', pointer: '/a/pw', value: 'hunter2' }])).toEqual(['hunter2']);
+  });
+});
+
+describe('asToolsReport (ADR-0060)', () => {
+  const tool = { name: 'jq', version: '1.7', purpose: 'json', status: 'installed', method: 'download', path: '/b/jq', reason: null };
+
+  it('reads the install document, a failed tool included', () => {
+    const report = asToolsReport({
+      bin_dir: '/b',
+      platform: 'darwin-arm64',
+      skipped_all: null,
+      on_path: false,
+      tools: [tool, { ...tool, name: 'semgrep', status: 'failed', reason: 'offline', path: null }],
+    });
+    expect(report).toMatchObject({ bin_dir: '/b', on_path: false, skipped_all: null });
+    expect(typeof report === 'string' ? [] : report.tools.map((t) => t.status)).toEqual(['installed', 'failed']);
+  });
+
+  it('reads the all-skipped document with null fields', () => {
+    expect(asToolsReport({ bin_dir: null, platform: null, skipped_all: '--no-tools', on_path: null, tools: [] })).toMatchObject({
+      skipped_all: '--no-tools',
+      on_path: null,
+      tools: [],
+    });
+  });
+
+  it('refuses a payload without tools, a nameless tool, or an unknown status', () => {
+    expect(asToolsReport({})).toMatch(/tools/);
+    expect(asToolsReport({ tools: [{ status: 'present' }] })).toMatch(/name/);
+    expect(asToolsReport({ tools: [{ ...tool, status: 'weird' }] })).toMatch(/status/);
   });
 });

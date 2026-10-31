@@ -15,6 +15,10 @@ vi.mock('../src/cli/invoke.js', () => ({
 import {
   GATED_COMMANDS,
   GATED_TIMEOUT_MS,
+  TOOLS_INSTALL_TIMEOUT_MS,
+  installTools,
+  bindProject,
+  listTools,
   INTEGRATION_NETWORK_TIMEOUT_MS,
   integrationConnect,
   integrationResources,
@@ -65,7 +69,8 @@ const GATED_ARGV: Readonly<Record<string, readonly string[]>> = {
   'cred local init': ['cred', 'local', 'init', '--path', '/p'],
   'cred local patch': ['cred', 'local', 'patch', '--path', '/p', '--expect-hash', 'h'],
   'cred local secure': ['cred', 'local', 'secure', '--path', '/p', '--apply'],
-  start: ['start', '--path', '/p', '--provider', 'claude', '--type', 'new'],
+  'tools install': ['tools', 'install'],
+  start: ['start', '--path', '/p', '--provider', 'claude', '--type', 'new', '--no-tools'],
 };
 
 describe('run() deadlines', () => {
@@ -76,7 +81,9 @@ describe('run() deadlines', () => {
       invokeDevteam.mockClear();
       await run(CONTEXT, argv, (body) => body);
       // Mutation: dropping the gated branch leaves `timeoutMs` unset (20 s) for a write.
-      expect(invokeDevteam.mock.calls[0]?.[0].timeoutMs, command.join(' ')).toBe(GATED_TIMEOUT_MS);
+      expect(invokeDevteam.mock.calls[0]?.[0].timeoutMs, command.join(' ')).toBe(
+        command.join(' ') === 'tools install' ? TOOLS_INSTALL_TIMEOUT_MS : GATED_TIMEOUT_MS,
+      );
     }
     expect(GATED_TIMEOUT_MS).toBeGreaterThan(20_000);
   });
@@ -91,6 +98,23 @@ describe('run() deadlines', () => {
   it('lets the caller\'s own timeoutMs win', async () => {
     await run({ ...CONTEXT, timeoutMs: 1234 }, ['sync', '--all'], (body) => body);
     expect(invokeDevteam.mock.calls[0]?.[0].timeoutMs).toBe(1234);
+  });
+});
+
+describe('the tools install deadline (ADR-0060)', () => {
+  it('gives tools install its own long deadline and bind the ordinary gated one', async () => {
+    // Mutation: sharing GATED_TIMEOUT_MS would kill a first-run download mid-install.
+    await installTools(CONTEXT);
+    await bindProject(CONTEXT, '/p');
+    const [install, bind] = invokeDevteam.mock.calls.map((call: { timeoutMs?: number }[]) => call[0]?.timeoutMs);
+    expect(install).toBe(TOOLS_INSTALL_TIMEOUT_MS);
+    expect(bind).toBe(GATED_TIMEOUT_MS);
+    expect(TOOLS_INSTALL_TIMEOUT_MS).toBeGreaterThan(GATED_TIMEOUT_MS);
+  });
+
+  it('leaves tools list on the short read default', async () => {
+    await listTools(CONTEXT);
+    expect(invokeDevteam.mock.calls[0]?.[0]).not.toHaveProperty('timeoutMs');
   });
 });
 

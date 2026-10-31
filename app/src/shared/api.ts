@@ -1162,6 +1162,32 @@ export interface CliInstallResult {
   readonly version?: string;
 }
 
+// ── helper tools (ADR-0060) ───────────────────────────────────────────────────
+
+/** `present`/`installed`/`skipped`/`failed` come from `tools install`; `present`/`missing` from `tools list`. */
+export type ToolStatus = 'present' | 'installed' | 'skipped' | 'failed' | 'missing';
+
+export interface ToolRecord {
+  readonly name: string;
+  readonly version: string | null;
+  readonly purpose: string;
+  readonly status: ToolStatus;
+  readonly method: string | null;
+  readonly path: string | null;
+  /** Why a tool was skipped or failed. */
+  readonly reason: string | null;
+}
+
+/** `tools install --json` and `tools list --json`. A failed tool is data here: the CLI exits 0. */
+export interface ToolsReport {
+  readonly bin_dir: string | null;
+  readonly platform: string | null;
+  /** Why nothing was attempted (`DEVTEAM_SKIP_TOOLS=1`, another install running), else `null`. */
+  readonly skipped_all: string | null;
+  readonly on_path: boolean | null;
+  readonly tools: readonly ToolRecord[];
+}
+
 // ── first-run onboarding (ADR-0030) ──────────────────────────────────────────
 
 export interface DetectedProvider {
@@ -1266,6 +1292,11 @@ export interface DevteamBridge {
   readonly startProject: (request: StartRequest) => Promise<OperationResult<StartReport>>;
   /** Opens the provider in the user's terminal on the first task last reported for `path`. */
   readonly launchFirstTask: (path: string) => Promise<LaunchFirstTaskAnswer>;
+  /**
+   * Installs the missing helper tools (ADR-0060). A separate step from bind and start, which
+   * skip tools: it can take minutes, so the caller runs it after a bind has already succeeded.
+   */
+  readonly installTools: () => Promise<OperationResult<ToolsReport>>;
   readonly onboardingState: () => Promise<OnboardingState>;
   readonly completeOnboarding: () => Promise<OnboardingState>;
   /**
@@ -1924,6 +1955,7 @@ export const CHANNELS = {
   detectProject: 'devteam:detect-project',
   startProject: 'devteam:start-project',
   launchFirstTask: 'devteam:launch-first-task',
+  installTools: 'devteam:install-tools',
   onboardingState: 'devteam:onboarding-state',
   completeOnboarding: 'devteam:complete-onboarding',
   projectNames: 'devteam:project-names',

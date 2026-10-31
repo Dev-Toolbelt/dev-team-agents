@@ -10,6 +10,7 @@ import { hostPlatformFrom } from '../../shared/directoryPaths.js';
 import { SELECT_CLASS } from '../formStyles.js';
 import { Problem } from '../Problem.js';
 import { ProviderIcon, providerLabel } from '../providers/ProviderIcon.js';
+import { runToolsInstall } from '../toolsInstall.js';
 import { unreachable } from '../useOperation.js';
 import { Busy, CommandBox, useFocusOnMount } from './CopyButton.js';
 import { COPY } from './copy.js';
@@ -219,6 +220,8 @@ export function StartStep({
         setProblem(result);
         return;
       }
+      // ADR-0060: `start` skips helper tools; they install in the background as their own step.
+      void runToolsInstall();
       let launch: LaunchFirstTaskAnswer | null = null;
       if (result.data.first_task?.launch != null) launch = await window.devteam.launchFirstTask(project.path);
       onStarted({ report: result.data, launch });
