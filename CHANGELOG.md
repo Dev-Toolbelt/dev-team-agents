@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Helper tools installed without asking (ADR-0060).** `devteam tools list | install` provisions `rg`, `fd`, `jq`, `ast-grep`, `tokei`, `delta`, `graphify`, `gitleaks` and `semgrep` from pinned, sha256-checked downloads (Python tools in their own venv), with no `sudo`. The CLI installers, every `devteam bind` (all providers), the standalone project installers and the health check run it and list each tool as it installs; a tool that cannot be installed is skipped with a reason. `DEVTEAM_SKIP_TOOLS=1` opts out. `bind --json` gains an additive `tools` field. `bind`/`start` accept `--no-tools`, which the desktop app passes before running `tools install` as a step of its own; `tools` is exempt from the account gate. `/devteam:install` now delegates to it and asks no confirmation; its `--yes` flag is accepted and ignored until the next minor version.
+- **Commits are scanned for secrets (ADR-0059).** The PreToolUse sub-script `03b-staged-secret-guard.sh` runs `gitleaks git --pre-commit --staged` on every `git commit` an agent runs, on Claude Code, Codex and opencode, and refuses one that carries a secret, naming file, line and rule only. This repository's CI gains a `security-scan` job: gitleaks over the full history and semgrep at ERROR severity, both pinned.
+
+### Fixed
+- **graphify was installed under the wrong package name.** `tool-installers` said `npm install -g graphify` / `pip install graphify`; the CLI is the PyPI distribution `graphifyy`, and `graphify` is an unrelated project.
+- **Deprecated scanner commands in the security skills.** `gitleaks detect`/`protect` → `gitleaks git`, `returntocorp/semgrep-action` → the `semgrep/semgrep` image, `semgrep --config=auto` → explicit rulesets with `--metrics=off`.
+
 ### Changed
 - **Windows installers are signed through SSL.com eSigner (ADR-0055).** The `.pfx` path (`WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD`) is gone: no certificate issued since 2023 can be exported to one. `app/build/sign-windows.cjs` signs the app's executables as electron-builder's sign hook and the CLI installers in `windows-cli.yml`, sha256 only, when the four `WIN_ESIGNER_*` secrets exist; without them every build stays unsigned as before, and pull requests never sign. CodeSignTool is pinned by version and SHA-256. **Breaking for a local build that sets `WIN_CSC_LINK` without `WIN_ESIGNER_*`:** it now fails instead of signing. A partial `WIN_ESIGNER_*` set fails a release; only a build that attaches installers signs, and the production secrets go in a tag-restricted `esigner-production` environment. The new dispatch-only `windows-signing-sandbox.yml` proves the chain against the eSigner sandbox before a certificate is bought.
 
