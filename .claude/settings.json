@@ -8,7 +8,7 @@
             "type": "command"
           }
         ],
-        "matcher": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|mcp__.*create_pull_request|mcp__.*merge_pull_request"
+        "matcher": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|Edit|MultiEdit|Write|NotebookEdit|mcp__.*create_pull_request|mcp__.*merge_pull_request"
       }
     ],
     "PostToolUseFailure": [
