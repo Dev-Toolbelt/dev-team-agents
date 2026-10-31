@@ -40,6 +40,8 @@ class InstallCliTest(unittest.TestCase):
             DEVTEAM_HOME=str(self.tmp / "home"),
             DEVTEAM_CLI_HOME=str(self.tmp / "cli"),
             DEVTEAM_BIN_DIR=str(self.tmp / "bin"),
+            # The installer and every bind provision tools (ADR-0060); a test never downloads.
+            DEVTEAM_SKIP_TOOLS="1",
         )
         self.bin = self.tmp / "bin" / "devteam"
 

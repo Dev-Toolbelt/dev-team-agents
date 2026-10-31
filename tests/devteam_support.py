@@ -42,7 +42,7 @@ CLI = REPO_ROOT / "scripts" / "cli" / "devteam"
 # mode that matters, because a seam that stops being neutralised does not announce itself:
 # it changes what the whole suite exercises. `DEVTEAM_HOSTNAME` is still a literal because
 # `paths.machine_host()` reads it from an inline tuple and exports no constant for it.
-from devteam import compat, entitlement, global_skills, paths, update  # noqa: E402  (needs the sys.path bootstrap above)
+from devteam import compat, entitlement, global_skills, paths, tools, update  # noqa: E402  (needs the sys.path bootstrap above)
 # Aliased, not imported bare: `secrets` is also a stdlib module name, and the shadowing
 # trap `creds.py` documents at its own import of this module applies here identically.
 from devteam import secrets as secrets_module  # noqa: E402  (same bootstrap as above)
@@ -260,6 +260,9 @@ class StoreTestCase(unittest.TestCase):
                 compat.CLIENT_SCHEMAS_ENV,
                 update.SHA256_ENV,
                 global_skills.USER_HOME_ENV,
+                tools.SKIP_ENV,
+                tools.BIN_DIR_ENV,
+                tools.TOOLS_HOME_ENV,
                 *entitlement.SEAM_ENVS,
             )
         }
@@ -310,6 +313,12 @@ class StoreTestCase(unittest.TestCase):
         # read — and an install test would write — the developer's own ~/.claude/skills.
         self.user_home = self.tmp / "user-home"
         os.environ[global_skills.USER_HOME_ENV] = str(self.user_home)
+        # Pinned, not popped: every `bind` the suite runs provisions tools (ADR-0060), which
+        # downloads from GitHub and writes into ~/.local/bin. Skipped by default, and pointed at
+        # the temp tree for the tests that switch it back on.
+        os.environ[tools.SKIP_ENV] = "1"
+        os.environ[tools.BIN_DIR_ENV] = str(self.tmp / "tools-bin")
+        os.environ[tools.TOOLS_HOME_ENV] = str(self.tmp / "tools-home")
         self.addCleanup(self._restore_env)
         assert_local_secret_backend()
         self.source = make_source_tree(self.tmp / "source")

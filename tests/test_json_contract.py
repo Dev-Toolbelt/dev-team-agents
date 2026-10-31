@@ -668,6 +668,8 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "git_exclude",
             "fallback_reason",
             "preferences_import",
+            # ADR-0060: the tools report of the `tools.install` every bind runs. Additive.
+            "tools",
         },
         "store list": {"installed", "current", "pinned"},
         "catalog": {"version", "project_id", "counts", "malformed"},

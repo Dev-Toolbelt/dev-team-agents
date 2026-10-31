@@ -21,7 +21,7 @@ from devteam.output import Emitter  # noqa: E402
 
 #: The command roots ADR-0029 never gates. A new subcommand is gated unless added here AND
 #: to `gate.EXEMPT`, so this list changing is a reviewed decision, not a side effect.
-EXEMPT_ROOTS = {"auth", "version", "path", "compat", "doctor", "unbind", "uninstall", "export", "tasks"}
+EXEMPT_ROOTS = {"auth", "version", "path", "compat", "doctor", "unbind", "uninstall", "export", "tasks", "tools"}
 #: Single leaves exempt under a gated root: hook plumbing (ADR-0044).
 EXEMPT_LEAVES = {("backlog", "prime")}
 
