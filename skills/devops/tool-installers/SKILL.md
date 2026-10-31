@@ -200,4 +200,4 @@ command -v apt-get >/dev/null 2>&1 && echo "Linux: apt" || { command -v dnf >/de
 
 ## Elevated Privileges
 
-Any `sudo`/elevated command in the tables above is a `sudo` row of `skills/shared/interaction-patterns/SKILL.md` § Command Run Plan: list it as `agent (you if it prompts)`, run it per that section's Elevation row, and re-verify with the tool's **Detect** command once the user confirms an interactive step.
+Any `sudo` or elevated command in the tables above is listed and run per `skills/shared/interaction-patterns/SKILL.md` § Command Run Plan (List and Elevation rows); re-verify with the tool's **Detect** command once the user confirms an interactive step.

@@ -23,16 +23,20 @@ versions did not match.
   columns.
 - One `AskUserQuestion` approves the whole list. **Run all** is recommended only when no row is
   risky or comes from untrusted content; otherwise **One by one** is, and a flagged row keeps its
-  own question. The agent then runs every row itself, `sudo` as `sudo -n`.
+  own question. The agent then runs every row itself; a `sudo` row runs as `sudo -n` when
+  `sudo -n true` succeeds and is an interactive step otherwise, which avoids matching sudo's
+  localized error text.
 - A row that waits on a person (a password or `sudo` prompt, MFA, a browser sign-in, an elevated
   terminal) is an interactive step. The agent stops there, shows the command for the user's own
   terminal, waits for `Done` / `It failed` / `Skip`, verifies the result where it can, and
   continues to the end of the list.
 - Routine work skips the list and the question: read-only inspection, the task's own builds,
-  tests and lints, and anything an approved plan or the user's request already covers, unless it
-  has a risky shape. The pause, elevation and secret rules still apply to it.
-- A sub-agent runs only the approved rows, verbatim, and returns at each interactive row, failure
-  or new command with the results so far. An autonomous run never approves a run plan.
+  tests and lints, and anything an approved plan or the user's request already covers. It follows
+  only the pause, elevation and secret rules; its exit codes stay with the flow that runs it. A
+  risky or untrusted command is never routine, even inside an approved plan.
+- A sub-agent runs only the approved rows, verbatim apart from `-n`, and returns at each
+  interactive row, failure or new command with the results so far. An autonomous run never
+  approves a run plan or a flagged row.
 
 ## Consequences
 
@@ -47,8 +51,9 @@ versions did not match.
   returns at each interactive row, which costs one round trip per such row; the per-row results it
   returns keep a re-spawned agent from running a row twice.
 - Skills with a stricter confirmation or failure handling (`local-environment` § Start) keep it;
-  the rule sets a floor, not a ceiling. A step that needs the CLI to restart (`/devteam:symlinks`,
-  elevated terminal) is a hand-off that ends the flow, not a run-plan step.
+  the rule sets a floor, not a ceiling. A step after which the CLI must restart
+  (`/devteam:symlinks`, elevated terminal) is a hand-off that ends the flow, not a run-plan step;
+  the skill's Interactive step row says so.
 
 ## Alternatives Considered
 
