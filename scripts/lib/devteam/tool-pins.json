@@ -1,0 +1,301 @@
+{
+  "schema": 1,
+  "_comment": "Pinned tools `devteam tools install` provisions (ADR-0060). Binary assets are verified against sha256 before anything is written; a mismatch installs nothing. Edit by hand, keep every platform's digest, and run tests/test_tools.py.",
+  "tools": [
+    {
+      "name": "rg",
+      "binary": "rg",
+      "version": "15.2.0",
+      "purpose": "faster code search",
+      "kind": "binary",
+      "brew": "ripgrep",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-apple-darwin.tar.gz",
+          "sha256": "3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4",
+          "format": "tar.gz"
+        },
+        "darwin-x64": {
+          "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-apple-darwin.tar.gz",
+          "sha256": "af7825fcc69a2afc7a7aea55fc9af90e26421d8f20fe59df32e233c0b8a231c1",
+          "format": "tar.gz"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz",
+          "sha256": "a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d",
+          "format": "tar.gz"
+        },
+        "linux-x64": {
+          "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c",
+          "format": "tar.gz"
+        },
+        "windows-arm64": {
+          "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-pc-windows-msvc.zip",
+          "sha256": "e4abca10c3a64ebea742667dd7009449d49403db5460dd6873e389fa2945360f",
+          "format": "zip"
+        },
+        "windows-x64": {
+          "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+          "sha256": "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5",
+          "format": "zip"
+        }
+      }
+    },
+    {
+      "name": "fd",
+      "binary": "fd",
+      "version": "10.5.0",
+      "purpose": "faster file search",
+      "kind": "binary",
+      "brew": "fd",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-aarch64-apple-darwin.tar.gz",
+          "sha256": "b67e1836c468e42e411984b56e52fa7abec08c2bd22c867398e7cc134aac5e12",
+          "format": "tar.gz"
+        },
+        "darwin-x64": {
+          "url": "https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-apple-darwin.tar.gz",
+          "sha256": "7e31028c62c6955877735d0406807aa484c2a5e6f86235a59e26c29c301da590",
+          "format": "tar.gz"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-aarch64-unknown-linux-musl.tar.gz",
+          "sha256": "d76c4317f7d5dba69f8a2a15856c90c777e7f0dd4e85f0de8c76de6992c374d4",
+          "format": "tar.gz"
+        },
+        "linux-x64": {
+          "url": "https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "761c72dc8e120d85b22292063be8a796e2eeb20eb3e4f38b8fa2343ccf3514a7",
+          "format": "tar.gz"
+        },
+        "windows-arm64": {
+          "url": "https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-aarch64-pc-windows-msvc.zip",
+          "sha256": "a2bcddcfd259b05357a77bbc6cd671fdb30f63fd266a0e748305890a8c5ceaa6",
+          "format": "zip"
+        },
+        "windows-x64": {
+          "url": "https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-pc-windows-msvc.zip",
+          "sha256": "a227701b8551c35a9931d9f6da75503cf86d88e182d71fb849a70864c5d57cd7",
+          "format": "zip"
+        }
+      }
+    },
+    {
+      "name": "jq",
+      "binary": "jq",
+      "version": "1.8.2",
+      "purpose": "reads JSON fields without loading whole files",
+      "kind": "binary",
+      "brew": "jq",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-macos-arm64",
+          "sha256": "2d75340ba57a4b4b4c8708a21c2dc8e958a48aaa8bba13b27f77f6e4c0eca07e",
+          "format": "raw"
+        },
+        "darwin-x64": {
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-macos-amd64",
+          "sha256": "e94b266e3c26690550006abe63152b782280f4e14374accdf04cbde844f00bc0",
+          "format": "raw"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-arm64",
+          "sha256": "8b85c817833814ddca00a144c33705546355afccf0cf39b188f3cdb48b852309",
+          "format": "raw"
+        },
+        "linux-x64": {
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-amd64",
+          "sha256": "b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f",
+          "format": "raw"
+        },
+        "windows-arm64": {
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-arm64.exe",
+          "sha256": "083b5377392bc57cf27052b6d20a2d927770683bca844632901ff38b4b7b0ac7",
+          "format": "raw"
+        },
+        "windows-x64": {
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-amd64.exe",
+          "sha256": "a6fc67fedaf9128a3309a1e2ebb8b986aeccf70122ee46d2cb4849e423f0c627",
+          "format": "raw"
+        }
+      }
+    },
+    {
+      "name": "ast-grep",
+      "binary": "ast-grep",
+      "version": "0.51.0",
+      "purpose": "structural code search by syntax tree",
+      "kind": "binary",
+      "brew": "ast-grep",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-aarch64-apple-darwin.zip",
+          "sha256": "e18e13c27ed6c4b3ec4de00745b0755dee9dc26c035e226f4dd5d147dca99cc8",
+          "format": "zip"
+        },
+        "darwin-x64": {
+          "url": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-x86_64-apple-darwin.zip",
+          "sha256": "8438fe549da59da28518c45bdaab5b851aabafe8fb4f8dc05c261a7649b4eca6",
+          "format": "zip"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-aarch64-unknown-linux-gnu.zip",
+          "sha256": "73af0ebe5958acee012754a5b2826a186580ef83333092408a7a01096fc30b8b",
+          "format": "zip"
+        },
+        "linux-x64": {
+          "url": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-x86_64-unknown-linux-gnu.zip",
+          "sha256": "a7eead5552d3a8daad70f5d50d935da44bd0c138e946b5b0a96b1d38169fa639",
+          "format": "zip"
+        },
+        "windows-arm64": {
+          "url": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-aarch64-pc-windows-msvc.zip",
+          "sha256": "fb6a4c3c6ed350d7e64eae81961bdf6b3f201c6e7c31ace8caccf8ceddff1cac",
+          "format": "zip"
+        },
+        "windows-x64": {
+          "url": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-x86_64-pc-windows-msvc.zip",
+          "sha256": "1a5b7824c5925ac34257f806488e54860817cefd855fd308d13df7550d068908",
+          "format": "zip"
+        }
+      }
+    },
+    {
+      "name": "tokei",
+      "binary": "tokei",
+      "version": "12.1.2",
+      "purpose": "codebase size and language stats",
+      "kind": "binary",
+      "brew": "tokei",
+      "_digest_note": "v12.1.2 is the newest tokei release with prebuilt binaries; it publishes no digests, so these were computed from the downloaded assets on 2026-10-31",
+      "assets": {
+        "darwin-x64": {
+          "url": "https://github.com/XAMPPRocky/tokei/releases/download/v12.1.2/tokei-x86_64-apple-darwin.tar.gz",
+          "sha256": "2af8abb6a08b0513f9d16ca2c7cd37949b858d2a3e3227be8cc412b3b4937d5b",
+          "format": "tar.gz"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/XAMPPRocky/tokei/releases/download/v12.1.2/tokei-aarch64-unknown-linux-gnu.tar.gz",
+          "sha256": "ef514fd12cfc3ee2d1725e5ecb866ee1123163004879ec285b22f3323389ebe2",
+          "format": "tar.gz"
+        },
+        "linux-x64": {
+          "url": "https://github.com/XAMPPRocky/tokei/releases/download/v12.1.2/tokei-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "331e77046935d655dce8d97ebb943fcc7e9684586dadf3d197f3df5e760cd31b",
+          "format": "tar.gz"
+        },
+        "windows-x64": {
+          "url": "https://github.com/XAMPPRocky/tokei/releases/download/v12.1.2/tokei-x86_64-pc-windows-msvc.exe",
+          "sha256": "b1d6c4b18f5fa238bd2c6e47caa65a7a3e4a1bd0de6df0b7c19c8083c941f57b",
+          "format": "raw"
+        }
+      }
+    },
+    {
+      "name": "delta",
+      "binary": "delta",
+      "version": "0.20.1",
+      "purpose": "readable git diffs for reviewing agent changes",
+      "kind": "binary",
+      "brew": "git-delta",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/dandavison/delta/releases/download/0.20.1/delta-0.20.1-aarch64-apple-darwin.tar.gz",
+          "sha256": "bc1839cea69288d4673a24faffbb825d408ca907e0f7d33b1678c9e6cdd5e58e",
+          "format": "tar.gz"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/dandavison/delta/releases/download/0.20.1/delta-0.20.1-aarch64-unknown-linux-gnu.tar.gz",
+          "sha256": "da7f4338f593572ff426ae153e0870e2fdc72729416eff551b40cdeb67940db8",
+          "format": "tar.gz"
+        },
+        "linux-x64": {
+          "url": "https://github.com/dandavison/delta/releases/download/0.20.1/delta-0.20.1-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "69dcb4043f55c29118f408c6efd30115e0a4e0a6709253343b8c8fa814ab4a31",
+          "format": "tar.gz"
+        },
+        "windows-x64": {
+          "url": "https://github.com/dandavison/delta/releases/download/0.20.1/delta-0.20.1-x86_64-pc-windows-msvc.zip",
+          "sha256": "c9af7484b33f1dbc1312a892fc7d5753a6d3365140a4000d49e575a2de742c25",
+          "format": "zip"
+        }
+      }
+    },
+    {
+      "name": "gitleaks",
+      "binary": "gitleaks",
+      "version": "8.30.1",
+      "purpose": "blocks commits that contain secrets",
+      "kind": "binary",
+      "brew": "gitleaks",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_arm64.tar.gz",
+          "sha256": "b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5",
+          "format": "tar.gz"
+        },
+        "darwin-x64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_x64.tar.gz",
+          "sha256": "dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952709",
+          "format": "tar.gz"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_arm64.tar.gz",
+          "sha256": "e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080",
+          "format": "tar.gz"
+        },
+        "linux-x64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz",
+          "sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+          "format": "tar.gz"
+        },
+        "windows-arm64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_arm64.zip",
+          "sha256": "b95f5e4f5c425cedca7ee203d9afd29597e692c4924a12ed42f970537c72cc0f",
+          "format": "zip"
+        },
+        "windows-x64": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip",
+          "sha256": "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e",
+          "format": "zip"
+        }
+      }
+    },
+    {
+      "name": "semgrep",
+      "binary": "semgrep",
+      "version": "1.176.0",
+      "purpose": "static security analysis for audits",
+      "kind": "python",
+      "package": "semgrep",
+      "python_min": [
+        3,
+        10
+      ],
+      "brew": "semgrep",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "_platform_note": "semgrep has no supported native Windows build; there it is skipped with a pointer at WSL or Docker"
+    },
+    {
+      "name": "graphify",
+      "binary": "graphify",
+      "version": "0.4.14",
+      "purpose": "knowledge-graph code navigation",
+      "kind": "python",
+      "package": "graphifyy",
+      "python_min": [
+        3,
+        10
+      ],
+      "requires": [
+        "jq"
+      ],
+      "_package_note": "the PyPI distribution is `graphifyy` (double y); `graphify` on PyPI and npm is a different project"
+    }
+  ]
+}

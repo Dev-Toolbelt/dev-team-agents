@@ -18,7 +18,7 @@ from pathlib import Path
 from . import auth, bind as bind_module
 from . import auth_gate as gate
 from . import detect
-from . import qa_auth, backlog, catalog, check as check_module, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, repairs, store, tasks, trace, insights, mining, update, upgrade, versions
+from . import qa_auth, backlog, catalog, check as check_module, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, repairs, store, tasks, tools, trace, insights, mining, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .console import stdin_is_console as _stdin_is_console
@@ -238,6 +238,10 @@ def cmd_bind(args, emitter):
         pin=args.pin,
         emitter=emitter,
     )
+    # Here and not in `bind_module.bind()`, for the same reason as the refusal above: `sync`,
+    # `sync --all` and `migrate` call that function, and none of them should download
+    # anything. A project bound for the first time gets the tools its agents expect (ADR-0060).
+    result["tools"] = _bind_tools(emitter, skip=getattr(args, "no_tools", False))
     human = "\n".join(
         [
             "bound {}".format(result["path"]),
@@ -269,8 +273,39 @@ def cmd_bind(args, emitter):
             else []
         )
         + _preferences_import_lines(result.get("preferences_import"))
+        + _bind_tools_lines(result["tools"])
     )
     return result, human
+
+
+def _bind_tools(emitter, skip=False):
+    """`tools.install` for a bind: progress on stderr, and a failure never fails the bind.
+
+    ``skip`` is `--no-tools`: the desktop app binds with it and runs `tools install` as a step of
+    its own, with a deadline sized for a first download (ADR-0060).
+    """
+    if skip:
+        return {"skipped_all": "--no-tools", "tools": [], "bin_dir": None, "platform": None, "on_path": None}
+    if not tools.skip_requested():
+        emitter.stderr.write(tools.header() + "\n")
+    try:
+        return tools.install(progress=lambda entry: emitter.stderr.write(tools.format_entry(entry) + "\n"))
+    except Exception as exc:  # noqa: BLE001 - the project is bound; the tools are a bonus
+        emitter.warn("tools not installed: {}".format(exc))
+        return {"skipped_all": str(exc), "tools": [], "bin_dir": None, "platform": None, "on_path": None}
+
+
+def _bind_tools_lines(report):
+    """The bind summary's tools line: counts only — each tool already went out as progress."""
+    if report.get("skipped_all"):
+        return ["  tools     not installed ({})".format(report["skipped_all"])]
+    counts = {}
+    for entry in report["tools"]:
+        counts[entry["status"]] = counts.get(entry["status"], 0) + 1
+    order = (tools.INSTALLED, tools.PRESENT, tools.SKIPPED, tools.FAILED)
+    lines = ["  tools     " + ", ".join("{} {}".format(counts[s], s) for s in order if counts.get(s))]
+    lines += ["  " + line for line in tools.summary_lines(report)[1 + len(report["tools"]):]]
+    return lines
 
 
 def _preferences_import_lines(report):
@@ -612,7 +647,7 @@ def cmd_start(args, emitter):
     )
     bound, _human = cmd_bind(
         argparse.Namespace(
-            path=str(root), provider=chosen, mode="auto", pin=None
+            path=str(root), provider=chosen, mode="auto", pin=None, no_tools=args.no_tools
         ),
         emitter,
     )
@@ -1182,6 +1217,29 @@ def cmd_skills_remove(args, emitter):
     else:
         human = "moved {} to quarantine: {}".format(payload["path"], payload["quarantined_to"])
     return payload, human
+
+
+def cmd_tools_list(args, emitter):
+    payload = tools.list_tools()
+    lines = ["bin dir  {}".format(payload["bin_dir"])]
+    lines += [tools.format_entry(entry) for entry in payload["tools"]]
+    return payload, "\n".join(lines)
+
+
+def cmd_tools_install(args, emitter):
+    # Progress goes to stderr as each tool finishes, so a multi-minute install is never a
+    # silent one and `--json` stdout still carries only the final document.
+    if not tools.skip_requested():
+        emitter.stderr.write(tools.header() + "\n")
+    payload = tools.install(
+        args.name or None,
+        progress=lambda entry: emitter.stderr.write(tools.format_entry(entry) + "\n"),
+    )
+    lines = tools.summary_lines(payload)
+    if not payload["skipped_all"]:
+        # The header and one line per tool already went out as progress; only the tail is new.
+        lines = lines[1 + len(payload["tools"]):]
+    return payload, "\n".join(lines)
 
 
 def cmd_prefs_list(args, emitter):
@@ -2027,6 +2085,9 @@ def build_parser():
     )
     bind_parser.add_argument("--mode", default="auto", choices=bind_module.MODES)
     bind_parser.add_argument("--pin", help="pin this project to a version")
+    bind_parser.add_argument(
+        "--no-tools", action="store_true", help="do not install the helper tools (run `devteam tools install` yourself)"
+    )
     bind_parser.set_defaults(func=cmd_bind)
 
     unbind = leaf(sub, "unbind", help="remove bind artifacts, keeping identity and memory")
@@ -2527,6 +2588,9 @@ def build_parser():
     start_parser.add_argument(
         "--type", choices=("new", "unfinished", "maintenance"), help="override the detected project type"
     )
+    start_parser.add_argument(
+        "--no-tools", action="store_true", help="do not install the helper tools (run `devteam tools install` yourself)"
+    )
     start_parser.set_defaults(func=cmd_start)
 
     # Unlike `store`/`prefs`/`cred`, `catalog` alone is a valid, meaningful call
@@ -2600,6 +2664,18 @@ def build_parser():
     skills_remove.add_argument("name")
     skills_remove.add_argument("--root", help="the root id, when the name exists in more than one")
     skills_remove.set_defaults(func=cmd_skills_remove)
+
+    # The helper tools agents lean on (ADR-0060) — machine-wide, outside every project and
+    # outside the store. `bind` calls the same `tools.install`.
+    tools_parser = leaf(
+        sub, "tools", help="list and install the pinned helper tools (rg, gitleaks, semgrep, …)"
+    ).add_subparsers(dest="tools_cmd")
+    leaf(tools_parser, "list", help="each pinned tool and whether it is installed").set_defaults(
+        func=cmd_tools_list
+    )
+    tools_install = leaf(tools_parser, "install", help="install every missing pinned tool")
+    tools_install.add_argument("name", nargs="*", help="only these tools (default: all)")
+    tools_install.set_defaults(func=cmd_tools_install)
 
     # The account commands (ADR-0029): the CLI owns the session, the app and the installers
     # call these. Their handlers and parser live in `auth.py`.
@@ -2808,6 +2884,8 @@ def main(argv=None, stdout=None, stderr=None):
             return emitter.fail(UsageError("tasks needs a subcommand: record, mark, retitle, review-open, review-result, trace-record, trace, list, watch"))
         if getattr(args, "command", None) == "skills":
             return emitter.fail(UsageError("skills needs a subcommand: list, show, install, remove"))
+        if getattr(args, "command", None) == "tools":
+            return emitter.fail(UsageError("tools needs a subcommand: list, install"))
         if getattr(args, "command", None) == "auth":
             return emitter.fail(
                 UsageError(

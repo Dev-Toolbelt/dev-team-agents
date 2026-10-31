@@ -458,6 +458,8 @@ MUTATING = {
     "quarantines the one it replaces with --replace (ADR-0020)",
     ("skills", "remove"): "moves a global skill into the store's quarantine, or unlinks a "
     "symlinked one (ADR-0020)",
+    ("tools", "install"): "downloads the pinned helper tools into the user's bin and tools "
+    "directories, outside the store (ADR-0060)",
     ("doctor",): "repairs what it finds — it rewrites the directory pointers, relocates a "
     "moved registry entry, and reassigns identity with --reassign-identity. Read the "
     "actions it returns, not the word 'diagnose', before reclassifying this one",
@@ -526,6 +528,7 @@ READ_ONLY = {
     ("catalog", "show"): "read-only browse",
     ("skills", "list"): "reads the providers' global skill directories; creates nothing",
     ("skills", "show"): "reads one global skill; creates nothing",
+    ("tools", "list"): "looks the pinned helper tools up on PATH; creates nothing",
 }
 
 

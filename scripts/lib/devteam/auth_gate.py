@@ -51,6 +51,9 @@ EXEMPT = frozenset(
         ("export",),
         ("quarantine", "restore"),
         ("tasks",),
+        # Third-party helper tools (ADR-0060): no license value, and the CLI installers run
+        # `tools install` before anyone has signed in.
+        ("tools",),
         # SessionStart runs it after a compaction (ADR-0044); a hook must never wait on the account check.
         ("backlog", "prime"),
     }
