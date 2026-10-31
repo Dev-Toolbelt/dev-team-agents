@@ -48,11 +48,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Build code (build.py, the NSIS script, the installer) runs with a read-only token;
+  # only the attach job below, which runs no build code, can write to a release.
   windows-cli-installer:
-    name: Build, smoke-test and attach the Windows CLI installers
+    name: Build and smoke-test the Windows CLI installers
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
     defaults:
       run:
         shell: bash
@@ -149,14 +154,53 @@ jobs:
           if (-not $gone) { throw 'uninstall left bin on the user PATH, or devteam.exe on disk' }
           if (-not (Test-Path (Join-Path $env:DEVTEAM_HOME 'core'))) { throw 'uninstall removed the store, which it must never touch' }
 
+      - name: Record the tag and version
+        id: version
+        run: |
+          echo "tag=${TAG:-}" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the installers for the attach job
+        if: ${{ env.ATTACH == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-cli-installers
+          path: |
+            dist/devteam-setup-*-x64.exe
+            dist/devteam-setup-*-arm64.exe
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  # A dispatch runs the workflow file of the ref it was started from, so attaching
+  # from one is allowed only on main: a branch cannot rewrite a release's assets.
+  attach:
+    name: Attach the Windows CLI installers to the release
+    needs: windows-cli-installer
+    if: ${{ inputs.attach && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      TAG: ${{ needs.windows-cli-installer.outputs.tag }}
+      VERSION: ${{ needs.windows-cli-installer.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: windows-cli-installers
+          path: dist
+
       # Draft first, publish after the assets are in: with the repository's immutable
       # releases setting on (ADR-0027 requires it), a published release accepts no new
       # assets. A release that already exists as a draft is reused; one that is already
       # published (a re-run) only takes the upload if the setting allows it.
       - name: Attach the installers to the release
-        if: ${{ env.ATTACH == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           if ! gh release view "$TAG" >/dev/null 2>&1; then
