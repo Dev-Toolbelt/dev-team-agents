@@ -73,8 +73,9 @@ release can be signed by CI with nobody at a keyboard:
 
 ### Negative
 - About US$ 310–370 a year, part of it a monthly eSigner subscription billed by signature count.
-  A release signs roughly ten files (the app's executable and uninstaller per architecture, three
-  app installers, two CLI installers).
+  A release signs 12 files, measured in the sandbox run of 2026-10-31: per architecture the app's
+  executable and `elevate.exe`, three NSIS uninstallers, three app installers and two CLI
+  installers. The eSigner plan's monthly quota must cover that per release.
 - A third party's tool (CodeSignTool, a Java jar) runs in the release job with the signing
   credentials. The pin limits it to one reviewed version.
 - Everything that runs in the signing job is inside the trust boundary: electron-builder and the
