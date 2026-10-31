@@ -1,11 +1,13 @@
 ---
 name: tool-installers
-description: Cross-OS install/verify knowledge base for the closed tool set /devteam:install supports.
+description: Manual cross-OS install paths for the pinned helper tools, when devteam tools can't.
 ---
 
 # Tool Installers
 
-Cross-OS knowledge base backing `/devteam:install`. Covers **exactly** the tools in the table below — this is a closed list, not a general "install anything" reference. Adding a tool here is a deliberate change to the command's allowlist (`commands/install.md`), never an implicit one.
+The **manual** path for the helper tools. The automatic one is `devteam tools install` (ADR-0060), which `devteam bind`, the CLI installers, the health check and `/devteam:install` all run: pinned downloads, sha256-verified, no `sudo`. Use this skill only for a tool that command reported as `skipped` or `failed`, or when no `devteam` CLI is available.
+
+Covers **exactly** the tools in the table below — a closed list, not a general "install anything" reference. The list itself is `scripts/lib/devteam/tool-pins.json`; adding a tool is a change there first, then a section here.
 
 Every entry follows the same shape: **detect** (already installed?) → **install** (per OS) → **verify** (re-run detect). On Windows, **prefer native install first** (`winget`, falling back to `choco` or `scoop` if present) — no WSL round-trip, no `wsl bash -c` wrapper, nothing for the user to enable first. Fall back to WSL only when none of `winget`/`choco`/`scoop` are available or the native command fails.
 
@@ -21,7 +23,9 @@ Every entry follows the same shape: **detect** (already installed?) → **instal
 | `ast-grep` | Structural code search/rewrite by AST pattern instead of regex — targets exact syntax nodes for large refactors | — |
 | `tokei` | Instant codebase size/complexity stats without an agent reading the whole tree | — |
 | `delta` | Readable git diff pager for human review of agent-generated diffs/PRs | — |
-| `graphify` | Knowledge-graph codebase navigation — the largest single token-economy win in this repo's toolset | `jq` |
+| `graphify` | Knowledge-graph codebase navigation — the largest single token-economy win in this repo's toolset | `jq`, Python 3.10+ |
+| `gitleaks` | Secret scanning — the commit-time guard (ADR-0059) refuses a commit that carries a secret | — |
+| `semgrep` | Static security analysis, run by `/devteam:security` and `/devteam:audit` | Python 3.10+ |
 
 ---
 
@@ -154,18 +158,43 @@ command -v apt-get >/dev/null 2>&1 && echo "Linux: apt" || { command -v dnf >/de
 
 ## graphify
 
-- **Detect:** `command -v graphify >/dev/null 2>&1 && graphify --version || echo NOT_FOUND`
+- **Detect:** `command -v graphify >/dev/null 2>&1 && echo found || echo NOT_FOUND` (it has no `--version` flag)
+- **Package:** the PyPI distribution is **`graphifyy`** (double y). `graphify` on PyPI and on npm is a different project — never install it by that name.
 - **Install:**
 
 | OS | Command |
 |----|---------|
-| macOS | `brew install graphify` |
-| Windows (native) | `npm install -g graphify` — works directly on native Windows, no WSL needed; fallback `pip install graphify` if npm is unavailable |
-| Linux/WSL | `npm install -g graphify` — fallback `pip install graphify` if npm is unavailable |
+| Any (Python 3.10+) | `pipx install graphifyy` — or `python3 -m pip install --user graphifyy` when pipx is missing |
 
 - **Dependency:** `jq` must also be installed (see above) — install it first if missing.
 - **Verify:** re-run detect, then confirm `jq` is present too.
 - **After the binary is confirmed working:** hand off to `skills/devops/graphify-setup/SKILL.md` starting at its Step 3 (Detect and Enable) — that skill owns enabling the plugin and its config, `.gitignore` entries, the first build, and the `CLAUDE.md` injection. This skill's job stops at "the binary and its dependency are installed and on PATH."
+
+## gitleaks
+
+- **Detect:** `command -v gitleaks >/dev/null 2>&1 && gitleaks version || echo NOT_FOUND`
+- **Install:**
+
+| OS | Command |
+|----|---------|
+| macOS | `brew install gitleaks` |
+| Windows (native) | `winget install Gitleaks.Gitleaks` (or `scoop install gitleaks`, or `choco install gitleaks`) |
+| Linux | Download the `linux_x64`/`linux_arm64` tarball from https://github.com/gitleaks/gitleaks/releases, check it against the release's `checksums.txt`, and put `gitleaks` in `~/.local/bin` |
+
+- **Verify:** re-run detect.
+
+## semgrep
+
+- **Detect:** `command -v semgrep >/dev/null 2>&1 && semgrep --version || echo NOT_FOUND`
+- **Install:**
+
+| OS | Command |
+|----|---------|
+| macOS | `brew install semgrep` |
+| Linux (Python 3.10+) | `pipx install semgrep` — or `python3 -m pip install --user semgrep` |
+| Windows | No supported native build — run it under WSL (Linux row) or through Docker (`docker run --rm -v "${PWD}:/src" semgrep/semgrep semgrep scan`) |
+
+- **Verify:** re-run detect.
 
 ---
 

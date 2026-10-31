@@ -492,7 +492,7 @@ silent no-op. A build still running at the summary is reported as `running`, wit
 | Check | Auto-fix |
 |-------|----------|
 | `source: "legacy"` | FIX — run `devteam sync`, which **moves** the file into `.dev-team-agents/plugin-settings/graphify.json` (new file written first, old one removed after). Never hand-edit or delete it |
-| `ready: false` | WARN — cannot auto-install; show each missing binary's `install_hint` (`/devteam:install graphify`, `/devteam:install jq`) |
+| `ready: false` | Category 13 installs the missing binaries; WARN only when one is still `skipped` or `failed`, with its reason and `install_hint` |
 | Settings file is not valid JSON (the CLI exits 3) | FIX blocked — report the parse error; never rewrite user config content automatically |
 | `configured: false` | Suggest `devteam plugin run graphify detect --json`, then `devteam plugin config set graphify targetPaths '[…]'` after the user confirms |
 | A `targetPaths` / `manifestPaths` entry is missing on disk | WARN — list the paths; do not remove them from the config (may be a rename in progress) |
@@ -774,21 +774,21 @@ command -v python3 >/dev/null 2>&1 && echo "PYTHON3: OK" || echo "PYTHON3: MISSI
 
 Only warn when `python3` is actually missing — do not repeat this hint on every run once it is present.
 
-## Category 13 — Productivity & Token-Efficiency Tools
+## Category 13 — Helper Tools
 
-These are optional CLI tools that reduce the token cost of the raw bash operations `skills/shared/token-efficiency/SKILL.md` already recommends (search, find, JSON extraction, structural code search, repo stats, diff review). None of them are required for dev-team-agents to function — WARN only, same as Category 12. The health check never installs anything itself — installation and cross-OS knowledge live in `/devteam:install` (`skills/devops/tool-installers/SKILL.md`).
+The pinned tools agents lean on: code search, JSON extraction, structural search, repo stats, diff review, the commit-time secret scan (`gitleaks`) and static analysis (`semgrep`, `graphify`). `scripts/lib/devteam/tool-pins.json` is the list; never restate it here. Unlike Category 12, these **are** installed without asking (ADR-0060): the user did not choose them and would not know what to answer.
 
 ```bash
-for _tool in rg fd jq ast-grep tokei delta; do
-  command -v "$_tool" >/dev/null 2>&1 && echo "OK: $_tool" || echo "MISSING: $_tool"
-done
+devteam tools list --json
 ```
 
 | Check | Status | Auto-fix |
 |-------|--------|----------|
-| Any tool in the list missing | WARN only | None — report the missing tool(s) and direct the user to `/devteam:install <tool>` (or `/devteam:install all`); never install automatically |
-
-Only warn when a tool is actually missing — do not repeat the hint on every run once it is present.
+| Any tool `missing` | Fixed | Run `devteam tools install` and show its list to the user — the header names the `DEVTEAM_SKIP_TOOLS=1` opt-out. It needs no `sudo` and verifies every pinned download's sha256; it writes to the user's bin and tools directories, except for a tool with no pinned build for the platform, which Homebrew installs when present (that line says so) |
+| A tool still `skipped` or `failed` after the install | Handed over | Report the reason the command printed (no build for this platform, no Python 3.10+, no network) with the manual path from `skills/devops/tool-installers/SKILL.md` |
+| `DEVTEAM_SKIP_TOOLS` is set | OK | The user opted out; report the missing tools as INFO, install nothing |
+| No `devteam` CLI on PATH | Handed over | Category 12 and the CLI install own that; recommend `scripts/install-cli.sh` |
+| All present | OK | No action |
 
 ## Category 14 — Docs Layout
 

@@ -49,7 +49,7 @@ Run the 14 health check categories from `setup-health-check/references/checks-li
 10. Credentials
 11. Memory Artifacts
 12. Python Prerequisite
-13. Productivity & Token-Efficiency Tools
+13. Helper Tools — missing tools are installed by `devteam tools install` without asking (ADR-0060)
 14. Docs Layout — `development` is reported once with the opt-in migration, never as an error; `gated` is validated
 
 For **Category 4**, run the check once for **each** provider in `<providers>`:
