@@ -134,7 +134,7 @@ The environment cannot create native symlinks yet (Windows without Developer Mod
 Wait for the answer, then:
 
 - **Developer Mode** → instruct the user to enable it now, then confirm with `AskUserQuestion` ("Developer Mode enabled?" → Yes / Not yet). On **Yes**, run Step 5. On **Not yet**, output `Enable Developer Mode, then run /devteam:symlinks again.` and stop.
-- **Elevated terminal** → an interactive step (interaction-patterns § Command Run Plan) that ends the flow instead of looping, because this session cannot verify it: show these commands for the user to run in the project root of an Administrator PowerShell:
+- **Elevated terminal** → not a run-plan step: <CLI> must restart before the repair takes effect, so this branch hands over and ends. Show these commands for the user to run in the project root of an Administrator PowerShell:
   ```
   git config core.symlinks true
   git checkout -- <config-dir>

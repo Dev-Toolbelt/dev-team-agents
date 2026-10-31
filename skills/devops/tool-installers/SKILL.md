@@ -171,4 +171,4 @@ command -v apt-get >/dev/null 2>&1 && echo "Linux: apt" || { command -v dnf >/de
 
 ## Elevated Privileges
 
-Any `sudo`/elevated command in the tables above: list it as an `agent` row and run it directly first. If it fails on a permission prompt or `sudo` is unavailable non-interactively, it becomes an interactive step of `skills/shared/interaction-patterns/SKILL.md` § Command Run Plan — the user runs it, confirms, and you re-verify. Never retry it with a different escalation (root shell, another `sudo` form); that decision belongs to the user.
+Any `sudo`/elevated command in the tables above is a `sudo` row of `skills/shared/interaction-patterns/SKILL.md` § Command Run Plan: list it as `agent (you if it prompts)`, run it per that section's Elevation row, and re-verify with the tool's **Detect** command once the user confirms an interactive step.
