@@ -255,13 +255,14 @@ class FormulaPayloadTest(unittest.TestCase):
             "changed, the formula's install block has to change with it.",
         )
 
-    def test_package_holds_only_python_files_so_the_glob_covers_it(self):
+    def test_every_package_file_is_matched_by_a_formula_glob(self):
         # The formula stages `scripts/lib/devteam/*.py`. A data file added to the
         # package (a JSON schema, a bundled template) would be silently left out
         # of the bottle and fail at runtime for brew users only. If this fails,
         # either move the data file out of the package or widen the formula's
         # glob — do not delete this test.
-        # A subpackage is covered only by its own `Dir[".../<name>/*.py"]` line.
+        # A subpackage is covered only by its own `Dir[".../<name>/*.py"]` line; a
+        # non-.py file at the top only by a `Dir["scripts/lib/devteam/*<suffix>"]` line.
         package = REPO_ROOT / "scripts" / "lib" / "devteam"
         formula = FORMULA.read_text(encoding="utf-8")
         strays = sorted(
@@ -269,7 +270,9 @@ class FormulaPayloadTest(unittest.TestCase):
             for entry in package.rglob("*")
             if "__pycache__" not in entry.parts
             and (
-                (entry.is_file() and entry.suffix != ".py")
+                (entry.is_file() and entry.parent == package
+                 and '.install Dir["scripts/lib/devteam/*{}"]'.format(entry.suffix) not in formula)
+                or (entry.is_file() and entry.parent != package and entry.suffix != ".py")
                 or (entry.is_dir() and 'Dir["scripts/lib/devteam/{}/*.py"]'.format(
                     entry.relative_to(package).as_posix()) not in formula)
             )
@@ -277,8 +280,8 @@ class FormulaPayloadTest(unittest.TestCase):
         self.assertEqual(
             [],
             strays,
-            "non-.py files in scripts/lib/devteam/ are not matched by the "
-            "formula's Dir[\"scripts/lib/devteam/*.py\"] glob: {}".format(strays),
+            "files in scripts/lib/devteam/ that no formula "
+            "`.install Dir[\"scripts/lib/devteam/*<suffix>\"]` line stages: {}".format(strays),
         )
 
     def test_shebang_rewrite_has_something_to_rewrite(self):

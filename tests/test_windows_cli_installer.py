@@ -227,6 +227,28 @@ class StageTest(unittest.TestCase):
         self.assertEqual((root / "launcher" / "launcher.exe").read_bytes(), b"stub-x64")
         self.assertTrue((root / "python" / "python.exe").is_file())
 
+    def test_the_cli_takes_the_scripts_lib_files_the_homebrew_formula_installs(self):
+        formula = (REPO_ROOT / "packaging" / "homebrew" / "devteam.rb").read_text(encoding="utf-8")
+        brewed = re.findall(r'\(libexec/"scripts/lib"\)\.install "scripts/lib/([^"]+)"', formula)
+        self.assertTrue(brewed)
+        self.assertEqual(sorted(build.CLI_LIB_FILES), sorted(brewed))
+        lib = self._stage() / "cli" / "scripts" / "lib"
+        for name in brewed:
+            self.assertTrue((lib / name).is_file(), name)
+
+    def test_the_staged_cli_imports_every_module_it_needs(self):
+        # The installer runs `devteam store install` from this tree; a module the
+        # stage leaves out fails there with exit 2 and no log. Data files read
+        # lazily (doc-layouts.json) are covered by the formula parity test above.
+        cli = self._stage() / "cli" / "scripts" / "cli" / "devteam"
+        env = dict(os.environ, DEVTEAM_HOME=str(self.tmp / "home"))
+        done = subprocess.run(
+            [sys.executable, "-I", str(cli), "version", "--json"],
+            capture_output=True, text=True, env=env, timeout=60,
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertTrue(json.loads(done.stdout)["ok"])
+
     def test_the_payload_is_a_tree_store_install_accepts(self):
         sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
         from devteam import versions

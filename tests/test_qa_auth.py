@@ -425,6 +425,7 @@ class ScriptTest(AuthCase):
         self.assertEqual(self.fills(), 2)
         self.assertTrue(os.path.exists(self.out))
 
+    @unittest.skipUnless(os.name == "posix", "Windows has no catchable SIGTERM: send_signal terminates the process")
     def test_signals_close_the_browser_and_exit_128_plus_the_number(self):
         import signal
         for sig, expected in ((signal.SIGTERM, 143), (signal.SIGINT, 130)):
@@ -541,6 +542,7 @@ class FallbackAndAuditTest(AuthCase):
 
 
 @unittest.skipUnless(shutil.which("node"), "node is not installed")
+@unittest.skipUnless(os.name == "posix", "Windows has no catchable SIGTERM: a timeout terminates the process")
 class TimeoutTest(AuthCase):
     def test_a_timed_out_script_gets_sigterm_to_close_its_browser(self):
         tmp = tempfile.mkdtemp()
