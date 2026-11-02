@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 
 from . import plugins as plugins_module
-from . import credentials_local, gitignore, hooks, jsonio, paths, prefs, project, providers, quarantine, registry, versions
+from . import credentials_local, default_agent, gitignore, hooks, jsonio, paths, prefs, project, providers, quarantine, registry, versions
 from .errors import ConflictError, EnvError, UsageError
 
 MODES = ("auto", "link", "copy", "vendored")
@@ -45,6 +45,8 @@ PROJECT_GITIGNORE_ENTRIES = (
     ".dev-team-agents/credentials.local.json",
     ".dev-team-agents/credentials.local.json.*",
     ".worktrees/",
+    # ADR-0062: the personal `orchestrator_default` lands here, never in the committed settings.json.
+    ".claude/settings.local.json",
     # `devteam export` defaults to the cache directory, but `--to .` is one keystroke
     # away and the archive can hold credential references and a quarantined
     # pre-upgrade memory directory. Never a thing to commit.
@@ -1053,14 +1055,26 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
                 retired,
             )
         )
+    # Before the projection and before `hooks.wire` reads `orchestrator_default`, so both already
+    # carry what a v2 preferences file held.
+    preferences_import = prefs.import_legacy(project_root, project_id, version, emitter=emitter)
     if "claude" in selected or resolved_mode == "vendored":
         artifacts.extend(hooks.wire(project_root, emitter=emitter))
+        # ADR-0062: personal, so it goes to settings.local.json, never the committed settings.json.
+        # A local file we cannot read or write is the user's; it never aborts a bind half done.
+        try:
+            default_agent.apply_project(
+                project_root,
+                "claude",
+                prefs.resolve(project_id, version)["values"].get("orchestrator_default") is True,
+            )
+        except (OSError, EnvError, ConflictError) as exc:
+            if emitter:
+                emitter.warn("{}: orchestrator_default not applied: {}".format(default_agent.CLAUDE_FILE, exc))
 
     # Resolved preferences and the state pointer are written on every bind and
     # every sync: both are projections of state that lives elsewhere, so a stale
     # one is a bug rather than a user edit to preserve.
-    # Before the projection, so it already carries what a v2 preferences file held.
-    preferences_import = prefs.import_legacy(project_root, project_id, version, emitter=emitter)
     artifacts.append(prefs.materialize(project_root, project_id, version))
     # Pre-plugin `user-data/graphify.json` -> `plugin-settings/graphify.json`. Idempotent,
     # and a no-op when the new file already exists (the leftover is reported, not touched).
@@ -1461,6 +1475,11 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
                 else:
                     if events:
                         unlinked.append("{} (hooks: {})".format(rel, ", ".join(events)))
+                try:
+                    if default_agent.apply_project(project_root, "claude", False):
+                        unlinked.append("{} (agent)".format(default_agent.CLAUDE_FILE))
+                except (OSError, EnvError, ConflictError) as exc:
+                    problems.append({"path": default_agent.CLAUDE_FILE, "error": str(exc)})
                 continue
             candidate = Path(project_root) / rel
             if not (candidate.exists() or candidate.is_symlink()):

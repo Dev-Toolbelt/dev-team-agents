@@ -856,10 +856,16 @@ def render_agent_claude(name, fm, body, src_path):
     return {"path": f".claude/agents/dev-team/{name}.md", "content": src_path.read_text(encoding="utf-8")}
 
 
+# ADR-0062: a main-session persona renders as `primary`, so opencode's `task` tool cannot spawn it
+# while `default_agent` still accepts it. Every other agent stays `all` (ADR-0033).
+OPENCODE_PRIMARY_AGENTS = ("orchestrator",)
+OPENCODE_PRIMARY_MODE = "primary"
+
+
 def render_agent_opencode(name, fm, body, model_id, effort, tool_map):
     desc = fm.get("description", "").strip()
     permission = _opencode_permission()
-    fm_lines = ["---", f"description: {desc}", "mode: all"]
+    fm_lines = ["---", f"description: {desc}", f"mode: {OPENCODE_PRIMARY_MODE if name in OPENCODE_PRIMARY_AGENTS else 'all'}"]
     if model_id:
         fm_lines.append(f"model: {model_id}")
     if effort:

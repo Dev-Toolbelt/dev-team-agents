@@ -618,6 +618,7 @@ PRE_COMPACT_HOOK="$(_hook_cmd pre-compact.sh)"
 POST_TOOL_USE_HOOK="$(_hook_cmd post-tool-use.sh)"
 SESSION_END_HOOK="$(_hook_cmd session-end.sh)"
 USER_PROMPT_HOOK="$(_hook_cmd user-prompt-submit.sh)"
+SUBAGENT_SUPERVISE_HOOK="$(_hook_cmd subagent-supervise.sh)"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
     cat > "$SETTINGS_FILE" <<EOF
@@ -703,6 +704,16 @@ if [ ! -f "$SETTINGS_FILE" ]; then
           {
             "type": "command",
             "command": "$(_json_str "$USER_PROMPT_HOOK")"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(_json_str "$SUBAGENT_SUPERVISE_HOOK")"
           }
         ]
       }
@@ -820,6 +831,7 @@ PYEOF
     _inject_hook "PostToolUse"  "$POST_TOOL_USE_HOOK"  "hooks/post-tool-use.sh"
     _inject_hook "SessionEnd"   "$SESSION_END_HOOK"    "hooks/session-end.sh"
     _inject_hook "UserPromptSubmit" "$USER_PROMPT_HOOK" "hooks/user-prompt-submit.sh"
+    _inject_hook "SubagentStop" "$SUBAGENT_SUPERVISE_HOOK" "hooks/subagent-supervise.sh"
 
     # An entry written before the command found the project root runs from whatever directory
     # the session is in, and one written before ADR-0043 runs a nested checkout's hooks. Rewrite an
@@ -829,7 +841,7 @@ PYEOF
             "pre-tool-use.sh=$PRE_TOOL_USE_HOOK" "stop.sh=$STOP_HOOK" \
             "session-start.sh=$SESSION_START_HOOK" "pre-compact.sh=$PRE_COMPACT_HOOK" \
             "post-tool-use.sh=$POST_TOOL_USE_HOOK" "session-end.sh=$SESSION_END_HOOK" \
-            "user-prompt-submit.sh=$USER_PROMPT_HOOK" <<'PYEOF'
+            "user-prompt-submit.sh=$USER_PROMPT_HOOK" "subagent-supervise.sh=$SUBAGENT_SUPERVISE_HOOK" <<'PYEOF'
 import sys, json
 
 settings_file = sys.argv[1]
@@ -930,6 +942,16 @@ if command -v python3 >/dev/null 2>&1 && [ -f "$INSTALL_DIR/scripts/lib/permissi
         echo "→ Integration-write ask rules present in .claude/settings.json"
     else
         echo "→ NOTE: the integration-write ask rules were not added to $SETTINGS_FILE (see above)."
+    fi
+fi
+
+# ── Step 7c: orchestrator_default (ADR-0062) ─────────────────────────────────
+# Personal, so the key goes to .claude/settings.local.json, never the committed settings.json:
+# written only when absent, removed only while it holds "orchestrator". The same rule
+# `devteam bind` applies through scripts/lib/devteam/default_agent.py. opencode and Codex have none.
+if command -v python3 >/dev/null 2>&1 && [ -f "$INSTALL_DIR/scripts/lib/default_agent.py" ]; then
+    if ! python3 "$INSTALL_DIR/scripts/lib/default_agent.py" claude "$PROJECT_ROOT"; then
+        echo "→ NOTE: orchestrator_default was not applied to .claude/settings.local.json (see above)."
     fi
 fi
 
@@ -1311,7 +1333,8 @@ else
   "recall_active": true,
   "check_active": true,
   "repair_hints_active": true,
-  "branch_overlap_active": true
+  "branch_overlap_active": true,
+  "orchestrator_default": false
 }
 EOF
         echo "→ User preferences: .dev-team-agents/user-data/preferences.json"

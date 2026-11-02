@@ -23,5 +23,6 @@
   "recall_active": true,
   "check_active": true,
   "repair_hints_active": true,
-  "branch_overlap_active": true
+  "branch_overlap_active": true,
+  "orchestrator_default": false
 }
