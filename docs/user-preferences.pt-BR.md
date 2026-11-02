@@ -75,7 +75,8 @@ scripts/lib/preferences-defaults.json
   "recall_active": true,
   "check_active": true,
   "repair_hints_active": true,
-  "branch_overlap_active": true
+  "branch_overlap_active": true,
+  "orchestrator_default": false
 }
 ```
 
@@ -110,6 +111,7 @@ scripts/lib/preferences-defaults.json
 | `check_active` | `true` | bool | Pré-checagem `devteam check` que compara o diff da branch com as decisões da base em `/devteam:pr` e `/devteam:push` (ADR-0049) |
 | `repair_hints_active` | `true` | bool | Dicas de reparo vindas do ledger local de reparos após falhas repetidas de comando (ADR-0051) |
 | `branch_overlap_active` | `true` | bool | Avisos de edições sobrepostas em branches não mergeadas de colegas (ADR-0052) |
+| `orchestrator_default` | `false` | bool | Torna a persona `orchestrator` o padrão da sessão no Claude Code (ADR-0062) |
 
 ---
 
@@ -134,6 +136,7 @@ O comportamento de worktree é guiado principalmente por cinco preferências:
 | `check_active` | `true` | Pré-checagem `devteam check` que compara o diff da branch com as decisões da base em `/devteam:pr` e `/devteam:push` (ADR-0049); `false` desliga |
 | `repair_hints_active` | `true` | Dicas de reparo vindas do ledger local de reparos após falhas repetidas de comando (ADR-0051); `false` desliga |
 | `branch_overlap_active` | `true` | Avisos de edições sobrepostas em branches não mergeadas de colegas (ADR-0052); `false` desliga |
+| `orchestrator_default` | `false` | `true` grava `"agent": "orchestrator"` em `.claude/settings.local.json` (ignorado pelo git, então fica só seu) no `devteam bind`/`sync`, só quando `agent` está ausente ali; `false` o remove apenas enquanto ainda tiver esse valor. opencode e Codex não têm padrão: use `/devteam:orchestrate` (ou o seletor de agentes do opencode) |
 
 ### Cascata de decisão
 

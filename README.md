@@ -231,6 +231,7 @@ Implementation commands also take a sprint task (`/devteam:backend TASK-003`): t
 | `/devteam:mobile` | Mobile implementation — mobile-developer + ui-ux-designer (when relevant) |
 | `/devteam:fullstack` | Full-stack implementation — backend + frontend teams in parallel |
 | `/devteam:sprint` | Execute approved sprints from `/devteam:plan` — by default each sprint in its own worktree on `sprint/<scope>-<n>` with its own isolated infra when the project uses Docker, its tasks in order, and independent sprints (`Runs with`) in parallel; worktree per task remains an option for one sprint; the task's agent bound to its spec, each task reviewed, resumable; the dependency graph is linted, a task whose blocker is still open is held back, tasks are claimed so a second session on the same sprint is told instead of redoing work, and the active sprint is re-injected after a compaction |
+| `/devteam:orchestrate` | Runs the current session as the `orchestrator`: it routes each request to the right flow and agents, relays between them and you, and checks every result (run banner, review marker) before it counts as done. Set `orchestrator_default` to make it the session default on Claude Code; on opencode pick it in the agent switcher, on Codex run `$devteam-orchestrate` per session |
 | `/devteam:spec` | Retroactive spec — writes the spec of a feature that already exists from its code, tests and docs; qa-specialist checks every scenario against the running feature, existing tests get the scenario token, and you decide each divergence (describe it as built, or keep the intended behavior and fix it) |
 | `/devteam:design` | UI/UX design — ui-ux-designer |
 | `/devteam:relayout` | Redesign an existing screen to match visual references — ui-ux-designer + frontend-developer, mandatory reference/target-screen gate, isolated worktree, automatic post-execution review |
@@ -287,6 +288,7 @@ The team has **18 agents** covering the full lifecycle. Full details in the [Age
 | Agent | What it does |
 |-------|-------------|
 | `product-analyst` | Lead of planning — turns a request into a closed, **business-level** requirements document ready to become sprints |
+| `orchestrator` | High-level coordinator that runs **as the main session** (never spawned): routes work to the specialists, relays between them and you, and supervises what they hand back. Started by `/devteam:orchestrate`, the opencode agent switcher, or the `orchestrator_default` preference (Claude Code) |
 | `software-architect` | System design, trade-offs, API contracts, design patterns, and ADRs |
 | `database-specialist` | Schema design, migrations, and query optimization |
 

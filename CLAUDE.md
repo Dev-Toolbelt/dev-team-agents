@@ -149,6 +149,8 @@ The source copy holds Claude's values because Claude is the identity case; `rend
 
 `preferences.json` is the persistent default; the session file is the per-session override. The base branch is **never** hardcoded (no `main`/`master`/`beta`) — it is auto-detected. On finalization (merge), the worktree skill enforces **rebase-onto-base → merge → teardown** of the worktree and its **isolated Docker stack only** (see `skills/shared/worktree/references/docker-isolation.md`). This ensures multi-agent workflows resolve the worktree decision exactly once.
 
+**The orchestrator persona** (`agents/orchestrator.md`, ADR-0062) runs only as the main session — `/devteam:orchestrate`, or the `orchestrator_default` preference on Claude Code (written to the git-ignored `.claude/settings.local.json`). It is exempt from the orchestration Agent Roster, and `agent-lint.sh` (`check_orchestrator_not_spawned`) fails a roster row or a `subagent_type` that would spawn it. Its body delegates to `skills/architecture/orchestration/SKILL.md`; never copy that skill's rules into it.
+
 ### Skills (`skills/**/*.md`)
 
 - Follow [agentskills.io specification](https://agentskills.io/specification)

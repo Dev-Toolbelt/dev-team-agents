@@ -31,7 +31,8 @@ On a v2 install that is not bound yet, all user-level preferences are stored in 
   "recall_active": true,
   "check_active": true,
   "repair_hints_active": true,
-  "branch_overlap_active": true
+  "branch_overlap_active": true,
+  "orchestrator_default": false
 }
 ```
 
@@ -81,6 +82,7 @@ Existing preferences.json files keep the key forever; the backfill does not rein
 | `check_active` | `true` | The `devteam check` pre-flight that compares the branch diff with base-branch decisions in `/devteam:pr` and `/devteam:push` (ADR-0049). `false` turns it off | `commands/pr.md`, `commands/push.md`, `devteam check` |
 | `repair_hints_active` | `true` | Repair hints surfaced from the machine-local repair ledger after repeated command failures (ADR-0051). `false` turns it off | the repair-ledger hint hook |
 | `branch_overlap_active` | `true` on a fresh file, `false` on backfill | Warnings about overlapping edits on teammates' unmerged branches (ADR-0052). `false` turns it off. Consent key — it fetches from the remote | the branch-overlap check |
+| `orchestrator_default` | `false` | Makes the `orchestrator` persona the Claude Code session default (ADR-0062): `devteam bind`/`sync` write `"agent": "orchestrator"` into the git-ignored `.claude/settings.local.json`, only when `agent` is absent there; `false` removes it only while it still holds that value. Not a consent key. opencode and Codex have no default: use `/devteam:orchestrate` (or opencode's agent switcher) | `devteam bind`/`sync`, `install.sh` |
 
 > **Fallback safety**: all scripts that read `preferences.json` use hardcoded defaults for every key. If the file is missing, malformed, or a key is removed, scripts fall back to the defaults above without error. Never leave a key out — the schema above is the authoritative default set.
 >

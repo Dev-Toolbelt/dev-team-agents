@@ -231,6 +231,7 @@ Os comandos de implementação também recebem uma tarefa de sprint (`/devteam:b
 | `/devteam:mobile` | Implementação mobile — mobile-developer + ui-ux-designer (quando relevante) |
 | `/devteam:fullstack` | Implementação full-stack — times de backend + frontend em paralelo |
 | `/devteam:sprint` | Executa sprints aprovadas do `/devteam:plan` — por padrão cada sprint na sua própria worktree em `sprint/<scope>-<n>`, com infra isolada quando o projeto usa Docker, as tarefas em ordem e as sprints independentes (`Runs with`) em paralelo; worktree por tarefa continua como opção para uma sprint; o agente da tarefa preso à sua spec, cada tarefa revisada, retomável; o grafo de dependências passa por lint, uma tarefa com bloqueio ainda aberto fica retida, as tarefas recebem claim para que uma segunda sessão na mesma sprint seja avisada em vez de refazer o trabalho, e a sprint ativa é reinjetada após uma compactação |
+| `/devteam:orchestrate` | Faz a sessão atual rodar como o `orchestrator`: encaminha cada pedido ao fluxo e aos agentes certos, faz a ponte entre eles e você, e confere cada resultado (run banner, marcador de review) antes de considerá-lo pronto. Ative `orchestrator_default` para torná-lo o padrão da sessão no Claude Code; no opencode escolha-o no seletor de agentes, no Codex rode `$devteam-orchestrate` a cada sessão |
 | `/devteam:spec` | Spec retroativa — escreve a spec de uma feature que já existe a partir do código, dos testes e dos docs; o qa-specialist confere cada cenário com a feature rodando, os testes existentes recebem o token do cenário e você decide cada divergência (descrever como está construído, ou manter o comportamento pretendido e corrigi-lo) |
 | `/devteam:design` | Design UI/UX — ui-ux-designer |
 | `/devteam:relayout` | Refazer o layout de uma tela existente para corresponder a referências visuais — ui-ux-designer + frontend-developer, gate obrigatório de referência/tela alvo, worktree isolada, review automática pós-execução |
@@ -287,6 +288,7 @@ O time tem **18 agentes** cobrindo todo o ciclo de vida. Detalhes completos na [
 | Agente | O que faz |
 |--------|-----------|
 | `product-analyst` | Protagonista do planejamento — transforma um pedido em um documento de requisitos **de negócio** fechado, pronto para virar sprints |
+| `orchestrator` | Coordenador de alto nível que roda **como a sessão principal** (nunca é disparado como sub-agente): encaminha o trabalho aos especialistas, faz a ponte entre eles e você, e supervisiona o que eles entregam. Iniciado por `/devteam:orchestrate`, pelo seletor de agentes do opencode ou pela preferência `orchestrator_default` (Claude Code) |
 | `software-architect` | Design de sistema, trade-offs, contratos de API, padrões de projeto e ADRs |
 | `database-specialist` | Modelagem de esquema, migrations e otimização de queries |
 
