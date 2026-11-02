@@ -26,7 +26,10 @@ import codex_hooks_merge  # noqa: E402
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "codex-0.160-hook-payloads.json"
 SUBAGENT_START = HOOKS / "subagent-start.sh"
 SUBAGENT_STOP = HOOKS / "subagent-stop.sh"
-REVIEW_MARKER = "all clear\n<!-- review-result: findings=0 -->"
+REVIEW_MARKER = (
+    "all clear\n\n| Agent | Tier | Model | Effort |\n|---|---|---|---|\n| `code-reviewer` | `backend-exec` | `sonnet` | `session-default` |"
+    "\n<!-- review-result: findings=0 -->"
+)
 
 
 def fixture(cwd=""):
@@ -338,6 +341,10 @@ class SubagentLifecycleTest(BoardCase):
 SUBAGENT_EVENTS_WIRED = {"claude": False, "codex": True, "opencode": False}
 
 
+#: SubagentStop alone: Claude Code runs the supervision gate on it (never the task-board capture).
+SUBAGENT_STOP_WIRED = {"claude": True, "codex": True, "opencode": False}
+
+
 class ProviderParityTest(unittest.TestCase):
     def wired(self, provider):
         if provider == "claude":
@@ -353,8 +360,9 @@ class ProviderParityTest(unittest.TestCase):
         for provider in providers.ALL_PROVIDERS:
             with self.subTest(provider=provider):
                 wired = self.wired(provider)
-                for event in ("SubagentStart", "SubagentStop"):
-                    self.assertEqual(event in wired, SUBAGENT_EVENTS_WIRED[provider], event)
+                self.assertEqual("SubagentStart" in wired, SUBAGENT_EVENTS_WIRED[provider])
+                # ADR-0062: Claude Code also wires SubagentStop, to the supervision gate only.
+                self.assertEqual("SubagentStop" in wired, SUBAGENT_STOP_WIRED[provider])
 
     def test_only_codex_reads_the_events(self):
         payload = cycle()["start"]

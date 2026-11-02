@@ -148,7 +148,9 @@ class StructuredChoiceRenderTest(unittest.TestCase):
         for rel, text in agents.items():
             fm = text.split("---")[1]
             with self.subTest(agent=rel):
-                self.assertRegex(fm, r"(?m)^mode:\s*all\s*$")
+                # A main-session persona renders `primary` (ADR-0062); every other agent `all` (ADR-0033).
+                mode = "primary" if Path(rel).stem in providers.OPENCODE_PRIMARY_AGENTS else "all"
+                self.assertRegex(fm, r"(?m)^mode:\s*{}\s*$".format(mode))
                 self.assertRegex(fm, r"(?m)^\s+question:\s*allow\s*$")
                 self.assertRegex(fm, r"(?m)^\s+bash:\s*ask\s*$")
                 self.assertRegex(fm, r"(?m)^\s+task:\s*allow\s*$")
