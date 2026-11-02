@@ -6,7 +6,9 @@
 # an exit 2 on a stop event would keep a Codex child running, and a board hook must never do that.
 # Claude Code is deliberately not wired to this event: its `Agent`/`Task` tool calls already reach
 # PreToolUse/PostToolUse, so a second source would record every spawn twice. opencode has no
-# such event. Prints nothing.
+# such event. Prints nothing, except a `{"decision":"block",...}` the supervision gate prints
+# (`00-supervision.sh`, ADR-0062): it is relayed as the hook's JSON output, still with exit 0, and the
+# sub-scripts after it do not run on that stop.
 
 # Prevent WSL from loading /etc/bash.bashrc for every sub-process spawned here.
 unset BASH_ENV ENV
@@ -29,11 +31,20 @@ head -c 4194304 > "$INPUT_FILE" || exit 0
 # Same filename convention as the other dispatchers.
 SUBSCRIPT_RE='^[0-9]{2}[a-z]?-[a-z0-9]([a-z0-9-]*[a-z0-9])?\.sh$'
 
+BLOCK_RE='^[[:space:]]*\{[[:space:]]*"decision"[[:space:]]*:[[:space:]]*"block"'
+BLOCK=""
 for script in "$HOOKS_DIR"/*.sh; do
     [ -f "$script" ] || continue
     [[ "$(basename "$script")" =~ $SUBSCRIPT_RE ]] || continue
-    env -u BASH_ENV -u ENV bash "$script" < "$INPUT_FILE" || true
+    out="$(env -u BASH_ENV -u ENV bash "$script" < "$INPUT_FILE")" || true
+    # A held stop is not the agent's end: the later sub-scripts (the task board) run on the stop
+    # that follows the hold, so a task is never settled before the agent finished.
+    if [[ "$out" =~ $BLOCK_RE ]]; then
+        BLOCK="$out"
+        break
+    fi
 done
+[ -n "$BLOCK" ] && printf '%s\n' "$BLOCK"
 
 # A sub-script's own exit code is deliberately not propagated (see the header).
 exit 0

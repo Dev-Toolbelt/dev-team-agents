@@ -60,6 +60,8 @@ EVENTS = (
     ("UserPromptSubmit", "user-prompt-submit.sh"),
     # A subagent launch that failed never reaches PostToolUse; the same dispatcher retires it.
     ("PostToolUseFailure", "post-tool-use.sh"),
+    # ADR-0062: the supervision gate. Not `subagent-stop.sh`: its task-board capture is Codex-only.
+    ("SubagentStop", "subagent-supervise.sh"),
 )
 
 #: Matchers for the events that filter by tool name. `PreToolUse` sees every tool
