@@ -347,6 +347,7 @@ export function projectPreferences(overrides: Partial<ProjectPreferencesView> = 
       check_active: true,
       repair_hints_active: true,
       branch_overlap_active: true,
+      orchestrator_default: false,
     },
     origin: {
       language: 'project',
@@ -374,6 +375,7 @@ export function projectPreferences(overrides: Partial<ProjectPreferencesView> = 
       check_active: 'defaults',
       repair_hints_active: 'defaults',
       branch_overlap_active: 'defaults',
+      orchestrator_default: 'defaults',
     },
     unknown: [],
   };

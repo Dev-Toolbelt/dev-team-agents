@@ -135,6 +135,13 @@ export const FIELDS: readonly Field[] = [
     consent: true,
     control: { type: 'switch' },
   },
+  {
+    key: 'orchestrator_default',
+    group: 'general',
+    label: 'Start Claude Code sessions as the orchestrator',
+    help: 'Run every new Claude Code session as the orchestrator persona. Other providers use /devteam:orchestrate.',
+    control: { type: 'switch' },
+  },
 
   // Context & session
   {

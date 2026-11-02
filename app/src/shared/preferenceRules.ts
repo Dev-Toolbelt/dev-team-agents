@@ -108,6 +108,7 @@ export const PREFERENCE_RULES: Readonly<Record<string, PreferenceRule>> = Object
   check_active: { kind: 'boolean' },
   repair_hints_active: { kind: 'boolean' },
   branch_overlap_active: { kind: 'boolean' },
+  orchestrator_default: { kind: 'boolean' },
 });
 
 /** The range of an integer key, for the renderer's controls. Throws on a non-integer key: a table error. */
