@@ -7,6 +7,8 @@ description: Delegation mechanics — execution gate, autonomous sprint protocol
 
 Reference material for an agent that plans work and delegates every implementation step to
 specialized subagents via the Task tool. The orchestrator never writes implementation code.
+Whoever runs the main session applies it: a command that orchestrates, or the `orchestrator`
+persona (`agents/orchestrator.md`), which is never itself a spawn target.
 
 ---
 
@@ -189,6 +191,12 @@ run.**
 Fill the summary from what came back. A subagent that returned no banner is reported `NOT RUN`.
 Never compose a banner yourself to fill the row — writing evidence you did not receive defeats the
 only check that can catch a phantom spawn.
+
+A returned banner is also checked against the spawn prompt: paths the agent touched outside the
+scope you gave it are a finding to report, not extra work to accept. On Claude Code and Codex a
+SubagentStop hook already sends an agent back once when its banner or review marker is missing
+(ADR-0062); a result that still lacks it is reported `FAILED` with what is missing, never retried a
+third time, and the user decides how to continue.
 
 ### 4. Liveness — "still running" is a claim, not a default
 

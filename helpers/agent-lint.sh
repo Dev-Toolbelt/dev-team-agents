@@ -435,9 +435,26 @@ check_verbatim_wording() {
 # failed spawn is trivially narrated as a success (see the skill's Spawn
 # Integrity section).
 ROSTER_FILE="$REPO_ROOT/skills/architecture/orchestration/SKILL.md"
-# Deliberately absent from the roster: the orchestrator itself, and the
+# Deliberately absent from the roster: the orchestrators themselves, and the
 # onboarding agent, which the user invokes and no orchestrator delegates to.
-ROSTER_EXEMPT=("software-architect" "setup-assistant")
+ROSTER_EXEMPT=("software-architect" "setup-assistant" "orchestrator")
+
+# ── The orchestrator persona is never a spawn target ─────────────────────────
+# agents/orchestrator.md runs only as the main session (ADR-0062): spawned, it
+# loses the question tool and only its last message returns. A roster row or a
+# subagent_type naming it would turn the persona into exactly that subagent.
+check_orchestrator_not_spawned() {
+  local hits
+  # shellcheck disable=SC2016
+  if awk '/^## Agent Roster/{f=1;next} /^## /{f=0} f' "$ROSTER_FILE" 2>/dev/null | grep -qE '^\| `orchestrator` \|'; then
+    ERRORS+=("  · orchestration roster lists 'orchestrator' — it runs only as the main session (ADR-0062), never as a spawned agent")
+  fi
+  hits="$(grep -rnE 'subagent_type[^a-z]{0,6}orchestrator([^a-z-]|$)' "$REPO_ROOT"/agents "$REPO_ROOT"/commands "$REPO_ROOT"/skills 2>/dev/null || true)"
+  [ -n "$hits" ] || return 0
+  while IFS= read -r hit; do
+    ERRORS+=("  · ${hit#"$REPO_ROOT"/}: spawns 'orchestrator' as a subagent — it runs only as the main session (ADR-0062)")
+  done <<< "$hits"
+}
 
 check_orchestration_roster() {
   [ -f "$ROSTER_FILE" ] || return 0
@@ -576,6 +593,7 @@ done < <(find "$REPO_ROOT/skills" -name "SKILL.md" | sort)
 
 check_skill_name_uniqueness
 check_orchestration_roster
+check_orchestrator_not_spawned
 check_command_roster
 check_plan_mode_mirroring
 check_verbatim_wording

@@ -74,7 +74,8 @@ the user never saw a prompt, and that reads as "no". `devteam prefs list` report
   "recall_active": true,
   "check_active": true,
   "repair_hints_active": true,
-  "branch_overlap_active": true
+  "branch_overlap_active": true,
+  "orchestrator_default": false
 }
 ```
 
@@ -109,6 +110,7 @@ the user never saw a prompt, and that reads as "no". `devteam prefs list` report
 | `check_active` | bool | `true` | The `devteam check` pre-flight that compares the branch diff with base-branch decisions in `/devteam:pr` and `/devteam:push` (ADR-0049) |
 | `repair_hints_active` | bool | `true` | Repair hints surfaced from the machine-local repair ledger after repeated command failures (ADR-0051) |
 | `branch_overlap_active` | bool | `true` | Warnings about overlapping edits on teammates' unmerged branches (ADR-0052; consent key) |
+| `orchestrator_default` | bool | `false` | Make the `orchestrator` persona the Claude Code session default (ADR-0062), through the git-ignored `.claude/settings.local.json`; written only when `agent` is absent there, removed only while it still holds our value. opencode and Codex: use `/devteam:orchestrate` |
 
 > For where each field is actually read and applied, see the "Consumed at" column in `CLAUDE-md/preferences.md` — the canonical consumer table, kept current whenever a field's wiring changes.
 
