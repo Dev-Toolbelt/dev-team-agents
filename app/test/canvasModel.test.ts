@@ -15,6 +15,8 @@ import {
   heatTone,
   indexGraph,
   layoutGraph,
+  nodeDescription,
+  nodeTitle,
   nodeTokensLabel,
   outlineTree,
   revealPlan,
@@ -26,7 +28,7 @@ import {
 } from '../src/renderer/canvasModel.js';
 import type { TaskGraph } from '../src/shared/api.js';
 import { NOW } from './fixtures/board.js';
-import { TURN, sampleGraph } from './fixtures/canvasGraph.js';
+import { TURN, graphNode, sampleGraph } from './fixtures/canvasGraph.js';
 
 const ALL = { level: 'all' as const, collapsed: new Set<string>() };
 
@@ -264,5 +266,23 @@ describe('traceProblems', () => {
       ['s2', 'missing'],
       ['s1', 'unreadable'],
     ]);
+  });
+});
+
+describe('nodeDescription', () => {
+  const node = (agent: string | null, description: string | null) => graphNode({ id: 'span:s1:x', group: TURN, agent, description });
+
+  it('[spec:canvas-view#S19] drops the agent name the task content starts with, whatever its case', () => {
+    expect(nodeDescription(node('software-architect', 'software-architect: Architect plan for VHI-712'))).toBe('Architect plan for VHI-712');
+    expect(nodeDescription(node('software-architect', 'Software-Architect:   Plan'))).toBe('Plan');
+    expect(nodeTitle(node('software-architect', 'software-architect: Plan'))).toBe('software-architect: Plan');
+  });
+
+  it('keeps text that only mentions another name, or is nothing but the prefix', () => {
+    expect(nodeDescription(node('software-architect', 'backend-developer: Build it'))).toBe('backend-developer: Build it');
+    expect(nodeDescription(node('software-architect', 'software-architects: Plan'))).toBe('software-architects: Plan');
+    expect(nodeDescription(node('software-architect', 'software-architect:'))).toBe('software-architect:');
+    expect(nodeDescription(node('software-architect', '   '))).toBeNull();
+    expect(nodeDescription(node('software-architect', null))).toBeNull();
   });
 });

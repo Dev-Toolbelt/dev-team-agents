@@ -9,6 +9,7 @@ import {
   ROLE_FAMILY_LABEL,
   agentLabel,
   elapsedSeconds,
+  nodeDescription,
   nodeTokensLabel,
   roleFamily,
   statusTone,
@@ -116,7 +117,7 @@ function CanvasNodeView({ data, selected }: NodeProps<CanvasFlowNode>) {
   useSyncExternalStore(canvasActions.subscribe, canvasActions.version);
   const actions = canvasActions.actionsFor(node);
   const description =
-    node.kind === 'main' ? (spawned > 0 ? `Coordinating ${spawned} ${spawned === 1 ? 'agent' : 'agents'}` : 'No agents spawned') : node.description;
+    node.kind === 'main' ? (spawned > 0 ? `Coordinating ${spawned} ${spawned === 1 ? 'agent' : 'agents'}` : 'No agents spawned') : nodeDescription(node);
   return (
     <div
       data-status={status.tone}

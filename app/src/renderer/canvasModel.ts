@@ -595,16 +595,33 @@ export function frameTokensLabel(group: Pick<GraphGroup, 'tokens' | 'usage_compl
 }
 
 /** The name an agent node is called by. */
-export function agentLabel(node: GraphNode): string {
+export function agentLabel(node: Pick<GraphNode, 'kind' | 'agent' | 'label' | 'persona'>): string {
   if (node.kind === 'main') return node.label ?? (node.persona === 'orchestrator' ? 'Orchestrator' : 'Main session');
   return node.agent ?? node.label ?? (node.kind === 'builtin' ? 'Built-in agent' : 'Agent');
+}
+
+/**
+ * What the node was asked to do, without the agent's name in front: a task's content often
+ * reads `<agent>: <work>`, and the agent is already the node's header. Null when there is none.
+ */
+export function nodeDescription(node: Pick<GraphNode, 'kind' | 'agent' | 'label' | 'description' | 'persona'>): string | null {
+  const text = node.description?.trim() ?? '';
+  if (text === '') return null;
+  const agent = agentLabel(node);
+  const prefix = `${agent}:`;
+  if (text.length > prefix.length && text.slice(0, prefix.length).toLowerCase() === prefix.toLowerCase()) {
+    const rest = text.slice(prefix.length).trim();
+    if (rest !== '') return rest;
+  }
+  return text;
 }
 
 /** The one-line name of a node in the outline and the detail panel. */
 export function nodeTitle(node: GraphNode): string {
   if (node.kind === 'main') return agentLabel(node);
   const agent = agentLabel(node);
-  return node.description !== null && node.description !== '' ? `${agent}: ${node.description}` : agent;
+  const description = nodeDescription(node);
+  return description !== null ? `${agent}: ${description}` : agent;
 }
 
 /** Elapsed seconds: the recorded duration, or the time since it started while it runs. */
