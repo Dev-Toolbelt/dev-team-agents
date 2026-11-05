@@ -1,0 +1,96 @@
+/*
+ * The canvas's own rules, bundled as a file (the production CSP is `style-src 'self'`, so React
+ * Flow's stylesheet is imported here rather than injected). React Flow's variables are pointed at
+ * the app's tokens so the canvas follows the light and dark themes like every other screen.
+ */
+@import '@xyflow/react/dist/style.css';
+
+/*
+ * Role-family tints for a node's background. Low chroma on purpose: the status owns the border
+ * and the icon, the tint only groups roles, and the role is also written on the node.
+ */
+:root {
+  --canvas-role-orchestration: oklch(0.95 0.03 300);
+  --canvas-role-planning: oklch(0.955 0.025 240);
+  --canvas-role-implementation: oklch(0.96 0.025 170);
+  --canvas-role-review-qa: oklch(0.955 0.03 350);
+  --canvas-role-builtin: oklch(0.96 0 0);
+  --canvas-frame-session: color-mix(in oklch, var(--muted) 35%, transparent);
+  --canvas-frame-turn: color-mix(in oklch, var(--card) 55%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas-role-orchestration: oklch(0.29 0.04 300);
+    --canvas-role-planning: oklch(0.285 0.035 240);
+    --canvas-role-implementation: oklch(0.28 0.03 170);
+    --canvas-role-review-qa: oklch(0.285 0.04 350);
+    --canvas-role-builtin: oklch(0.26 0 0);
+  }
+}
+
+.devteam-canvas.react-flow {
+  --xy-background-color: var(--background);
+  --xy-background-pattern-color: color-mix(in oklch, var(--muted-foreground) 30%, transparent);
+  --xy-edge-stroke: color-mix(in oklch, var(--muted-foreground) 80%, transparent);
+  --xy-edge-stroke-selected: var(--primary);
+  --xy-edge-stroke-width: 1.5;
+  --xy-handle-background-color: var(--muted-foreground);
+  --xy-handle-border-color: var(--card);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-background-color: color-mix(in oklch, var(--background) 70%, transparent);
+  --xy-minimap-mask-stroke-color: var(--border);
+  --xy-minimap-node-background-color: var(--muted);
+  --xy-selection-background-color: color-mix(in oklch, var(--primary) 10%, transparent);
+  --xy-selection-border: 1px dotted var(--primary);
+  --xy-attribution-background-color: transparent;
+  --xy-node-boxshadow-selected: none;
+  color: var(--foreground);
+  font-family: var(--font-system);
+}
+
+/* Custom nodes draw their own chrome; the default node box would add a second border. */
+.devteam-canvas .react-flow__node-canvasNode,
+.devteam-canvas .react-flow__node-canvasGroup {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius);
+}
+
+.devteam-canvas .react-flow__node:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--ring) 60%, transparent);
+  outline-offset: 2px;
+}
+
+.devteam-canvas .react-flow__handle {
+  width: 7px;
+  height: 7px;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A background agent's spawn edge is dashed; the node also says "Background" in words. */
+.devteam-canvas .react-flow__edge.canvas-edge-background .react-flow__edge-path {
+  stroke-dasharray: 6 4;
+}
+
+.devteam-canvas .react-flow__edge.canvas-edge-dimmed {
+  opacity: 0.2;
+}
+
+.devteam-canvas .react-flow__controls,
+.devteam-canvas .react-flow__minimap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* Heatmap: unknown usage is hatched, never painted as the lowest level. */
+.canvas-heat-unknown {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklch, var(--muted-foreground) 14%, transparent) 0 6px,
+    transparent 6px 12px
+  );
+}

@@ -15,9 +15,12 @@ import {
   Settings2,
   TriangleAlert,
   CalendarPlus,
+  Columns3,
+  Network,
   CircleSlash,
   XCircle,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -28,10 +31,12 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Hint } from '@/components/ui/tooltip';
 import { Empty } from '../Problem.js';
-import { toastLinkRefused } from '../toasts.js';
+import { destinationOf, openTaskLink as openLink } from '../taskLinks.js';
+import { LINK_BUTTON_CLASS, PrBadge } from './PrBadge.js';
 import { useOnDeactivate } from '../useOnDeactivate.js';
 import { NO_TABS, closeTab, moveTab, openTab, pruneTabs, type BoardTabs as TabsState } from '../boardTabs.js';
 import { BoardTabs, panelId, tabId } from './BoardTabs.js';
+import { Canvas, type BoardCardRef } from './Canvas.js';
 import {
   PERIODS,
   basename,
@@ -51,7 +56,9 @@ import {
   timeInColumn,
   countFindings,
   viewProject,
+  type KanbanFilters,
   type KanbanItem,
+  type KanbanView,
   type Period,
   type ProjectView,
 } from '../boardModel.js';
@@ -67,7 +74,6 @@ import {
   type BoardSettings,
   type BoardTurn,
   type BoardRef,
-  type BoardTaskPr,
   type BoardWorktree,
   type OpenTaskLinkRequest,
 } from '../../shared/api.js';
@@ -317,7 +323,7 @@ export function Board({ active = true, clock = Date.now }: { active?: boolean; c
                 aria-labelledby={tabId(each.project_id)}
                 hidden={!shown}
               >
-                <HiddenAwareKanban
+                <ProjectPanel
                   project={each}
                   name={boardProjectName(each, shownNames)}
                   period={period}
@@ -542,44 +548,6 @@ function DirectTurns({ turns }: { turns: readonly BoardTurn[] }) {
   );
 }
 
-/** `host/path` of a link, for its tooltip: where the click goes, without the scheme. Empty when unparseable. */
-function destinationOf(url: string): string {
-  try {
-    const parsed = new URL(url);
-    return `${parsed.hostname}${parsed.pathname}`;
-  } catch {
-    return '';
-  }
-}
-
-/** Ids only: the main process finds the URL in its own snapshot and validates it before opening. */
-async function openLink(request: OpenTaskLinkRequest): Promise<void> {
-  try {
-    const answer = await window.devteam.openTaskLink(request);
-    if (!answer.ok) toastLinkRefused(answer.message);
-  } catch {
-    toastLinkRefused('That link could not be opened.');
-  }
-}
-
-const LINK_BUTTON_CLASS =
-  'inline-flex items-center gap-0.5 rounded-sm font-mono text-info underline-offset-2 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden';
-
-/** `#45` for a pull request, `!45` for a merge request. The accessible name says what pressing it does. */
-function PrBadge({ pr, request }: { pr: BoardTaskPr; request: OpenTaskLinkRequest }) {
-  const label = pr.kind === 'pr' ? `#${pr.number}` : `!${pr.number}`;
-  const name = `Open ${pr.kind === 'pr' ? 'pull' : 'merge'} request ${label} in browser`;
-  const destination = destinationOf(pr.url);
-  return (
-    <Hint content={destination === '' ? name : `${name} (${destination})`}>
-      <button type="button" aria-label={name} onClick={() => void openLink(request)} className={LINK_BUTTON_CLASS}>
-        {label}
-        <ExternalLink className="size-3" aria-hidden="true" />
-      </button>
-    </Hint>
-  );
-}
-
 function IssueBadge({ issue, request }: { issue: BoardRef; request: OpenTaskLinkRequest }) {
   const name = `Open issue ${issue.key} in browser`;
   const destination = destinationOf(issue.url);
@@ -704,13 +672,21 @@ function CountsRow({ counts }: { counts: BoardCounts }) {
   );
 }
 
-// ── the project kanban ────────────────────────────────────────────────────────
+// ── a project tab: its kanban or its canvas ───────────────────────────────────
 
-// A kanban that is not on show skips re-rendering on feed, period and settings changes; it
-// catches up when shown again, because `active` changes then. Its filters live in its state.
-const HiddenAwareKanban = memo(Kanban, (prev, next) => !prev.active && !next.active);
+type ProjectMode = 'board' | 'canvas';
 
-function Kanban({
+/** A request to bring one board card into view; `nonce` makes a repeated request a new one. */
+interface CardReveal extends BoardCardRef {
+  readonly nonce: number;
+}
+
+/**
+ * One open project: a Board/Canvas switch over the kanban and the canvas. Both stay mounted once
+ * shown, like the kanban filters across tabs, so switching keeps each one's state; only the one
+ * on show keeps its clocks running and the canvas reads its graph only while it is on show.
+ */
+function ProjectPanel({
   project,
   name,
   period,
@@ -724,6 +700,90 @@ function Kanban({
   settings: BoardSettings;
   clock: () => number;
   active: boolean;
+}) {
+  const [mode, setMode] = useState<ProjectMode>('board');
+  const [canvasMounted, setCanvasMounted] = useState(false);
+  const [reveal, setReveal] = useState<CardReveal | null>(null);
+  const choose = (next: ProjectMode) => {
+    if (next === 'canvas') setCanvasMounted(true);
+    setMode(next);
+  };
+  return (
+    <div className="space-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-base font-semibold">{name}</h3>
+        <div role="group" aria-label="View" className="inline-flex rounded-md border bg-muted/40 p-0.5">
+          {(['board', 'canvas'] as const).map((each) => (
+            <button
+              key={each}
+              type="button"
+              aria-pressed={mode === each}
+              onClick={() => choose(each)}
+              className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-1 text-sm font-medium focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden ${
+                mode === each ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {each === 'board' ? <Columns3 className="size-4" aria-hidden="true" /> : <Network className="size-4" aria-hidden="true" />}
+              {each === 'board' ? 'Board' : 'Canvas'}
+            </button>
+          ))}
+        </div>
+      </header>
+      <div hidden={mode !== 'board'}>
+        <HiddenAwareKanban
+          project={project}
+          period={period}
+          settings={settings}
+          clock={clock}
+          active={active && mode === 'board'}
+          reveal={reveal}
+        />
+      </div>
+      {canvasMounted ? (
+        <div hidden={mode !== 'canvas'}>
+          <Canvas
+            project={project}
+            period={period}
+            clock={clock}
+            active={active && mode === 'canvas'}
+            onShowOnBoard={(card) => {
+              setReveal((was) => ({ ...card, nonce: (was?.nonce ?? 0) + 1 }));
+              setMode('board');
+            }}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ── the project kanban ────────────────────────────────────────────────────────
+
+/** The kanban draws the card in one of its columns. */
+function kanbanHas(view: KanbanView, card: BoardCardRef): boolean {
+  return [view.todo, view.in_progress, view.in_review, view.pr_created, view.done].some((column) =>
+    column.some((item) => item.session.session_id === card.sessionId && item.task.key === card.taskKey),
+  );
+}
+
+// A kanban that is not on show skips re-rendering on feed, period and settings changes; it
+// catches up when shown again, because `active` changes then. Its filters live in its state.
+const HiddenAwareKanban = memo(Kanban, (prev, next) => !prev.active && !next.active);
+
+function Kanban({
+  project,
+  period,
+  settings,
+  clock,
+  active,
+  reveal,
+}: {
+  project: BoardProject;
+  period: Period;
+  settings: BoardSettings;
+  clock: () => number;
+  active: boolean;
+  reveal: CardReveal | null;
 }) {
   // Filtering (period cutoff, done retention) and the In Review, To do and Done cards only
   // need a fresh reading once a minute; the per-second tick below exists for in-progress
@@ -779,11 +839,57 @@ function Kanban({
   const anyRunning = view.in_progress.some((item) => isRunning(item.session, item.task));
   const tick = Math.max(useNow(clock, 1, active && anyRunning), project.as_of ?? 0);
 
+  // "Show on board" from the canvas: narrow to the card's session, then bring the card into view
+  // once it is drawn. Each request is handled once, so later snapshots do not steal focus.
+  const root = useRef<HTMLDivElement>(null);
+  const revealed = useRef(0);
+  // A card a filter of this board hides is brought back by lifting that filter; one the period or
+  // the direct-work lifetime hides cannot be, and the user is told instead of nothing happening.
+  useEffect(() => {
+    if (reveal === null) return;
+    setSessionId(reveal.sessionId);
+    const base: KanbanFilters = {
+      sessionId: reveal.sessionId,
+      period,
+      hideOldDone,
+      retentionDays: settings.doneRetentionDays,
+      onlyFindings,
+      directTodoTtlHours: settings.directTodoTtlHours,
+    };
+    const shows = (filters: KanbanFilters) => kanbanHas(buildKanban(project, filters, coarseNow), reveal);
+    if (shows(base)) return;
+    const lifts: readonly Pick<KanbanFilters, 'hideOldDone' | 'onlyFindings'>[] = [
+      { hideOldDone, onlyFindings: false },
+      { hideOldDone: false, onlyFindings },
+      { hideOldDone: false, onlyFindings: false },
+    ];
+    const lift = lifts.find((each) => shows({ ...base, ...each }));
+    if (lift !== undefined) {
+      setHideOldDone(lift.hideOldDone);
+      setOnlyFindings(lift.onlyFindings === true);
+      return;
+    }
+    toast.info('That card is not on the board', {
+      id: 'show-on-board',
+      description: 'It falls outside the chosen period or the direct-work lifetime. Widen the period to see it.',
+    });
+    // Only a new request runs this; the filters it reads are the ones on screen at that moment.
+  }, [reveal]);
+  useEffect(() => {
+    if (reveal === null || revealed.current === reveal.nonce || !active) return;
+    const wanted = `${reveal.sessionId}:${reveal.taskKey}`;
+    const card = Array.from(root.current?.querySelectorAll<HTMLElement>('[data-card]') ?? []).find((each) => each.dataset['card'] === wanted);
+    if (card === undefined) return;
+    revealed.current = reveal.nonce;
+    card.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // Focusable for this one move only: a card is not a tab stop of its own.
+    card.setAttribute('tabindex', '-1');
+    card.addEventListener('blur', () => card.removeAttribute('tabindex'), { once: true });
+    card.focus();
+  }, [reveal, view, active]);
+
   return (
-    <div className="space-y-4">
-      <header>
-        <h3 className="text-base font-semibold">{name}</h3>
-      </header>
+    <div ref={root} className="space-y-4">
 
       <div className="flex flex-wrap items-center gap-3">
         <label className="text-sm" htmlFor={sessionSelectId}>
@@ -1143,6 +1249,7 @@ const TaskCard = memo(function TaskCard({
     <li className="min-w-0">
       <article
         aria-labelledby={contentId}
+        data-card={`${session.session_id}:${task.key}`}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && open) {
             event.stopPropagation();
@@ -1150,7 +1257,7 @@ const TaskCard = memo(function TaskCard({
             toggle.current?.focus();
           }
         }}
-        className="rounded-md border bg-card p-3 text-sm text-card-foreground shadow-xs"
+        className="rounded-md border bg-card p-3 text-sm text-card-foreground shadow-xs outline-hidden focus:ring-[3px] focus:ring-ring/50"
       >
         <p id={contentId} className={`break-words [overflow-wrap:anywhere] ${task.column === 'done' ? 'text-muted-foreground' : ''}`}>
           {title}
