@@ -842,7 +842,12 @@ _SECRET_PATTERNS = (
     # "has a letter" re-scan the run from every start and made a run of `+a+a…` quadratic.
     (re.compile(r"(?<![\w/.+-])[A-Za-z0-9+_-]{32,}={0,2}(?![\w/.])"), _long_token),
 )
-_INVISIBLE = re.compile("[\u0000-\u001f\u007f-\u009f­؜᠎​-‏‪-‮⁠-⁤⁦-⁯﻿]")
+#: Control, format and other invisible characters: zero-width and bidi marks, the line and paragraph
+#: separators, variation selectors and Unicode tag characters (which can carry hidden text).
+_INVISIBLE = re.compile(
+    "[\u0000-\u001f\u007f-\u009f­؜᠎​-‏  ‪-‮"
+    "⁠-⁤⁦-⁯︀-️﻿\U000e0000-\U000e007f]"
+)
 
 
 def redact(text):
@@ -850,6 +855,22 @@ def redact(text):
     for pattern, replacement in _SECRET_PATTERNS:
         text = pattern.sub(replacement, text)
     return text
+
+
+def clean_line(value, limit):
+    """``value`` as one redacted line of at most ``limit`` characters (``…`` when cut), else ``None``.
+
+    Whitespace collapses to one space; every other invisible character is deleted, not spaced,
+    before redaction, so a zero-width character cannot split a secret into unmatched halves. The
+    one rule for a short excerpt of agent-written text (the trace's ``last_output``, the canvas).
+    """
+    if not isinstance(value, str):
+        return None
+    visible = _INVISIBLE.sub("", " ".join(value.split()))
+    flat = " ".join(redact(visible).split())
+    if not flat:
+        return None
+    return flat if len(flat) <= limit else flat[: limit - 1].rstrip() + "\u2026"
 
 
 #: A turn's marker files are removed by the hooks that end the turn; one a crashed or killed
@@ -2529,9 +2550,9 @@ def _entry_epoch(entry):
 def _background_reports(window, path):
     """New background hand-backs in the transcript since the window's offset.
 
-    Yields ``{"id", "markers", "status"}`` per notification (``status`` is the hand-back's own
-    ``<status>``, else ``""``), and advances ``window["tx_offset"]`` past the complete lines read,
-    chunk by chunk up to ``BACKGROUND_SCAN_CAP``. The same notification appears as a queue entry
+    Yields ``{"id", "at", "markers", "status", "text"}`` per notification (``status`` is the
+    hand-back's own ``<status>``, else ``""``; ``text`` its ``<result>``), and advances
+    ``window["tx_offset"]`` past the complete lines read, chunk by chunk up to ``BACKGROUND_SCAN_CAP``. The same notification appears as a queue entry
     and as a user entry, and a resumed agent may notify twice: the caller dedupes on ``id``. A
     notification with no ``tool-use-id`` and no ``task-id`` names nothing and is dropped. A line
     longer than the read cap is skipped, not waited for: the scan resumes at the next line.
@@ -2600,6 +2621,8 @@ def _scan_chunk(window, path):
             "at": int(at),
             "markers": review_triggers.markers(_result_text(section.group(1)))[-1:] if section else [],
             "status": _notification_status(text),
+            # The agent's report as handed back; the trace keeps only a redacted excerpt of it.
+            "text": _result_text(section.group(1)) if section else "",
         })
     return reports, more
 
@@ -4229,11 +4252,15 @@ id_text = _id_text
 json_objects = _json_objects
 async_launch = _async_launch
 agent_report = _output
+invisible_chars = _INVISIBLE
 spawned_agent_id = _spawned_agent_id
 spawned_task_path = _spawned_task_path
 wait_results = _wait_results
+wait_entries = _wait_entries
 background_reports = _background_reports
 current_turn = _turn
 bound_id = _bound_id
 bound_projects = _bound
 project_records = _project_records
+view_context = _view_context
+session_status = _session_status

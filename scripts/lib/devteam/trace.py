@@ -51,6 +51,19 @@ SAFE_NAME = _AGENT_NAME
 SAFE_VERSION = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]{1,32})?$")
 _HANDBACK_FAILED = ("failed", "killed", "error")
 
+#: Characters a span's ``last_output`` keeps: a one-line excerpt of the agent's report, never the report.
+LAST_OUTPUT_MAX = 140
+#: Raw report characters :func:`last_output` looks at, and kept text it gathers before cutting: the
+#: excerpt is the report's head, so the rest is never scanned (a report can be megabytes).
+_LAST_OUTPUT_SCAN = 64 * 1024
+_LAST_OUTPUT_GATHER = 1024
+_HTML_COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.DOTALL)
+_TASK_RESULT = re.compile(r"<task_result>(.*?)(?:</task_result>|\Z)", re.DOTALL)
+#: Lines that carry no prose: table rows (the run banner), headings, rules, fence markers.
+_NOISE_LINE = re.compile(r"^\s*(?:\||#{1,6}(?:\s|$)|[-*_=]{3,}\s*$)")
+_FENCE = re.compile(r"^\s*(?:```|~~~)")
+_LIST_MARK = re.compile(r"^\s*(?:[-*+>]|\d{1,3}[.)])\s+")
+
 
 def trace_dir(root, project_id):
     return tasks.tasks_dir(root, project_id) / TRACE_DIR
@@ -165,6 +178,73 @@ def _findings(value):
     return found[-1] if found else None
 
 
+def _report_text(value, depth=0):
+    """The prose of an agent's report in a tool result: Claude's ``content`` text parts, opencode's
+    ``<task_result>``, a Codex final message; ``""`` when there is none."""
+    if depth > 4:
+        return ""
+    if isinstance(value, str):
+        stripped = value.lstrip()
+        if stripped.startswith(("{", "[")):
+            try:
+                return _report_text(json.loads(value), depth + 1)
+            except ValueError:
+                pass
+        found = _TASK_RESULT.search(value[:_LAST_OUTPUT_SCAN])
+        return found.group(1) if found else value
+    if isinstance(value, list):
+        parts = [_report_text(v.get("text") if isinstance(v, dict) else v, depth + 1) for v in value[:20]]
+        return "\n".join(p for p in parts if p)
+    if isinstance(value, dict):
+        value = tasks.agent_report(value)  # never the fields that echo the agent's prompt
+        for key in ("content", "result", "text", "output", "message"):
+            if key in value:
+                found = _report_text(value[key], depth + 1)
+                if found:
+                    return found
+    return ""
+
+
+def last_output(value):
+    """A one-line, redacted excerpt of an agent's report, at most :data:`LAST_OUTPUT_MAX` characters,
+    else ``None``. Never raises.
+
+    The report's head after the lines that carry no prose (run banner, headings, code, HTML comments)
+    are dropped; whitespace collapses, invisible characters go, and secrets are masked before the
+    cut. Only whole lines are kept, so a secret is never cut into a shorter, unmatched piece.
+    """
+    try:
+        return _excerpt(_report_text(value))
+    except (TypeError, ValueError, AttributeError, RecursionError):
+        return None
+
+
+def _excerpt(text):
+    """:func:`last_output` of a report already reduced to text (also how a stored excerpt is read back)."""
+    try:
+        if not isinstance(text, str) or not text.strip():
+            return None
+        truncated = len(text) > _LAST_OUTPUT_SCAN
+        lines = _HTML_COMMENT.sub(" ", text[:_LAST_OUTPUT_SCAN]).splitlines()
+        if truncated and lines:
+            lines.pop()  # possibly cut mid-line
+        kept, size, fenced = [], 0, False
+        for line in lines:
+            if _FENCE.match(line):
+                fenced = not fenced
+                continue
+            if fenced or not line.strip() or _NOISE_LINE.match(line):
+                continue
+            line = _LIST_MARK.sub("", line).strip()
+            kept.append(line)
+            size += len(line) + 1
+            if size >= _LAST_OUTPUT_GATHER:
+                break
+        return tasks.clean_line(" ".join(kept), LAST_OUTPUT_MAX)
+    except (TypeError, ValueError, AttributeError, RecursionError):
+        return None
+
+
 def _event(payload):
     """What an agent-tool payload stands for: ``(provider, op, body)``, else ``None``."""
     provider, tool = _provider_and_tool(payload)
@@ -177,11 +257,15 @@ def _event(payload):
     )
     use_id = tasks.first_text(payload, "tool_use_id", "toolUseId")
     if tool == "wait_agent":
-        results = tasks.wait_results(payload.get("tool_response"))
+        # A finished v1 agent's state is `{"completed": <its final message>}`: the report itself.
+        results = [
+            (ident, status, failed, last_output(state.get("completed")) if isinstance(state, dict) else None)
+            for ident, state, status, failed in tasks.wait_entries(payload.get("tool_response"))
+        ]
         return (provider, "wait", results) if results else None
     if tool == "close_agent":
         ident = tasks.id_text(inp.get("target") or inp.get("id") or inp.get("agent_id"))
-        return (provider, "wait", [(ident, "cancelled", False)]) if ident else None
+        return (provider, "wait", [(ident, "cancelled", False, None)]) if ident else None
     name = review_triggers.spawn_name(tasks.first_text(inp, "subagent_type", "agent_type"))
     if name is not None and not SAFE_NAME.match(name):
         return None  # a name no agent carries: recorded before the provider checks it, so never trusted
@@ -207,10 +291,11 @@ def _event(payload):
             return provider, "ref", {"id": use_id, "agent_path": task_path}
         # No agent at all: failed, as the board records it (`tasks._agent_op`).
         return provider, "end", {"id": use_id, "status": "failed"}
-    findings = _findings(payload.get("tool_response") or payload.get("tool_output") or payload.get("output"))
+    report = payload.get("tool_response") or payload.get("tool_output") or payload.get("output")
+    findings = _findings(report)
     if provider == "opencode":
         return provider, "end", {
-            "id": use_id, "status": "completed", "findings": findings,
+            "id": use_id, "status": "completed", "findings": findings, "last_output": last_output(report),
             "agent_id": tasks.id_text(payload.get("agent_session_id")),
             "usage": usage.from_payload(payload.get("agent_usage")),
             "model": payload.get("agent_model") if isinstance(payload.get("agent_model"), str) else None,
@@ -220,6 +305,7 @@ def _event(payload):
     if launched:
         return provider, "background", body
     body["findings"] = findings
+    body["last_output"] = last_output(report)
     return provider, "end", dict(body, status="completed")
 
 
@@ -319,6 +405,7 @@ def _settle_v2(trace, transcript, now):
     for span, answer in pairs:
         _end(span, "completed", max(span["started_at"], min(now, answer["at"] or now)))
         span["findings"] = _findings(answer["text"])
+        span["last_output"] = last_output(answer["text"])
 
 
 def _end(span, status, now):
@@ -344,21 +431,24 @@ def _apply(trace, provider, op, body, owner, turn, now, transcript):
             "turn_at": turn[0], "command": turn[1],
             "started_at": now, "ended_at": None, "status": "running",
             "model": None, "usage": None, "tool_uses": None, "duration_ms": None, "findings": None,
+            "last_output": None,
         })
         if provider == "codex":
             _mark_rollout(spans[-1], transcript)
         return True
     if op == "wait":
         changed = False
-        for ident, status, failed in body:
+        for ident, status, failed, excerpt in body:
             span = _find(spans, ident)
             if span is not None and _end(span, "failed" if failed else status, now):
                 changed = True
+                if excerpt:
+                    span["last_output"] = excerpt
         return changed
     span = _find(spans, body["id"])
     if span is None:
         return False
-    for key in ("agent_id", "agent_path", "model", "duration_ms", "tool_uses", "usage", "findings"):
+    for key in ("agent_id", "agent_path", "model", "duration_ms", "tool_uses", "usage", "findings", "last_output"):
         if body.get(key) is not None:
             span[key] = body[key]
     if op == "ref" and body.get("agent_path"):
@@ -468,6 +558,7 @@ def settle(root, payload, now=None):
                         _end(span, status, max(span["started_at"], min(now, report["at"])))
                         if report.get("markers"):
                             span["findings"] = report["markers"][-1]
+                        span["last_output"] = last_output(report.get("text"))
             if provider == "codex":
                 _settle_v2(trace, transcript, now)
             for span in spans:
@@ -535,6 +626,8 @@ def _node(span, now):
         "duration_s": max(0, int(end) - int(span.get("started_at") or end)),
         "duration_ms": span.get("duration_ms"), "tool_uses": span.get("tool_uses"),
         "model": _safe(span.get("model")), "usage": span.get("usage"), "findings": span.get("findings"),
+        # Read back as data: the stored excerpt is re-redacted and re-capped, never trusted.
+        "last_output": _excerpt(span.get("last_output")),
         "tokens": own, "subtree_tokens": own, "usage_complete": span.get("usage") is not None, "children": [],
     }
 
@@ -612,3 +705,6 @@ def show(root, session_id, now=None):
 
 #: The public name for reading a trace file (insights.py reads traces through it).
 load = _load
+safe_name = _safe
+read_aliases = _read_aliases
+aliases_path = _aliases_path
