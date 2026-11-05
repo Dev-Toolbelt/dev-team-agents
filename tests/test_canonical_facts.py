@@ -40,6 +40,7 @@ class CanonicalFactsTest(unittest.TestCase):
         wrong = {
             "fid-as-current-metric": "Keep FID under 100ms.",
             "faq-howto-rich-result-promise": "Add FAQPage markup to earn a rich result.",
+            "faq-rich-result-gov-health-only": "FAQ snippets only show for gov and healthcare sites.",
             "rel-next-prev-pagination": 'Mark pagination with rel="next" links.',
             "google-extended-affects-search": "Block Google-Extended to leave AI Overviews.",
             "sitemap-priority-changefreq-used": "Set the sitemap priority to 1.0 so Google crawls it first.",
@@ -76,7 +77,8 @@ class CanonicalFactsTest(unittest.TestCase):
     def test_allowed_wording_passes(self):
         allowed = [
             "FID was replaced by INP in March 2024.",
-            "FAQPage: no rich result outside government and health sites.",
+            "FAQPage: no rich result for any site since 2026-05-07.",
+            "FAQ rich results were limited to government and health sites until Google retired them.",
             'Google has ignored rel="next" since 2019.',
             "Google-Extended has no effect on Search.",
             "Google ignores priority and changefreq.",
@@ -99,6 +101,7 @@ class CanonicalFactsTest(unittest.TestCase):
             "Google-Extended is separate from Googlebot, which serves Search.",
             "Sitemaps: Google ignores <priority> values.",
             "HowTo markup: no rich result since 2023.",
+            "Add an FAQ section to the health insurance landing page.",
         ]
         result = run_lint(self.tree("\n".join(allowed) + "\n"))
         self.assertEqual(result.returncode, 0, result.stdout)

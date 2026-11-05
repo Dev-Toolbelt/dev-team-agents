@@ -13,10 +13,10 @@ Load `skills/shared/current-context/SKILL.md` and restrict all work to the activ
 
 Every Task spawn prompt below MUST end with, verbatim: "Before your last paragraph, emit your run-banner table under **Ran on:** exactly as defined in your agent file's `<!-- run-banner -->` block — this is not optional. Then close with a concise report only: files changed (paths, no diffs), key decisions and why, and anything the user must know. Do not paste full file contents, command logs, or a play-by-play of intermediate steps."
 
-- `seo-specialist` — runs the full SEO Quality Gate (technical, on-page including the `facebookexternalhit` share-preview check, Core Web Vitals, structured data, AI search (AEO/GEO)) regardless of the project's Detection Signals posture, since this command is an explicit SEO request
+- `seo-specialist` — runs the full SEO Quality Gate regardless of the project's Detection Signals posture, since this command is an explicit SEO request. Scope (changed pages, or a full-site sample) follows the sampling rule in `skills/design/seo-optimization/SKILL.md` § Audit Procedure; findings come back in its § Quality Gate Output Format. Its concise report always includes the full Quality Gate block — the finding lines are the hand-off, not an intermediate step
 
 Also spawn if the task includes implementation of the fixes it finds (when $ARGUMENTS contains "implement", "fix", or "apply"):
-- `frontend-developer` — implement the SEO fixes in code
+- `frontend-developer` — spawned only after `seo-specialist` returns; implement the SEO fixes in code. Pass it the gate's `BLOCKER` and `ISSUE` lines (`location → fix`) as the work list — never `PASS` lines or lines tagged `unverified`, which go to the user; for stack-specific fixes it loads `skills/design/seo-optimization/references/framework-recipes.md`
 
 ## Session close (mandatory)
 

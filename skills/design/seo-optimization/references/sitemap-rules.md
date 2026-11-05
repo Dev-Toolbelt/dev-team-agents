@@ -1,6 +1,8 @@
 # Sitemap Rules
 
-Source: sitemaps.org protocol and Google Search Central sitemap documentation.
+Load when a sitemap is generated, edited, or reviewed. Sources: sitemaps.org protocol and Google Search Central sitemap documentation.
+
+This reference describes checks; severity is decided only by SKILL.md § Quality Gate Output Format.
 
 ## Limits
 
@@ -16,7 +18,7 @@ Source: sitemaps.org protocol and Google Search Central sitemap documentation.
 
 - Only canonical, indexable URLs answering `200`
 - Exclude: `noindex` pages, URLs that redirect, non-canonical duplicates, parameter variants, `4xx`/`5xx`, pages disallowed in `robots.txt`, login and cart pages
-- A URL in the sitemap whose canonical points elsewhere is a contradiction — report it as `ISSUE`
+- A URL in the sitemap whose canonical points elsewhere is a contradiction — report it as a finding
 
 ## Fields
 
@@ -37,4 +39,6 @@ Source: sitemaps.org protocol and Google Search Central sitemap documentation.
 
 ## Discovery
 
-Reference the sitemap from `robots.txt` (`Sitemap: https://example.com/sitemap.xml`) and submit it in Search Console / Bing Webmaster Tools. IndexNow is an optional push protocol used by Bing and Yandex, not by Google — advisory only.
+Reference the sitemap from `robots.txt` (`Sitemap: https://example.com/sitemap.xml`) and submit it in Search Console / Bing Webmaster Tools. IndexNow is an optional push protocol used by Bing, Yandex, Seznam, Naver and others, not by Google — advisory only ([participating engines](https://www.indexnow.org/searchengines.json)) (as last verified 2026-11-04).
+
+To ask Google to recrawl: the URL Inspection tool for a few URLs (`monitoring.md` § Testing tools), a sitemap for many. The Google Indexing API is **not** a general alternative — it can only be used for pages with `JobPosting` or `BroadcastEvent` embedded in a `VideoObject` ([Indexing API](https://developers.google.com/search/apis/indexing-api/v3/quickstart)) (as last verified 2026-11-04); never recommend it for other pages.

@@ -9,7 +9,7 @@ description: Core Web Vitals, bundle budgets, Lighthouse CI, image optimization.
 
 Load for frontend or full-stack projects where user-perceived performance matters. Not applicable to backend-only services.
 
-## Core Web Vitals (2024 thresholds)
+## Core Web Vitals thresholds
 
 | Metric | Good | Needs improvement | Poor | Measures |
 |--------|------|-------------------|------|----------|
@@ -17,7 +17,7 @@ Load for frontend or full-stack projects where user-perceived performance matter
 | **INP** (Interaction to Next Paint) | ≤ 200ms | 200–500ms | > 500ms | Interactivity |
 | **CLS** (Cumulative Layout Shift) | ≤ 0.1 | 0.1–0.25 | > 0.25 | Visual stability |
 
-**FID (First Input Delay)** was replaced by INP in March 2024.
+**FID (First Input Delay)** is retired; use INP.
 
 ## Bundle Size Budgets (recommended defaults)
 
@@ -45,7 +45,7 @@ Integrate Lighthouse CI in the PR pipeline:
     uploadArtifacts: true
 ```
 
-Minimum score gates (recommended):
+Minimum score gates (recommended) — CI regression guards on lab data, not SEO or Core Web Vitals verdicts. The SEO verdict uses 75th-percentile field data per `skills/design/seo-optimization/SKILL.md` § Core Web Vitals.
 | Category | Minimum |
 |----------|---------|
 | Performance | 80 |
@@ -84,7 +84,7 @@ Rules:
 
 ## Long Animation Frames (LoAF)
 
-New Chrome signal (2024). Flags tasks > 50ms that block the main thread. Detect with:
+Chrome signal. Flags tasks > 50ms that block the main thread. Detect with:
 ```javascript
 new PerformanceObserver(list => {
   for (const entry of list.getEntries()) {

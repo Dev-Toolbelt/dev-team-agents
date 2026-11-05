@@ -13,7 +13,7 @@ Run through every item before declaring a task complete:
 - [ ] Accessible — keyboard navigable, no missing ARIA labels, sufficient contrast
 - [ ] No console errors or warnings
 - [ ] No hardcoded strings for international projects (use i18n keys)
-- [ ] LCP measured (Lighthouse or DevTools) — target < 2.5 s
+- [ ] LCP checked in the lab (Lighthouse or DevTools) against the thresholds in `skills/architecture/performance-budgets/SKILL.md`; field data decides
 - [ ] No duplicate/redundant API calls — checked against `skills/architecture/data-fetching-integrity/SKILL.md` (network panel: no repeated identical requests per action, no re-fetch on every render, no avoidable waterfall)
 - [ ] Linters pass
 - [ ] No debug artifacts

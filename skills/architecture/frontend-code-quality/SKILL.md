@@ -12,7 +12,7 @@ These apply unless the project overrides in `code-standards.md`:
 - **No business logic in components**: move to hooks, composables, or services
 - **Semantic HTML**: use the right element for the right job (`button`, `nav`, `article`, etc.)
 - **Accessibility**: minimum WCAG 2.1 AA — contrast ratio 4.5:1, keyboard navigable, ARIA where HTML semantics are insufficient
-- **Performance**: optimize for **Largest Contentful Paint (LCP) < 2.5 s** — the threshold Google defines as "good" and the industry benchmark below which bounce rates and conversion losses become significant. Every extra second of load time measurably increases abandonment. Concretely: lazy-load below-the-fold content, don't block rendering, preload critical assets, minimize layout shifts (CLS), and defer non-critical JS
+- **Performance**: optimize for a "good" **Largest Contentful Paint (LCP)** per the thresholds in `skills/architecture/performance-budgets/SKILL.md` — the benchmark below which bounce rates and conversion losses become significant. Every extra second of load time measurably increases abandonment. Concretely: lazy-load below-the-fold content, don't block rendering, preload critical assets, minimize layout shifts (CLS), and defer non-critical JS
 - **No inline styles** unless the project uses CSS-in-JS as a convention
 - **Loading states**: every API call or async operation must show a loading indicator while in flight — skeleton, spinner, disabled button, or equivalent; the implementation depends on context but user feedback is mandatory
 - **Page metadata**: update `<title>`, meta description, Open Graph tags, and favicon whenever the page or its context changes; use the framework's head manager (React Helmet, VueUse/head, Nuxt `useHead`, Angular `Title`/`Meta`, etc.)

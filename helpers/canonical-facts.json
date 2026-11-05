@@ -24,8 +24,17 @@
         "\\bno (rich|FAQ|HowTo)\\b",
         "\\b(never promise|only for|restricted|retired|deprecated|removed|no longer|limited to)\\b"
       ],
-      "why": "HowTo rich results were removed in 2023-09 and FAQ rich results are limited to well-known government and health sites since 2023-08",
-      "source": "https://developers.google.com/search/blog/2023/08/howto-faq-changes"
+      "why": "HowTo rich results were removed in 2023-09; the FAQ rich result was retired for every site on 2026-05-07",
+      "source": "https://developers.google.com/search/updates"
+    },
+    {
+      "id": "faq-rich-result-gov-health-only",
+      "pattern": "\\bFAQ(Page)?\\b(?=.{0,160}\\b(rich|snippets?|results?|SERP)\\b).{0,160}\\b(gov(ernment)?|health\\w*|medical)\\b|\\b(gov(ernment)?|health\\w*|medical)\\b.{0,160}\\bFAQ(Page)?\\b(?=.{0,160}\\b(rich|snippets?|results?|SERP)\\b)",
+      "allow": [
+        "\\b(retired|no longer|2026-05|for (any|every) site)\\b"
+      ],
+      "why": "FAQ rich results were limited to government and health sites from 2023-08 until Google retired them for every site on 2026-05-07 — the gov/health restriction is no longer current",
+      "source": "https://developers.google.com/search/updates"
     },
     {
       "id": "rel-next-prev-pagination",
