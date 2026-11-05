@@ -54,7 +54,7 @@ export const STATUS_ICON: Readonly<Record<StatusTone, typeof CheckCircle2>> = {
 
 export const STATUS_TEXT_CLASS: Readonly<Record<StatusTone, string>> = {
   running: 'text-info',
-  idle: 'text-muted-foreground',
+  idle: 'text-[var(--canvas-warning-text)]',
   completed: 'text-success',
   failed: 'text-destructive',
   interrupted: 'text-warning',
@@ -63,7 +63,7 @@ export const STATUS_TEXT_CLASS: Readonly<Record<StatusTone, string>> = {
 
 const STATUS_BORDER_CLASS: Readonly<Record<StatusTone, string>> = {
   running: 'border-info',
-  idle: 'border-muted-foreground/50',
+  idle: 'border-warning',
   completed: 'border-success/70',
   failed: 'border-destructive',
   interrupted: 'border-warning',

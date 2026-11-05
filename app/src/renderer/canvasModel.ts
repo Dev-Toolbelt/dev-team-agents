@@ -484,7 +484,8 @@ export function statusTone(status: GraphNodeStatus | null): { readonly tone: Sta
     case 'running':
       return { tone: 'running', label: 'Running' };
     case 'idle':
-      return { tone: 'idle', label: 'Idle' };
+      // Idle means the agent stopped and is waiting, often on the user: say so.
+      return { tone: 'idle', label: 'Idle · waiting' };
     case 'completed':
       return { tone: 'completed', label: 'Completed' };
     case 'failed':

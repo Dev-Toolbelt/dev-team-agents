@@ -1,7 +1,8 @@
 import { memo } from 'react';
 import type { Node, NodeProps } from '@xyflow/react';
-import { Activity, ChevronDown, ChevronRight, CircleAlert, Moon, Pause } from 'lucide-react';
+import { Activity, ChevronDown, ChevronRight, CircleAlert, CircleCheck, Pause } from 'lucide-react';
 
+import { Hint } from '@/components/ui/tooltip';
 import { formatDateTime } from '../boardModel.js';
 import { frameTokensLabel, type TraceProblem } from '../canvasModel.js';
 import { ProviderIcon, providerLabel } from '../providers/ProviderIcon.js';
@@ -23,10 +24,22 @@ export type CanvasGroupData = {
 
 export type CanvasFlowGroup = Node<CanvasGroupData, 'canvasGroup'>;
 
-const SESSION_STATUS: Readonly<Record<BoardSessionStatus, { readonly icon: typeof Activity; readonly label: string }>> = {
-  active: { icon: Activity, label: 'Active' },
-  idle: { icon: Pause, label: 'Idle' },
-  ended: { icon: Moon, label: 'Ended' },
+interface SessionStatusStyle {
+  readonly icon: typeof Activity;
+  readonly label: string;
+  /** The frame's border: a finished session reads green, one waiting on the user amber. */
+  readonly border: string;
+  readonly text: string;
+  /** Says what the status means, where the word alone does not. */
+  readonly hint: string | null;
+}
+
+export const IDLE_SESSION_HINT = 'Idle: the session is waiting for input or has paused — it may need your answer to continue';
+
+const SESSION_STATUS: Readonly<Record<BoardSessionStatus, SessionStatusStyle>> = {
+  active: { icon: Activity, label: 'Active', border: 'border-info/60', text: 'text-info', hint: null },
+  idle: { icon: Pause, label: 'Idle · waiting', border: 'border-warning', text: 'text-[var(--canvas-warning-text)]', hint: IDLE_SESSION_HINT },
+  ended: { icon: CircleCheck, label: 'Ended', border: 'border-success/70', text: 'text-[var(--canvas-success-text)]', hint: null },
 };
 
 const TRACE_PROBLEM_TEXT: Readonly<Record<TraceProblem, string>> = {
@@ -49,6 +62,17 @@ function ToggleButton({ collapsed, name, onClick }: { collapsed: boolean; name: 
       {collapsed ? <ChevronRight className="size-4" aria-hidden="true" /> : <ChevronDown className="size-4" aria-hidden="true" />}
     </button>
   );
+}
+
+function SessionStatusChip({ status, icon: Icon }: { status: SessionStatusStyle; icon: typeof Activity }) {
+  const chip = (
+    <span className={`nodrag nopan ml-auto inline-flex shrink-0 items-center gap-1 font-medium ${status.text}`} data-slot="session-status">
+      <Icon className="size-3.5" aria-hidden="true" />
+      <span>{status.label}</span>
+      {status.hint !== null ? <span className="sr-only">{`. ${status.hint}`}</span> : null}
+    </span>
+  );
+  return status.hint === null ? chip : <Hint content={status.hint}>{chip}</Hint>;
 }
 
 /** A session frame (provider, status, branch, PRs, token total) or a turn frame inside it. */
@@ -82,8 +106,9 @@ function CanvasGroupView({ data }: NodeProps<CanvasFlowGroup>) {
   const StatusIcon = status?.icon;
   return (
     <div
-      className={`h-full w-full rounded-lg border-2 border-border bg-[var(--canvas-frame-session)] ${dimmed ? 'opacity-40' : ''}`}
+      className={`h-full w-full rounded-lg border-2 ${status?.border ?? 'border-border'} bg-[var(--canvas-frame-session)] ${dimmed ? 'opacity-40' : ''}`}
       data-kind="session"
+      data-session-status={group.status ?? undefined}
     >
       <div className="space-y-1 px-3 pt-2.5 text-xs">
         <div className="flex items-center gap-2">
@@ -97,12 +122,7 @@ function CanvasGroupView({ data }: NodeProps<CanvasFlowGroup>) {
           <span className="min-w-0 truncate text-sm font-semibold" title={group.label}>
             {group.label}
           </span>
-          {status !== null && StatusIcon !== undefined ? (
-            <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-muted-foreground">
-              <StatusIcon className="size-3.5" aria-hidden="true" />
-              {status.label}
-            </span>
-          ) : null}
+          {status !== null && StatusIcon !== undefined ? <SessionStatusChip status={status} icon={StatusIcon} /> : null}
         </div>
         <div className="flex items-center gap-3 pl-6 text-muted-foreground">
           <span className="min-w-0 truncate font-mono">{group.branch ?? 'no branch'}</span>

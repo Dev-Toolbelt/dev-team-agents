@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNod
 import {
   Background,
   MiniMap,
+  Panel,
   ReactFlow,
   ReactFlowProvider,
   applyNodeChanges,
@@ -10,15 +11,15 @@ import {
   type NodeChange,
   type NodeTypes,
 } from '@xyflow/react';
-import { CircleAlert, Crosshair, Flame, ListTree, Maximize, RotateCcw, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { CircleAlert, X } from 'lucide-react';
 
 import '../canvas.css';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { PortalContainer } from '@/components/ui/portal-container';
 import { Empty } from '../Problem.js';
 import { formatDateTime, formatDuration, periodCutoff, type Period } from '../boardModel.js';
 import {
-  COLLAPSE_LEVELS,
   ROLE_FAMILY_LABEL,
   agentLabel,
   effectiveCollapsed,
@@ -46,13 +47,11 @@ import { clearPositions, loadPositions, savePosition } from '../canvasPositions.
 import { CanvasGroup, type CanvasFlowGroup } from './CanvasGroup.js';
 import { CanvasClock, CanvasNode, STATUS_ICON, STATUS_TEXT_CLASS, WorktreeChip, type CanvasFlowNode } from './CanvasNode.js';
 import { CanvasOutline } from './CanvasOutline.js';
+import { CanvasToolbar } from './CanvasToolbar.js';
 import { PrBadge } from './PrBadge.js';
 import type { BoardProject, GraphNode, TaskGraph, TaskGraphResult } from '../../shared/api.js';
 
 const NODE_TYPES: NodeTypes = { canvasNode: CanvasNode, canvasGroup: CanvasGroup };
-
-const SELECT_CLASS =
-  'h-8 rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30';
 
 type FlowNode = CanvasFlowNode | CanvasFlowGroup;
 
@@ -162,34 +161,6 @@ function GraphProblem({ result }: { result: Extract<TaskGraphResult, { ok: false
   );
 }
 
-function ToggleButton({
-  pressed,
-  onClick,
-  disabled = false,
-  title,
-  children,
-}: {
-  pressed: boolean;
-  onClick: () => void;
-  disabled?: boolean;
-  title?: string;
-  children: ReactNode;
-}) {
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      aria-pressed={pressed}
-      disabled={disabled}
-      title={title}
-      onClick={onClick}
-      className={pressed ? 'border-primary bg-primary/10' : ''}
-    >
-      {children}
-    </Button>
-  );
-}
-
 function CanvasBoard({
   graph: fullGraph,
   projectId,
@@ -206,7 +177,6 @@ function CanvasBoard({
   onShowOnBoard: ((card: BoardCardRef) => void) | undefined;
 }) {
   const flow = useReactFlow();
-  const levelId = useId();
   const coarseNow = Math.max(useClock(clock, 60, active), fullGraph.as_of);
   const cutoff = periodCutoff(period, coarseNow);
   const graph = useMemo(() => filterGraphByPeriod(fullGraph, cutoff), [fullGraph, cutoff]);
@@ -219,7 +189,7 @@ function CanvasBoard({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusOn, setFocusOn] = useState(false);
   const [heatOn, setHeatOn] = useState(false);
-  const [outlineOn, setOutlineOn] = useState(false);
+  const [outlineOn, setOutlineOn] = useState(true);
 
   const collapsed = useMemo(() => effectiveCollapsed(graph, choices), [graph, choices]);
   const expanded = useMemo(() => explicitlyExpanded(choices), [choices]);
@@ -399,6 +369,7 @@ function CanvasBoard({
     setOverrides({});
   };
   const hasOverrides = Object.keys(overrides).length > 0;
+  const fullScreen = useFullScreen(() => void flow.fitView({ padding: 0.1, duration: 200 }));
 
   if (graph.groups.length === 0) {
     return <Empty>No session of this project has activity in this period.</Empty>;
@@ -406,107 +377,164 @@ function CanvasBoard({
 
   return (
     <div className="space-y-3">
-      <div role="toolbar" aria-label="Canvas controls" className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => void flow.fitView({ padding: 0.1, duration: 200 })}>
-          <Maximize aria-hidden="true" />
-          Fit view
-        </Button>
-        <Button variant="outline" size="sm" aria-label="Zoom in" title="Zoom in" onClick={() => void flow.zoomIn({ duration: 150 })}>
-          <ZoomIn aria-hidden="true" />
-        </Button>
-        <Button variant="outline" size="sm" aria-label="Zoom out" title="Zoom out" onClick={() => void flow.zoomOut({ duration: 150 })}>
-          <ZoomOut aria-hidden="true" />
-        </Button>
-        <label className="ml-1 text-sm" htmlFor={levelId}>
-          Show
-        </label>
-        <select id={levelId} value={level} onChange={(event) => setLevel(event.target.value as CollapseLevel)} className={SELECT_CLASS}>
-          {COLLAPSE_LEVELS.map((each) => (
-            <option key={each.value} value={each.value}>
-              {each.label}
-            </option>
-          ))}
-        </select>
-        <ToggleButton
-          pressed={focusOn}
-          disabled={selectedNode === undefined && !focusOn}
-          title={selectedNode === undefined ? 'Select an agent to focus on it' : 'Dim everything outside the selected agent’s line'}
-          onClick={() => setFocusOn((was) => !was)}
-        >
-          <Crosshair aria-hidden="true" />
-          Focus
-        </ToggleButton>
-        <ToggleButton pressed={heatOn} title="Shade agents by the tokens of their subtree" onClick={() => setHeatOn((was) => !was)}>
-          <Flame aria-hidden="true" />
-          Token heatmap
-        </ToggleButton>
-        <ToggleButton pressed={outlineOn} title="The canvas as a keyboard-navigable list" onClick={() => setOutlineOn((was) => !was)}>
-          <ListTree aria-hidden="true" />
-          Outline
-        </ToggleButton>
-        <Button variant="outline" size="sm" disabled={!hasOverrides} onClick={resetLayout}>
-          <RotateCcw aria-hidden="true" />
-          Reset layout
-        </Button>
-      </div>
-
       <CanvasNotices graph={fullGraph} />
 
-      <div className="flex h-[max(28rem,calc(100vh-17rem))] min-h-0 gap-3">
-        {outlineOn ? (
-          <div className="w-72 shrink-0 overflow-auto rounded-lg border bg-card">
-            <CanvasOutline items={outline} selectedId={selectedId} onSelect={revealInCanvas} />
+      <div
+        ref={fullScreen.ref}
+        data-full-screen={fullScreen.mode}
+        className={`flex min-h-0 gap-3 ${
+          fullScreen.mode === 'off'
+            ? 'h-[max(28rem,calc(100vh-17rem))]'
+            : fullScreen.mode === 'native'
+              ? 'h-full bg-background p-3'
+              : 'fixed inset-0 z-50 bg-background p-3'
+        }`}
+      >
+        <PortalContainer.Provider value={fullScreen.mode === 'native' ? fullScreen.element : null}>
+          <div className="min-w-0 flex-1 overflow-hidden rounded-lg border" aria-label="Canvas" role="region">
+            <CanvasClock.Provider value={tick}>
+              <ReactFlow<FlowNode, Edge>
+                className="devteam-canvas"
+                nodes={nodes}
+                edges={flowEdges}
+                nodeTypes={NODE_TYPES}
+                onNodesChange={onNodesChange}
+                onPaneClick={() => {
+                  setSelectedId(null);
+                  setFocusOn(false);
+                }}
+                nodesConnectable={false}
+                edgesFocusable={false}
+                elementsSelectable
+                multiSelectionKeyCode={null}
+                selectionKeyCode={null}
+                deleteKeyCode={null}
+                onlyRenderVisibleElements
+                minZoom={0.1}
+                maxZoom={2}
+                proOptions={{ hideAttribution: true }}
+              >
+                <Background gap={24} />
+                <Panel position="top-left">
+                  <CanvasToolbar
+                    level={level}
+                    onLevel={setLevel}
+                    onFitView={() => void flow.fitView({ padding: 0.1, duration: 200 })}
+                    onZoomIn={() => void flow.zoomIn({ duration: 150 })}
+                    onZoomOut={() => void flow.zoomOut({ duration: 150 })}
+                    focusOn={focusOn}
+                    focusDisabled={selectedNode === undefined && !focusOn}
+                    onFocus={() => setFocusOn((was) => !was)}
+                    heatOn={heatOn}
+                    onHeat={() => setHeatOn((was) => !was)}
+                    outlineOn={outlineOn}
+                    onOutline={() => setOutlineOn((was) => !was)}
+                    fullScreen={fullScreen.mode !== 'off'}
+                    onFullScreen={fullScreen.toggle}
+                    canReset={hasOverrides}
+                    onReset={resetLayout}
+                  />
+                </Panel>
+                <MiniMap
+                  pannable
+                  zoomable
+                  ariaLabel="Mini map"
+                  nodeColor={(node) => (node.type === 'canvasGroup' ? 'var(--muted)' : 'var(--muted-foreground)')}
+                />
+              </ReactFlow>
+            </CanvasClock.Provider>
           </div>
-        ) : null}
-        <div className="min-w-0 flex-1 overflow-hidden rounded-lg border" aria-label="Canvas" role="region">
-          <CanvasClock.Provider value={tick}>
-            <ReactFlow<FlowNode, Edge>
-              className="devteam-canvas"
-              nodes={nodes}
-              edges={flowEdges}
-              nodeTypes={NODE_TYPES}
-              onNodesChange={onNodesChange}
-              onPaneClick={() => {
+          {outlineOn ? (
+            <div className="w-72 shrink-0 overflow-auto rounded-lg border bg-card" data-panel="outline">
+              <CanvasOutline items={outline} selectedId={selectedId} onSelect={revealInCanvas} />
+            </div>
+          ) : null}
+          {selectedNode !== undefined ? (
+            <NodeDetail
+              node={selectedNode}
+              projectId={projectId}
+              sessionId={selectedNode.session_id ?? sessionIdOf(sessionOf(view.index, selectedNode.id) ?? '')}
+              now={selectedNode.status === 'running' ? tick : coarseNow}
+              onClose={() => {
                 setSelectedId(null);
                 setFocusOn(false);
               }}
-              nodesConnectable={false}
-              edgesFocusable={false}
-              elementsSelectable
-              multiSelectionKeyCode={null}
-              selectionKeyCode={null}
-              deleteKeyCode={null}
-              onlyRenderVisibleElements
-              minZoom={0.1}
-              maxZoom={2}
-              proOptions={{ hideAttribution: true }}
-            >
-              <Background gap={24} />
-              <MiniMap
-                pannable
-                zoomable
-                ariaLabel="Mini map"
-                nodeColor={(node) => (node.type === 'canvasGroup' ? 'var(--muted)' : 'var(--muted-foreground)')}
-              />
-            </ReactFlow>
-          </CanvasClock.Provider>
-        </div>
-        {selectedNode !== undefined ? (
-          <NodeDetail
-            node={selectedNode}
-            projectId={projectId}
-            sessionId={selectedNode.session_id ?? sessionIdOf(sessionOf(view.index, selectedNode.id) ?? '')}
-            now={selectedNode.status === 'running' ? tick : coarseNow}
-            onClose={() => {
-              setSelectedId(null);
-              setFocusOn(false);
-            }}
-            onShowOnBoard={onShowOnBoard}
-          />
-        ) : null}
+              onShowOnBoard={onShowOnBoard}
+            />
+          ) : null}
+        </PortalContainer.Provider>
       </div>
     </div>
   );
+}
+
+type FullScreenMode = 'off' | 'native' | 'overlay';
+
+/**
+ * Full screen for the canvas and its side panels. The Fullscreen API when the element offers it
+ * (Esc leaves, and `fullscreenchange` reports either way out); otherwise, or when the request is
+ * refused, an overlay over the window that Esc also leaves. `onChange` runs after each switch.
+ */
+function useFullScreen(onChange: () => void) {
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
+  const [mode, setMode] = useState<FullScreenMode>('off');
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
+
+  useEffect(() => {
+    if (element === null) return;
+    const sync = () => setMode((was) => (document.fullscreenElement === element ? 'native' : was === 'native' ? 'off' : was));
+    // A container that unmounted while full screen took its listener along: a new one starts from
+    // what the document says, and the old one leaves 'native' behind.
+    sync();
+    document.addEventListener('fullscreenchange', sync);
+    return () => {
+      document.removeEventListener('fullscreenchange', sync);
+      setMode((was) => (was === 'native' ? 'off' : was));
+    };
+  }, [element]);
+
+  useEffect(() => {
+    if (mode !== 'overlay') return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) setMode('off');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mode]);
+
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const frame = requestAnimationFrame(() => onChangeRef.current());
+    return () => cancelAnimationFrame(frame);
+  }, [mode]);
+
+  const toggle = useCallback(() => {
+    if (mode === 'native') {
+      if (typeof document.exitFullscreen === 'function') void document.exitFullscreen().catch(() => setMode('off'));
+      else setMode('off');
+      return;
+    }
+    if (mode === 'overlay') {
+      setMode('off');
+      return;
+    }
+    if (element === null) return;
+    if (typeof element.requestFullscreen !== 'function') {
+      setMode('overlay');
+      return;
+    }
+    // Granted: `fullscreenchange` switches the mode. Refused: the overlay stands in.
+    element.requestFullscreen().catch(() => setMode('overlay'));
+  }, [mode, element]);
+
+  return { ref: setElement, element, mode, toggle };
 }
 
 function CanvasNotices({ graph }: { graph: TaskGraph }) {
