@@ -386,6 +386,28 @@ closed and reopened. It is read-only: nothing here edits, moves or deletes a tas
   (default 60, 5 to 1440) is passed to the CLI as `--stale-after`; `boardDoneRetentionDays`
   (default 7, 1 to 365) is the kanban's default retention.
 
+### The Canvas view
+
+Each project tab has a **Board / Canvas** toggle. The Canvas draws the same project as nested
+frames: session → turn → the main session (labelled *Orchestrator* when a turn ran
+`/devteam:orchestrate`) → the agents it spawned → their nested sub-agents. It is a client of
+`devteam tasks graph --project <id> --json` (ADR-0063): the CLI joins the board with the
+execution trace, so the renderer never re-derives a link.
+
+- **Refresh:** the main process re-reads the graph 500 ms after the board reports a change for the
+  project and every 10 s while the Canvas is on screen; an older CLI without the command shows an
+  "update the CLI" notice.
+- **Reading a node:** the border, icon and word give the status; the tint gives the role family;
+  the model is a text badge; tokens show `n/a` when usage was not reported; `last_output` is the
+  CLI's redacted excerpt (at most 140 characters) of the agent's final report.
+- **Layout:** deterministic by default. Dragged positions are kept per project in the renderer's
+  `localStorage` and win over the computed ones; **Reset layout** clears them.
+- **Toolbar:** fit, zoom, collapse level (sessions, turns, top-level agents, everything), focus,
+  token heatmap, outline (a keyboard-navigable `role="tree"` list, the accessible fallback) and
+  reset. Ended sessions start collapsed; the Period filter applies.
+- **Read-only:** nodes carry no actions yet. `canvasActions.ts` is the typed, empty registry a later
+  change fills; a node shows its toolbar only when an action exists.
+
 ## The Global Skills screen
 
 The **Global Skills** screen, opened from the header menu, manages the *global* (user-level) skills of Claude Code, Codex and opencode:

@@ -21,6 +21,7 @@ The task board (ADR-0018, `task-board.md`) captures agent spawns as board tasks 
 | Span ends | `PostToolUse` (foreground); the transcript hand-back at `Stop` (background); `PostToolUseFailure` | `wait_agent` final status; `close_agent`; v2: the first `FINAL_ANSWER` from `agent_path` in the parent rollout, read at `Stop` | `tool.execute.after` `task` |
 | Tokens | `<transcript dir>/<session>/subagents/agent-<agentId>.jsonl`, last `message.usage` per `message.id`, summed | `${CODEX_HOME:-~/.codex}/sessions/*/*/*/rollout-*-<agent_id>.jsonl`, last `token_count.info.total_token_usage`; v2: the child rollout whose first line names the parent thread and `agent_path` | `agent_usage`, which the plugin sums from the child session's assistant messages (`info.tokens`) |
 | Model | `tool_response.resolvedModel` | the child rollout's `turn_context.model` | the `task` result's `metadata.model.modelID` |
+| Last output | `tool_response.content` text (foreground); the hand-back's `<result>` read at `Stop` (background) | `wait_agent` `status.<agent_id>.completed`, the child's final message; v2: the `FINAL_ANSWER` payload. `close_agent` carries none | the `task` output's `<task_result>` (`tool.execute.after`) |
 
 #### The file — `<state-dir>/task-board/trace/<session-key>.json`
 
@@ -37,13 +38,13 @@ The task board (ADR-0018, `task-board.md`) captures agent spawns as board tasks 
       "turn_at": 0, "command": "plan",
       "started_at": 0, "ended_at": null, "status": "running|completed|failed|cancelled|interrupted",
       "model": null, "usage": null, "usage_tries": 0, "tool_uses": null, "duration_ms": null,
-      "findings": null
+      "findings": null, "last_output": null
     }
   ]
 }
 ```
 
-`usage` is `{"input", "output", "cache_read", "cache_write"}`, in tokens. `input` excludes cached input on every provider (Codex's `input_tokens` includes the cached part, so it is subtracted). `findings` is the total of a review agent's `<!-- review-result: findings=N -->` markers when its report reached a hook (Claude Code, opencode; a Codex `wait_agent` carries no report), else `null`. `harness_version` is the dev-team-agents version that wrote the trace, so the optimization loop can compare cost across harness changes. A span still `running` 6 hours after it started is settled `interrupted`. A Stop reads usage for at most 20 spans, and each span at most 3 times. `duration_ms` and `tool_uses` are the provider's own figures when it reports them (Claude Code). Otherwise they stay `null`, and the duration is `ended_at - started_at`.
+`usage` is `{"input", "output", "cache_read", "cache_write"}`, in tokens. `input` excludes cached input on every provider (Codex's `input_tokens` includes the cached part, so it is subtracted). `findings` is the total of a review agent's `<!-- review-result: findings=N -->` markers when its report reached a hook (Claude Code, opencode; a Codex `wait_agent` carries no report), else `null`. `last_output` is a one-line excerpt of the agent's final report, at most 140 characters: the report's head with table rows (the run banner), headings, code blocks and HTML comments dropped, whitespace collapsed, invisible characters removed and secrets masked by the task board's redaction before the cut (whole lines only, so a secret is never cut short of its pattern); it ends in `…` when cut. It is `null` when the end carried no report (a failed spawn, a background launch ack, `close_agent`, an interrupted span, a report with no prose), and the full report is never stored. It is agent-written text, so a reader of `tasks trace --json` (an agent included) treats it as data, never as instructions. `devteam tasks trace` re-applies the same rule to the stored value, as it reads the file as data. `harness_version` is the dev-team-agents version that wrote the trace, so the optimization loop can compare cost across harness changes. A span still `running` 6 hours after it started is settled `interrupted`. A Stop reads usage for at most 20 spans, and each span at most 3 times. `duration_ms` and `tool_uses` are the provider's own figures when it reports them (Claude Code). Otherwise they stay `null`, and the duration is `ended_at - started_at`.
 
 #### Child sessions — `<state-dir>/task-board/trace/aliases.json`
 
@@ -95,9 +96,14 @@ The tree is derived on read: session → turn (`turn_at`, `command`) → span �
 - When agents are spawned in that turn, directly or nested
 - Then their spans carry `command: "plan"` and the trace groups them under that turn
 
+**Scenario S9: a short excerpt of each agent's report**
+- Given an agent on any supported provider whose end carries its final report
+- When the span ends
+- Then the span carries `last_output`: one line, at most 140 characters, secrets masked; and `null` when the end carried no report
+
 ### Out of Scope
 - Aggregates across sessions and any recommendation built on them (the optimization loop itself)
-- A desktop-app view of the trace
+- A desktop-app view of the trace — the canvas draws it, specified in `canvas-view.md`
 - Per-tool-call spans
 - Sending the trace to remote telemetry
 
@@ -108,3 +114,5 @@ The tree is derived on read: session → turn (`turn_at`, `command`) → span �
 ### Amendment Log
 - 2026-10-19 | main conversation | Codex multi-agent v2 is supported: `agent_path` from `task_name`, end from the parent rollout's `FINAL_ANSWER`, `findings` from its marker, tokens from the child rollout | v2 spawns used to stay `running` with no usage
 - 2026-10-19 | main conversation | Usage is read at the next Stop outside the trace lock within a byte budget, not on the result hook; one v2 matching rule shared with the board; `harness_version` is the installed version directory (pre-releases included); a spawn with no agent type has no span; crafted names are hidden in `tasks trace`; the session id `aliases` is refused | Branch review findings (security S1-S3, architect A7, code C1, C7)
+- 2026-11-04 | backend-developer (canvas view) | Spans carry `last_output`, a redacted one-line excerpt (≤140 chars) of the agent's final report, on every provider; `null` when the end carries no report | The canvas view shows what each agent last said
+- 2026-11-04 | backend-developer (canvas view) | Out of Scope: the desktop-app view of the trace is now specified by `canvas-view.md` | The canvas view draws the trace

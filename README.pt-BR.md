@@ -136,6 +136,7 @@ Os dois instalam só para o seu usuário, colocam o `devteam` no PATH e instalam
 | Conectar contas do GitHub, Jira e Cloudflare | `devteam integration connect github\|jira\|cloudflare`, test, disconnect, config |
 | Ver as tarefas dos agentes em todos os projetos vinculados (o Quadro do app lê o mesmo) | `devteam tasks list\|watch` |
 | Ver a árvore de agentes de uma sessão, com duração, modelo e tokens por agente | `devteam tasks trace <session>` |
+| Ver as sessões, turnos e a árvore de agentes de um projeto como um único grafo (o Canvas do app lê o mesmo) | `devteam tasks graph --project <id>` |
 | Ver quais tarefas da sprint estão prontas, bloqueadas ou com claim, e as ondas que as dependências implicam | `devteam backlog ready` |
 | Verificar o grafo de dependências de um arquivo de sprint (ciclos, ids desconhecidos, ondas fora de ordem) | `devteam backlog lint` |
 | Ver custo e confiabilidade por agente e comando, com sugestões que você decide | `devteam insights report` |

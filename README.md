@@ -136,6 +136,7 @@ Both install for your user only, put `devteam` on your PATH and install the fram
 | Connect GitHub, Jira and Cloudflare accounts | `devteam integration connect github\|jira\|cloudflare`, test, disconnect, config |
 | See every agent task across bound projects (the app's Board reads the same) | `devteam tasks list\|watch` |
 | See one session's agent tree with duration, model and tokens per agent | `devteam tasks trace <session>` |
+| See a project's sessions, turns and agent tree as one graph (the app's Canvas reads the same) | `devteam tasks graph --project <id>` |
 | See which sprint tasks are ready, blocked or claimed, and the waves their dependencies imply | `devteam backlog ready` |
 | Check a sprint file's dependency graph (cycles, unknown ids, out-of-order waves) | `devteam backlog lint` |
 | See cost and reliability per agent and command, with suggestions you decide | `devteam insights report` |
