@@ -36,6 +36,8 @@ import {
   type SkillProviderFilter,
   type SkillRemoveRequest,
   type StartRequest,
+  type TaskGraphResult,
+  type TaskGraphUpdate,
 } from '../shared/api.js';
 
 function migrateRequest(request: MigrateRequest): Record<string, unknown> {
@@ -312,6 +314,32 @@ const bridge: DevteamBridge = {
       task_key: request.task_key === null ? null : String(request.task_key),
       link: { type: request.link.type, index: Number(request.link.index), expect: String(request.link.expect) },
     }),
+
+  // The canvas. A subscription tells the main process to keep this project's graph fresh;
+  // every push names its project, and only that project's listener hears it.
+  taskGraph: (projectId: ProjectId) => ipcRenderer.invoke(CHANNELS.taskGraph, String(projectId)),
+  onTaskGraph: (projectId: ProjectId, listener: (result: TaskGraphResult) => void) => {
+    const id = String(projectId);
+    const handler = (_event: unknown, update: TaskGraphUpdate): void => {
+      if (update.projectId === id) listener(update.result);
+    };
+    ipcRenderer.on(CHANNELS.taskGraphChanged, handler);
+    ipcRenderer.invoke(CHANNELS.taskGraphSubscribe, id).then(
+      (accepted: unknown) => {
+        if (accepted !== true) console.warn(`devteam: the canvas subscription for ${id} was refused; the graph will not refresh on its own`);
+      },
+      (error: unknown) => console.warn(`devteam: the canvas subscription for ${id} failed: ${String(error)}`),
+    );
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      ipcRenderer.removeListener(CHANNELS.taskGraphChanged, handler);
+      ipcRenderer.invoke(CHANNELS.taskGraphUnsubscribe, id).catch((error: unknown) => {
+        console.warn(`devteam: the canvas unsubscribe for ${id} failed: ${String(error)}`);
+      });
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld('devteam', bridge);

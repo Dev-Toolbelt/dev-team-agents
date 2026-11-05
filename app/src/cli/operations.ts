@@ -47,6 +47,15 @@ import type {
   BoardTurn,
   BoardWorktree,
   BindMode,
+  GraphEdge,
+  GraphEdgeKind,
+  GraphGroup,
+  GraphGroupKind,
+  GraphNode,
+  GraphNodeKind,
+  GraphNodeStatus,
+  GraphTodo,
+  TaskGraph,
   BindProvider,
   BindReport,
   CatalogDetail,
@@ -164,6 +173,8 @@ export const READ_ONLY_COMMANDS: readonly (readonly string[])[] = Object.freeze(
   ['skills', 'show'],
   ['tasks', 'list'],
   ['tasks', 'watch'],
+  // The canvas: derives the session/turn/agent graph from the task records and traces.
+  ['tasks', 'graph'],
   // ADR-0060. Read-only: reports which helper tools are present on this machine.
   ['tools', 'list'],
   // ADR-0029. Every `auth` leaf is `compat.STORE_NEUTRAL`; see `accountCommands.ts`.
@@ -416,6 +427,9 @@ export const COMMAND_SHAPES: Readonly<Record<string, CommandShape>> = Object.fre
   // allowed on the one-shot `list`.
   'tasks list': { operands: 0, flags: { '--stale-after': 'value', '--since': 'value' } },
   'tasks watch': { operands: 0, flags: { '--stale-after': 'value' } },
+  // The canvas (ADR-0015, ADR-0041): a read of one project's records and traces. `--project` is a
+  // project id the app's own registry returned, never a path.
+  'tasks graph': { operands: 0, flags: { '--project': 'value', '--since': 'value' } },
   // ADR-0029: the account. No flag carries a secret; a code or password goes over stdin.
   // ADR-0060. `tools install` and `tools list` take no operand: every missing tool, never a named one.
   'tools list': { operands: 0, flags: {} },
@@ -3052,5 +3066,218 @@ export function watchTasks(
       else handlers.onEvent(event);
     },
     onEnd: handlers.onEnd,
+  });
+}
+
+// ── the canvas: `tasks graph` ─────────────────────────────────────────────────
+
+export const MAX_GRAPH_GROUPS = 2_000;
+export const MAX_GRAPH_NODES = 5_000;
+export const MAX_GRAPH_EDGES = 10_000;
+const MAX_GRAPH_NOTICES = 50;
+const MAX_GRAPH_TODOS = 100;
+const MAX_GRAPH_LABEL = 512;
+const MAX_GRAPH_DESCRIPTION = 100;
+const MAX_GRAPH_LAST_OUTPUT = 140;
+const GRAPH_GROUP_KINDS: readonly GraphGroupKind[] = ['session', 'turn'];
+const GRAPH_NODE_KINDS: readonly GraphNodeKind[] = ['main', 'agent', 'review', 'builtin'];
+const GRAPH_EDGE_KINDS: readonly GraphEdgeKind[] = ['spawn', 'produced', 'reviewed'];
+const GRAPH_NODE_STATUSES: readonly GraphNodeStatus[] = ['running', 'idle', 'completed', 'failed', 'interrupted'];
+
+/**
+ * Invisible characters that can disguise text: Unicode tag characters, variation selectors,
+ * zero-width characters and bidirectional controls. They are dropped, not replaced.
+ */
+function graphInvisible(code: number): boolean {
+  return (
+    (code >= 0xe0000 && code <= 0xe007f) ||
+    (code >= 0xfe00 && code <= 0xfe0f) ||
+    (code >= 0x200b && code <= 0x200f) ||
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x2060 && code <= 0x2069) ||
+    code === 0xfeff ||
+    code === 0x061c ||
+    code === 0x180e
+  );
+}
+
+/** Line breaks and other control characters: each becomes a space. */
+function graphBreaking(code: number): boolean {
+  return code < 0x20 || (code >= 0x7f && code <= 0x9f) || code === 0x2028 || code === 0x2029;
+}
+
+/** One line, bounded: a control character (a newline the CLI missed) becomes a space. */
+function graphLine(value: unknown, max: number): string | null {
+  if (typeof value !== 'string') return null;
+  const chars: string[] = [];
+  for (const ch of value) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (graphInvisible(code)) continue;
+    chars.push(graphBreaking(code) ? ' ' : ch);
+  }
+  const line = chars.join('').trim();
+  return line === '' ? null : [...line].slice(0, max).join('');
+}
+
+function graphCount(value: unknown): number {
+  return nonNegative(value) ?? 0;
+}
+
+function asGraphTodos(raw: unknown): GraphTodo[] {
+  if (!Array.isArray(raw)) return [];
+  const todos: GraphTodo[] = [];
+  for (const entry of raw.slice(0, MAX_GRAPH_TODOS)) {
+    if (!isRecord(entry)) continue;
+    const key = boundedString(entry['key'], MAX_ID);
+    if (key === null) continue;
+    // A status the record lacks is said as `unknown`, never guessed as pending or done.
+    const status = boundedString(entry['status'], 64) ?? 'unknown';
+    todos.push({ key, content: graphLine(entry['content'], MAX_TASK_TEXT) ?? '', status });
+  }
+  return todos;
+}
+
+/** A group, or null when it has no id or a kind this app does not know (it frames nothing honestly). */
+function asGraphGroup(raw: unknown): GraphGroup | null {
+  if (!isRecord(raw)) return null;
+  const id = boundedString(raw['id'], MAX_ID);
+  const kind = raw['kind'];
+  if (id === null || typeof kind !== 'string' || !(GRAPH_GROUP_KINDS as readonly string[]).includes(kind)) return null;
+  const status = raw['status'];
+  return {
+    id,
+    kind: kind as GraphGroupKind,
+    parent: boundedString(raw['parent'], MAX_ID),
+    label: graphLine(raw['label'], MAX_GRAPH_LABEL) ?? id,
+    provider: boundedString(raw['provider'], 64),
+    status: typeof status === 'string' && (SESSION_STATUSES as readonly string[]).includes(status) ? (status as BoardSessionStatus) : null,
+    branch: boundedString(raw['branch'], MAX_ID),
+    command: boundedString(raw['command'], MAX_ID),
+    at: nonNegative(raw['at']),
+    started_at: nonNegative(raw['started_at']),
+    ended_at: nonNegative(raw['ended_at']),
+    prs: asBoardSessionPrs(raw['prs']),
+    tokens: graphCount(raw['tokens']),
+    usage_complete: raw['usage_complete'] === true,
+    session_id: boundedString(raw['session_id'], MAX_ID),
+  };
+}
+
+/**
+ * A node, or null without an id or a group. An unknown kind (a newer CLI) is drawn as a generic
+ * `builtin` box rather than dropped, so its children keep their parent; an unknown status is null.
+ */
+function asGraphNode(raw: unknown): GraphNode | null {
+  if (!isRecord(raw)) return null;
+  const id = boundedString(raw['id'], MAX_ID);
+  const group = boundedString(raw['group'], MAX_ID);
+  if (id === null || group === null) return null;
+  const kind = raw['kind'];
+  const status = raw['status'];
+  const findings = raw['findings'];
+  return {
+    id,
+    kind: typeof kind === 'string' && (GRAPH_NODE_KINDS as readonly string[]).includes(kind) ? (kind as GraphNodeKind) : 'builtin',
+    group,
+    label: graphLine(raw['label'], MAX_GRAPH_LABEL),
+    agent: boundedString(raw['agent'], MAX_ID),
+    description: graphLine(raw['description'], MAX_GRAPH_DESCRIPTION),
+    persona: raw['persona'] === 'orchestrator' ? 'orchestrator' : null,
+    status: typeof status === 'string' && (GRAPH_NODE_STATUSES as readonly string[]).includes(status) ? (status as GraphNodeStatus) : null,
+    model: boundedString(raw['model'], 128),
+    started_at: nonNegative(raw['started_at']),
+    ended_at: nonNegative(raw['ended_at']),
+    duration_s: graphCount(raw['duration_s']),
+    tokens: graphCount(raw['tokens']),
+    subtree_tokens: graphCount(raw['subtree_tokens']),
+    usage_complete: raw['usage_complete'] === true,
+    findings: typeof findings === 'number' && Number.isSafeInteger(findings) && findings >= 0 ? findings : null,
+    background: raw['background'] === true,
+    last_output: graphLine(raw['last_output'], MAX_GRAPH_LAST_OUTPUT),
+    task_key: boundedString(raw['task_key'], MAX_ID),
+    worktree: asBoardWorktree(raw['worktree']),
+    pr: asBoardPr(raw['pr']),
+    todos: asGraphTodos(raw['todos']),
+    session_id: boundedString(raw['session_id'], MAX_ID),
+    record_id: boundedString(raw['record_id'], MAX_ID),
+    spawn_id: boundedString(raw['spawn_id'], MAX_ID),
+  };
+}
+
+function asGraphEdge(raw: unknown): GraphEdge | null {
+  if (!isRecord(raw)) return null;
+  const from = boundedString(raw['from'], MAX_ID);
+  const to = boundedString(raw['to'], MAX_ID);
+  const kind = raw['kind'];
+  if (from === null || to === null || typeof kind !== 'string' || !(GRAPH_EDGE_KINDS as readonly string[]).includes(kind)) return null;
+  return { id: boundedString(raw['id'], MAX_ID) ?? `e:${from}>${to}`, from, to, kind: kind as GraphEdgeKind };
+}
+
+/** Parse each entry, dropping malformed ones and duplicate ids; `cap` marks the graph truncated. */
+function graphItems<T extends { readonly id: string }>(
+  raw: unknown,
+  cap: number,
+  parse: (entry: unknown) => T | null,
+  keep: (item: T) => boolean,
+): { readonly items: T[]; readonly capped: boolean } {
+  if (!Array.isArray(raw)) return { items: [], capped: false };
+  const items: T[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw.slice(0, cap)) {
+    const item = parse(entry);
+    if (item === null || seen.has(item.id) || !keep(item)) continue;
+    seen.add(item.id);
+    items.push(item);
+  }
+  return { items, capped: raw.length > cap };
+}
+
+/**
+ * `tasks graph --json`, schema 1. Never throws and drops what it cannot draw: a group with an
+ * unknown kind, a node whose group is missing, an edge whose ends are missing. Groups whose
+ * parent was dropped are kept as roots. Only a document without a `project_id` is refused.
+ */
+export function asTaskGraph(body: Record<string, unknown>): TaskGraph | string {
+  const projectId = boundedString(body['project_id'], MAX_ID);
+  if (projectId === null) return 'no `project_id`';
+  const groups = graphItems(body['groups'], MAX_GRAPH_GROUPS, asGraphGroup, () => true);
+  const groupIds = new Set(groups.items.map((group) => group.id));
+  const rootedGroups = groups.items.map((group) =>
+    group.parent !== null && !groupIds.has(group.parent) ? { ...group, parent: null } : group,
+  );
+  const nodes = graphItems(body['nodes'], MAX_GRAPH_NODES, asGraphNode, (node) => groupIds.has(node.group));
+  const nodeIds = new Set(nodes.items.map((node) => node.id));
+  const edges = graphItems(body['edges'], MAX_GRAPH_EDGES, asGraphEdge, (edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to));
+  const notices = Array.isArray(body['notices'])
+    ? body['notices']
+        .map((notice) => boundedString(notice, MAX_ID))
+        .filter((notice): notice is string => notice !== null)
+        .slice(0, MAX_GRAPH_NOTICES)
+    : [];
+  const schema = nonNegative(body['schema']);
+  return {
+    schema: schema === null ? 1 : Math.floor(schema),
+    project_id: projectId,
+    as_of: graphCount(body['as_of']),
+    truncated: body['truncated'] === true || groups.capped || nodes.capped || edges.capped,
+    notices,
+    groups: rootedGroups,
+    nodes: nodes.items,
+    edges: edges.items,
+  };
+}
+
+/** `devteam tasks graph --project <id> [--since <epoch>]`. A graph for another project is refused. */
+export function taskGraph(
+  context: CliContext,
+  options: { readonly projectId: string; readonly sinceSeconds?: number },
+): Promise<OperationResult<TaskGraph>> {
+  const { projectId, sinceSeconds } = options;
+  const since =
+    sinceSeconds !== undefined && Number.isSafeInteger(sinceSeconds) && sinceSeconds >= 0 ? ['--since', String(sinceSeconds)] : [];
+  return run(context, ['tasks', 'graph', '--project', projectId, ...since], (body) => {
+    const graph = asTaskGraph(body);
+    if (typeof graph === 'string') return graph;
+    return graph.project_id === projectId ? graph : `a graph for project ${graph.project_id}, not ${projectId}`;
   });
 }

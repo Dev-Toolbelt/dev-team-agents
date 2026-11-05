@@ -15,7 +15,7 @@ import { BrowserWindow, Menu, Notification, Tray, app, clipboard, nativeImage, s
 
 import { APP_ID, DISPLAY_NAME, aboutCredits, type AboutFacts } from './about.js';
 import { hasPendingWrites, settleInFlight, terminateInFlight } from '../cli/invoke.js';
-import { GATED_COMMANDS, ackNotification, listTasks, watchNotifications, watchTasks } from '../cli/operations.js';
+import { GATED_COMMANDS, ackNotification, listTasks, taskGraph, watchNotifications, watchTasks } from '../cli/operations.js';
 import { registerIpc } from './ipc.js';
 import { createSecretClipboard, settleSecretClipboard } from './secretClipboard.js';
 import { installCli, runBrewProcess, runInstallerProcess } from './cliInstaller.js';
@@ -29,6 +29,8 @@ import { NotificationCenter, type NativeNotice } from './notifications.js';
 import { registerNotificationIpc } from './notificationIpc.js';
 import { TaskBoard, saveBoardSettings } from './taskBoard.js';
 import { registerTaskBoardIpc } from './taskBoardIpc.js';
+import { TaskGraphRunner } from './taskGraph.js';
+import { registerTaskGraphIpc } from './taskGraphIpc.js';
 import { loginItemOptions, loginItemState, shouldHideOnClose, trayTitle, trayTooltip } from './background.js';
 import { readSettings, writeBoardSettings, writeOpenAtLogin } from './settings.js';
 import { CHANNELS, CREDENTIALS_CLIPBOARD_CLEAR_SECONDS, type BackgroundSettings, type NotificationFeed, type ProjectId } from '../shared/api.js';
@@ -145,6 +147,7 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let center: NotificationCenter | null = null;
 let board: TaskBoard | null = null;
+let graphs: TaskGraphRunner | null = null;
 /** The window is created hidden on a login launch: the user did not open the app. */
 let startHidden = false;
 /** A project a notification asked to show, delivered once the renderer can hear it. */
@@ -401,6 +404,7 @@ if (!primaryInstance) {
     quitting = true;
     center?.dispose();
     board?.dispose();
+    graphs?.dispose();
     // Only cancellable plugin runs are ended; a write (bind, upgrade, prefs, skills...) is
     // never killed mid-write. Quit is held for up to WRITE_SETTLE_MS while writes finish,
     // then resumed. `writesSettled` makes the second `before-quit` pass straight through.
@@ -543,8 +547,29 @@ function onReady(): void {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.isDestroyed()) window.webContents.send(CHANNELS.taskBoardChanged, feed);
       }
+      graphs?.boardChanged(feed);
     },
     log: (message) => process.stderr.write(`dev-team-agents: ${message}\n`),
+  });
+
+  graphs = new TaskGraphRunner({
+    run: async (projectId) => {
+      const ctx = await ipc.context();
+      return ctx === null ? null : taskGraph(ctx, { projectId });
+    },
+    onChange: (update) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) window.webContents.send(CHANNELS.taskGraphChanged, update);
+      }
+    },
+    log: (message) => process.stderr.write(`dev-team-agents: ${message}\n`),
+  });
+
+  registerTaskGraphIpc({
+    trustedRenderer: RENDERER_TARGET,
+    get: (projectId) => graphs!.get(projectId),
+    subscribe: (projectId) => graphs!.subscribe(projectId),
+    unsubscribe: (projectId) => graphs!.unsubscribe(projectId),
   });
 
   registerTaskBoardIpc({

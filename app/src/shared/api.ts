@@ -1556,6 +1556,12 @@ export interface DevteamBridge {
   readonly setBoardSettings: (settings: BoardSettings) => Promise<BoardSettingsAnswer>;
   /** Open one validated PR/MR or issue link in the OS browser; the renderer sends ids, never a URL. */
   readonly openTaskLink: (request: OpenTaskLinkRequest) => Promise<OpenTaskLinkAnswer>;
+  // The canvas. The main process runs `devteam tasks graph` for a project on demand, and keeps
+  // re-running it while the renderer is subscribed (on a board change, debounced, plus a poll).
+  /** The project's latest graph; runs the command when nothing is cached yet. */
+  readonly taskGraph: (projectId: ProjectId) => Promise<TaskGraphResult>;
+  /** Subscribe to one project's graph; `listener` hears every new result. Returns the unsubscribe. */
+  readonly onTaskGraph: (projectId: ProjectId, listener: (result: TaskGraphResult) => void) => () => void;
 }
 
 export type NotificationLevel = 'info' | 'warning' | 'critical';
@@ -1793,6 +1799,64 @@ export interface BoardFeed {
   readonly projects: readonly BoardProject[];
   /** Set only on the answer to a manual refresh whose one-shot `list` failed; never pushed or stored. */
   readonly refreshError?: string;
+}
+
+// ── the canvas: the task graph (`devteam tasks graph`, schema 1) ─────────────
+
+export type GraphGroupKind = 'session' | 'turn';
+export type GraphNodeKind = 'main' | 'agent' | 'review' | 'builtin';
+export type GraphEdgeKind = 'spawn' | 'produced' | 'reviewed';
+/** `idle`: only a main node, for a session that is open but doing nothing. */
+export type GraphNodeStatus = 'running' | 'idle' | 'completed' | 'failed' | 'interrupted';
+
+export interface GraphTodo { readonly key: string; readonly content: string; readonly status: string; }
+
+export interface GraphGroup {
+  readonly id: string; readonly kind: GraphGroupKind; readonly parent: string | null; readonly label: string;
+  readonly provider: string | null; readonly status: BoardSessionStatus | null; readonly branch: string | null;
+  readonly command: string | null; readonly at: number | null;
+  readonly started_at: number | null; readonly ended_at: number | null;
+  readonly prs: readonly BoardSessionPr[]; readonly tokens: number; readonly usage_complete: boolean;
+  /** The top session this frame belongs to; null from a CLI that predates the field. */
+  readonly session_id: string | null;
+}
+
+export interface GraphNode {
+  readonly id: string; readonly kind: GraphNodeKind; readonly group: string; readonly label: string | null;
+  readonly agent: string | null; readonly description: string | null; readonly persona: 'orchestrator' | null;
+  readonly status: GraphNodeStatus | null; readonly model: string | null;
+  readonly started_at: number | null; readonly ended_at: number | null; readonly duration_s: number;
+  readonly tokens: number; readonly subtree_tokens: number; readonly usage_complete: boolean;
+  readonly findings: number | null; readonly background: boolean; readonly last_output: string | null;
+  readonly task_key: string | null; readonly worktree: BoardWorktree | null; readonly pr: BoardTaskPr | null;
+  readonly todos: readonly GraphTodo[];
+  /** The top session the node is drawn in; null from a CLI that predates the field. */
+  readonly session_id: string | null;
+  /**
+   * The board record `task_key` belongs to: the top session, or a child session (opencode) / child
+   * thread (Codex) folded into it. Links and "Show on board" resolve against this, never the frame.
+   */
+  readonly record_id: string | null;
+  /** The provider's spawn id (`tool_use_id` / `callID`); null for the main node and id-less board tasks. */
+  readonly spawn_id: string | null;
+}
+
+export interface GraphEdge { readonly id: string; readonly from: string; readonly to: string; readonly kind: GraphEdgeKind; }
+
+export interface TaskGraph {
+  readonly schema: number; readonly project_id: ProjectId; readonly as_of: number; readonly truncated: boolean;
+  readonly notices: readonly string[]; readonly groups: readonly GraphGroup[];
+  readonly nodes: readonly GraphNode[]; readonly edges: readonly GraphEdge[];
+}
+
+export type TaskGraphResult =
+  | { readonly ok: true; readonly graph: TaskGraph }
+  | { readonly ok: false; readonly reason: 'unsupported' | 'unavailable' | 'error'; readonly detail: string | null };
+
+/** Main → renderer push: one project's latest graph result. */
+export interface TaskGraphUpdate {
+  readonly projectId: ProjectId;
+  readonly result: TaskGraphResult;
 }
 
 /**
@@ -2035,4 +2099,9 @@ export const CHANNELS = {
   boardSettings: 'devteam:board-settings',
   setBoardSettings: 'devteam:set-board-settings',
   openTaskLink: 'devteam:open-task-link',
+  taskGraph: 'devteam:task-graph',
+  taskGraphSubscribe: 'devteam:task-graph-subscribe',
+  taskGraphUnsubscribe: 'devteam:task-graph-unsubscribe',
+  /** Main → renderer push of a `TaskGraphUpdate`. */
+  taskGraphChanged: 'devteam:task-graph-changed',
 } as const;
