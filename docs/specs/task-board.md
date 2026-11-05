@@ -370,7 +370,7 @@ window, "since" is the later of the session's `created_at` and its latest resume
 a record call finds an ended session alive again); a task completed at or after that instant enters.
 Tasks created after the window opened do not enter it.
 
-**Result — read from a marker.** Our four review/QA agents end their final report with
+**Result — read from a marker.** Our four review/QA agents (the window triggers above) end their final report with
 `<!-- review-result: findings=N -->` (rule in `skills/shared/review-result/SKILL.md`, emitted from
 each agent's `## Before You Finish`). The hook scans the agent's returned output for it:
 Claude `PostToolUse` on `Agent`/`Task` (`tool_response`), Codex `PostToolUse` on `wait_agent`
@@ -378,7 +378,9 @@ Claude `PostToolUse` on `Agent`/`Task` (`tool_response`), Codex `PostToolUse` on
 read, never the echoed `prompt`/input. A result from `Agent`/`Task`/opencode `task` counts only when
 the call names one of our review agents (`subagent_type`); a `general-purpose` agent that quotes the
 marker changes nothing (marker-only acceptance is Codex `wait_agent`'s alone, which does not name its
-agent). The marker counts only as the **last non-empty line** of a report or final message, standing
+agent; it skips a report from an agent the board tracks as a task). `seo-specialist` also ends its Quality
+Gate with the marker but is not a trigger: it runs next to `frontend-developer`, so its marker settles no window.
+The marker counts only as the **last non-empty line** of a report or final message, standing
 alone, after fenced and inline code have been removed. One report retires one slot and carries one
 marker; markers of distinct reports (parallel reviewers) are summed. The result is recorded when
 no token is left. For a command/prompt-triggered window, the next `Stop` scans the transcript's
@@ -638,6 +640,7 @@ Implementation details:
 ### Amendment Log
 | Date | Change | Reason |
 |---|---|---|
+| 2026-11-05 | `seo-specialist` ends its Quality Gate with the review-result marker (agent-lint, SubagentStop gate) without becoming a window trigger; Codex `wait_agent` skips reports from agents tracked as tasks | The SEO gate is a review, but the agent runs in the implementation phase of `/devteam:frontend` and `/devteam:fullstack`; filtering keeps Codex in line with Claude and opencode, which count only named review agents |
 | 2026-09-30 | `sessions_active` counts sessions whose status is not `ended` (active or idle); `tasks watch` also re-emits a project's `snapshot` on a 30 s clock refresh when the derived view changed (stale/abandoned move with time, not with the file); `record`/`mark` `--project-root` is optional (defaults to the resolved root); Stop marks idle through `stop/04b-task-board.sh`; the opencode plugin's `session.idle` payload now carries `session_id` so that hook can name the session | Spec was silent on these; each is needed for the stated behavior to hold |
 | 2026-09-30 | `ready` carries no extra keys; session ids that are not filename-safe are hashed by `record`, but the bash-side `mark` callers (Stop, SessionEnd) skip them, so such a session is never marked idle/ended | Provider ids in practice are UUIDs; skipping avoids a bash re-implementation of the hashing |
 | 2026-09-30 | Resume command `cd`s into the record's `cwd` when it is still a directory, else the project root | Providers find a session by working directory; one started in a linked worktree or subdirectory did not resume from the root |

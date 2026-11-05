@@ -334,6 +334,24 @@ class SubagentLifecycleTest(BoardCase):
         window, _ = self.mixed_wait(["reviewer", "worker-1", "qa-1"])
         self.assertEqual((window["found"], window["markers"], window["findings"]), (3, 2, 3))
 
+    def test_a_marker_from_an_agent_tracked_as_a_task_is_not_a_review_result(self):
+        # `seo-specialist` ends its gate with the marker but is not a review agent: on Claude and
+        # opencode its result never names a review agent, so on Codex its `wait_agent` report must
+        # not settle the window either.
+        steps, session, _ = self.review_agent("code-reviewer")
+        seo = "seo-agent-1"
+        spawn = copy.deepcopy(steps["spawn_pre"])
+        spawn["tool_use_id"] = "call_seo"
+        spawn["tool_input"]["agent_type"] = "seo-specialist"
+        tasks.record(self.root, spawn, now=T0 + 2)
+        tasks.record(self.root, dict(steps["spawn_post"], tool_use_id="call_seo", tool_input=spawn["tool_input"],
+                                     tool_response=json.dumps({"agent_id": seo})), now=T0 + 3)
+        self.assertIn(seo, [t.get("agent_ref") for t in self.agents(session)])
+        wait = dict(steps["wait_post"], tool_response={"status": {seo: {"completed": REVIEW_MARKER}}})
+        self.assertFalse(tasks.review_result(self.root, wait, now=T0 + 6)["recorded"])
+        (window,) = self.load(session)["reviews"]
+        self.assertEqual((window.get("markers", 0), window["pending"]), (0, 1))
+
 
 #: What each provider does with the subagent lifecycle events. A provider added to
 #: `providers.ALL_PROVIDERS` without a case fails `test_every_provider_has_its_capture_decided`.

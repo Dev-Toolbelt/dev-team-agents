@@ -64,7 +64,8 @@ class GateTest(unittest.TestCase):
         self.assertIsNotNone(self.held(payload("backend-developer", banner("frontend-developer"))))
 
     def test_reviewer_needs_the_review_result_marker(self):
-        for agent in ("qa-specialist", "code-reviewer", "backend-reviewer", "frontend-reviewer"):
+        lint = (REPO_ROOT / "helpers" / "agent-lint.sh").read_text(encoding="utf-8")
+        for agent in re.search(r'^REVIEW_RESULT_AGENTS="([^"]*)"', lint, re.M).group(1).split():
             with self.subTest(agent=agent):
                 reason = self.held(payload(agent, banner(agent)))
                 self.assertIn("review-result: findings=", reason)
@@ -90,6 +91,14 @@ class GateTest(unittest.TestCase):
         gate = (HOOKS / "lib" / "subagent-supervision.sh").read_text(encoding="utf-8")
         gate_agents = set(re.findall(r'"([a-z-]+)"', re.search(r"REVIEWERS = \{([^}]*)\}", gate).group(1)))
         self.assertEqual(lint_agents, gate_agents)
+
+    def test_task_board_review_agents_are_the_marker_agents_minus_seo(self):
+        # seo-specialist emits the marker but runs next to frontend-developer, so it opens no In Review window.
+        from devteam import review_triggers
+        lint = (REPO_ROOT / "helpers" / "agent-lint.sh").read_text(encoding="utf-8")
+        lint_agents = set(re.search(r'^REVIEW_RESULT_AGENTS="([^"]*)"', lint, re.M).group(1).split())
+        self.assertEqual(lint_agents - set(review_triggers.REVIEW_AGENTS), {"seo-specialist"})
+        self.assertLessEqual(set(review_triggers.REVIEW_AGENTS), lint_agents)
 
     def test_malformed_or_incomplete_payloads_print_nothing(self):
         for data in ("", "not json", "[]", "{}", json.dumps({"agent_type": "backend-developer"}),

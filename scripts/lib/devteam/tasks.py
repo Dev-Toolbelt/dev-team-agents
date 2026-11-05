@@ -2249,6 +2249,14 @@ def _apply_result(rec, call, now, observed=None):
     if reports:
         # A `wait_agent` that names its agents: a report a `SubagentStop` already folded counts once.
         # Each marker is paired with its own agent, never by position: workers list no marker.
+        # Review agents are never tasks, so a report from an agent tracked as a task (a worker, or
+        # `seo-specialist`, which emits the marker without being a review agent) is not a result.
+        workers = {
+            "{}{}".format(_SUBAGENT_SLOT, ref)
+            for task in rec.get("tasks", []) if _is_agent(task)
+            for ref in (task.get("agent_id"), task.get("agent_ref")) if ref
+        }
+        reports = [(i, m) for i, m in reports if i not in workers]
         consumed = window.setdefault("consumed", [])
         fresh = [m for i, m in reports if m is not None and i not in consumed]
         if not fresh:

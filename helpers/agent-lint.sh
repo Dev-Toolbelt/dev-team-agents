@@ -111,8 +111,10 @@ QUIZ_MC_RE="\\?[[:space:]\"'\`*]*\\([[:space:]]*${QUIZ_OPT}([[:space:]]*/[[:spac
 ERRORS=()
 WARNINGS=()
 
-# Agents whose final report closes a review or QA pass (docs/specs/task-board.md § In Review).
-REVIEW_RESULT_AGENTS="qa-specialist code-reviewer backend-reviewer frontend-reviewer"
+# Agents whose final report ends with the review-result marker — the SubagentStop gate's REVIEWERS.
+# The task board's In Review triggers (review_triggers.REVIEW_AGENTS) are a subset: seo-specialist
+# emits the marker but opens no window (docs/specs/task-board.md § In Review).
+REVIEW_RESULT_AGENTS="qa-specialist code-reviewer backend-reviewer frontend-reviewer seo-specialist"
 
 # "<name><TAB><file>" entries, scanned for duplicates after all skills are read.
 SKILL_NAMES=()

@@ -41,7 +41,7 @@ is the number of rows.
 
 | Column | Rule |
 |--------|------|
-| Severity | The labels of `skills/shared/pr-review/SKILL.md` — `BLOCKING`, `SUGGESTION`, `NITPICK`, `QUESTION` — never a second vocabulary; rows ordered most severe first. An agent whose report grades differently writes the mapped label: `BLOCKER`, `CRITICAL` → `BLOCKING`; `MAJOR`, `HIGH`, `MEDIUM` → `SUGGESTION`; `MINOR`, `LOW`, `INFO` → `NITPICK` |
+| Severity | The labels of `skills/shared/pr-review/SKILL.md` — `BLOCKING`, `SUGGESTION`, `NITPICK`, `QUESTION` — never a second vocabulary; rows ordered most severe first. An agent whose report grades differently writes the mapped label: `BLOCKER`, `CRITICAL` → `BLOCKING`; `MAJOR`, `HIGH`, `MEDIUM` → `SUGGESTION`; `MINOR`, `LOW`, `INFO` → `NITPICK`; `ISSUE` → `SUGGESTION` (impact `high` or `med`) or `NITPICK` (impact `low`); a line tagged `unverified` → `QUESTION`, whatever its gate tag. `PASS` lines are not findings and get no row |
 | Finding | Specific enough to tell two findings apart — never "improve error handling" |
 | Location | `path:line` when the finding has one; `—` for a general finding |
 | Evidence | What makes it real: a reproducible failure, command output, or a named rule. A row without evidence is speculation — drop it |

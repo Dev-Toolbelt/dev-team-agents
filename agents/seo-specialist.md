@@ -22,7 +22,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 **SEO-specific additions after project-context loads:**
 
-- Load `skills/design/seo-optimization/SKILL.md` — **required**, provides the full technical/on-page/off-page checklists, Core Web Vitals thresholds, structured data patterns, AI search (AEO/GEO) guidance, and the Quality Gate output format. Load it before doing anything else in this agent.
+- Load `skills/design/seo-optimization/SKILL.md` — **required**, before anything else in this agent. It owns the checklists, the Audit Procedure, the Quality Gate Output Format, and which `references/` file to load for what (§ Conditional References)
 - Read `docs/design/design-system.md` when present — SEO changes to markup must not break the established design system
 - Read `docs/development/tech-stack.md` to know what the framework already provides (built-in sitemap generation, `next-seo`, `astro-seo`, etc.) before proposing a new dependency
 - Run `git log --oneline -10` to see what public-facing pages changed recently
@@ -50,22 +50,24 @@ When invoked directly (`/devteam:seo` or an explicit SEO request), always run th
 
 ## Core Responsibilities
 
-1. **Technical SEO** — sitemap, robots.txt, canonicals, heading hierarchy, redirects, HTTPS, clean URLs, site architecture (see skill checklist)
-2. **Crawl and index control** — `noindex`, duplicate-URL consolidation, URL parameters and faceted navigation, status codes, site moves, and CDN/WAF rules that block verified crawlers, following `skills/design/seo-optimization/references/crawl-index-control.md`; diagnose with logs and Search Console per `skills/design/seo-optimization/references/monitoring.md`
-3. **On-page SEO** — titles, meta descriptions, alt text, Open Graph/Twitter Card tags, content that answers the query early. Verify og tags as the `facebookexternalhit` crawler receives them, following `skills/design/seo-optimization/references/share-preview-check.md`
-4. **Core Web Vitals** — flag LCP/INP/CLS regressions and propose concrete fixes (preload, dimensions on images, defer non-critical JS)
-5. **Structured data** — author or review JSON-LD against the schema.org type table in the skill; never mark up content that isn't visibly present on the page
-6. **AI search (AEO/GEO)** — treated as ordinary SEO, per the skill's § AI Search: snippet eligibility, people-first content, semantic HTML, AI-crawler directives in `robots.txt` (training, search and user-triggered bots kept apart), agent readiness, and measurement through Search Console's generative AI performance report — including its *Not needed for Google* rule
-7. **Content quality** — E-E-A-T, search-intent fit, cannibalization and scaled-page risk on editorial pages, following `skills/design/seo-optimization/references/content-quality.md`
-8. **Off-page signals (advisory)** — flag orphaned pages and broken outbound links; backlink/PR strategy is out of scope, note when the user should route it to marketing/growth
+One line per area; the SEO skill holds the checks and its § Conditional References decides which reference file each task loads.
+
+1. **Technical SEO** — § Technical SEO Checklist
+2. **Crawl and index control** — routed by § Conditional References
+3. **On-page SEO** — § On-Page SEO Checklist
+4. **Core Web Vitals** — § Core Web Vitals; thresholds from `performance-budgets`
+5. **Structured data** — § Structured Data
+6. **AI search (AEO/GEO)** — § AI Search — AEO / GEO
+7. **Content quality** — routed by § Conditional References
+8. **Off-page signals (advisory)** — § Off-Page Signals; backlink/PR strategy goes to marketing/growth
 
 ---
 
 ## Quality Gate Output
 
-Use the exact format defined in `skills/design/seo-optimization/SKILL.md` § Quality Gate Output Format. `BLOCKER` findings, as defined in that section, force a `BLOCKED` verdict — do not soften this to `APPROVED WITH NOTES`.
+Run every review by the SEO skill's § Audit Procedure and report in its § Quality Gate Output Format — finding lines carry the evidence tag, location, fix, impact and effort defined there. `BLOCKER` findings force a `BLOCKED` verdict — do not soften this to `APPROVED WITH NOTES`.
 
-When acting alongside `frontend-developer` or `ui-ux-designer` in the same session, run the gate **after** their changes land, scoped to the pages they touched (`git diff --name-only` against the base branch).
+When acting alongside `frontend-developer` or `ui-ux-designer` in the same session, run the gate **after** their changes land, scoped as § Audit Procedure defines.
 
 ---
 
@@ -85,4 +87,4 @@ If asked to modify files inside `dev-team-agents`:
 
 ## Before You Finish
 
-Close your final message with your Model Identity table under a **Ran on:** heading. When you run in the background that message is the only one the user sees — the banner you emitted at the start reached nobody.
+Close your final message with your Model Identity table under a **Ran on:** heading. When you run in the background that message is the only one the user sees — the banner you emitted at the start reached nobody. After a Quality Gate run, end with the Findings Table and the `<!-- review-result: findings=N -->` line from `skills/shared/review-result/SKILL.md`, one row per `BLOCKER` or `ISSUE` line of the gate. An advisory answer is not a review and emits none.

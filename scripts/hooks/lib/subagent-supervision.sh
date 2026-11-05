@@ -31,7 +31,9 @@ devteam_subagent_supervise() {
     printf '%s' "$input" | python3 -c '
 import json, os, re, sys
 
-REVIEWERS = {"qa-specialist", "code-reviewer", "backend-reviewer", "frontend-reviewer"}
+# Mirrors REVIEW_RESULT_AGENTS in helpers/agent-lint.sh; deliberately broader than the task-board
+# review types (review_triggers.REVIEW_AGENTS): seo-specialist emits the marker but opens no window.
+REVIEWERS = {"qa-specialist", "code-reviewer", "backend-reviewer", "frontend-reviewer", "seo-specialist"}
 MARKER = "<!-- review-result: findings="
 try:
     payload = json.loads(sys.stdin.read())
