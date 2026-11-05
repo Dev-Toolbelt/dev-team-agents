@@ -58,3 +58,14 @@ The design and writing agents should be able to use well-known community skills 
 > file in `exclude` and reviews the vendored diff. A routing skill may also suspend upstream rules
 > that clash with formats the framework fixes; the writing routing skill does so for absolutes,
 > blanket adverb and passive bans, Wh- openers, em dashes and the two-items rule.
+
+> **Amendment (2026-11-04) — content that conflicts with the framework's rules is adapted, not vendored.**
+> Decision 6 lets a skill ship without its scripts, so networked scripts alone are not a reason to
+> refuse one. A skill is not vendored when its *knowledge* conflicts with the framework's
+> primary-source rules (invented scores, unsourced numeric targets, practices a primary source calls
+> unnecessary or counterproductive): agents would load it as authority. Its verified facts are
+> rewritten into the framework's own skill instead, and the rejected claims are listed there. First
+> case: four SEO skill repositories (AgriciDaniel/claude-seo, AgriciDaniel/claude-blog,
+> coreyhaines31/marketingskills, zubair-trabzada/geo-seo-claude) adapted into
+> `skills/design/seo-optimization/`, whose *Rejected third-party claims* table records what was
+> left out.
