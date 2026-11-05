@@ -102,6 +102,12 @@ async function openCanvas(user: ReturnType<typeof userEvent.setup>) {
   return screen.findByRole('toolbar', { name: 'Canvas controls' });
 }
 
+/** Picks a collapse level from the toolbar's "Show" menu. */
+async function chooseLevel(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(screen.getByRole('button', { name: /^Show: / }));
+  await user.click(await screen.findByRole('menuitemradio', { name: label }));
+}
+
 describe('Canvas view', () => {
   it('[spec:canvas-view#S1] switches a project tab between its board and its canvas, keeping both mounted', async () => {
     const user = userEvent.setup();
@@ -149,11 +155,11 @@ describe('Canvas view', () => {
     const canvas = screen.getByRole('region', { name: 'Canvas' });
     await within(canvas).findByText('Review the API');
 
-    await user.selectOptions(screen.getByLabelText('Show'), 'agents');
+    await chooseLevel(user, 'Top-level agents');
     await waitFor(() => expect(within(canvas).queryByText('Review the API')).not.toBeInTheDocument());
     expect(within(canvas).getByText('Build the cart API').closest('[data-status]')).toHaveTextContent('+2 hidden');
 
-    await user.selectOptions(screen.getByLabelText('Show'), 'all');
+    await chooseLevel(user, 'Everything');
     expect(await within(canvas).findByText('Review the API')).toBeInTheDocument();
   });
 
@@ -161,7 +167,6 @@ describe('Canvas view', () => {
     const user = userEvent.setup();
     renderCanvas();
     await openCanvas(user);
-    await user.click(screen.getByRole('button', { name: 'Outline' }));
     const tree = screen.getByRole('tree', { name: 'Canvas outline' });
     const items = within(tree).getAllByRole('treeitem');
     expect(items[0]).toHaveAccessibleName(/Session: Cart rework/);
@@ -223,7 +228,6 @@ describe('Canvas view', () => {
     });
     try {
       // React Flow shows a node's toolbar while the node is selected.
-      await user.click(screen.getByRole('button', { name: 'Outline' }));
       fireEvent.click(screen.getByRole('treeitem', { name: 'backend-developer: Build the cart API' }));
       fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
       expect(run).toHaveBeenCalledWith(expect.objectContaining({ task_key: 't4' }), { projectId: 'proj-a', sessionId: 's1', recordId: null });
@@ -254,7 +258,6 @@ describe('Canvas view', () => {
     const user = userEvent.setup();
     renderCanvas();
     await openCanvas(user);
-    await user.click(screen.getByRole('button', { name: 'Outline' }));
     fireEvent.click(screen.getByRole('treeitem', { name: 'backend-developer: Build the cart API' }));
     await user.click(await screen.findByRole('button', { name: 'Show on board' }));
     const view = screen.getByRole('group', { name: 'View' });
@@ -268,9 +271,9 @@ describe('Canvas view', () => {
     renderCanvas();
     await openCanvas(user);
     const reset = screen.getByRole('button', { name: 'Reset layout' });
-    expect(reset).toBeEnabled();
+    expect(reset).not.toHaveAttribute('aria-disabled');
     await user.click(reset);
-    expect(reset).toBeDisabled();
+    expect(reset).toHaveAttribute('aria-disabled', 'true');
     expect(localStorage.getItem('devteam.canvas.positions.v1:proj-a')).toBeNull();
   });
 
@@ -279,19 +282,18 @@ describe('Canvas view', () => {
     renderCanvas();
     await openCanvas(user);
     const canvas = screen.getByRole('region', { name: 'Canvas' });
-    await user.selectOptions(screen.getByLabelText('Show'), 'sessions');
-    await user.click(screen.getByRole('button', { name: 'Outline' }));
+    await chooseLevel(user, 'Sessions only');
     expect(within(canvas).queryByText('Check the release')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('treeitem', { name: 'qa-specialist: Check the release' }));
     expect(await within(canvas).findByText('Check the release')).toBeInTheDocument();
     expect(within(canvas).getByRole('button', { name: 'Collapse session Old session' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Show')).toHaveValue('turns');
+    expect(screen.getByRole('button', { name: 'Show: Turns' })).toBeInTheDocument();
     expect(await screen.findByRole('complementary', { name: 'qa-specialist' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('treeitem', { name: 'code-reviewer: Review the API' }));
     expect(await within(canvas).findByText('Review the API')).toBeInTheDocument();
-    expect(screen.getByLabelText('Show')).toHaveValue('all');
+    expect(screen.getByRole('button', { name: 'Show: Everything' })).toBeInTheDocument();
     expect(await screen.findByRole('complementary', { name: 'code-reviewer' })).toBeInTheDocument();
   });
 
@@ -302,7 +304,6 @@ describe('Canvas view', () => {
     const canvas = screen.getByRole('region', { name: 'Canvas' });
     const card = (text: string) => within(canvas).getByText(text).closest('[data-status]')!;
     await within(canvas).findByText('Review the API');
-    await user.click(screen.getByRole('button', { name: 'Outline' }));
     const focus = screen.getByRole('button', { name: 'Focus' });
 
     fireEvent.click(screen.getByRole('treeitem', { name: 'backend-developer: Build the cart API' }));
@@ -359,7 +360,6 @@ describe('Canvas view', () => {
     const widthBefore = parseFloat(turn().style.width);
     const xBefore = relativeX(canvas, moved);
 
-    await user.click(screen.getByRole('button', { name: 'Outline' }));
     fireEvent.click(screen.getByRole('treeitem', { name: 'backend-test-specialist: Tests' }));
     const wrapper = canvas.querySelector<HTMLElement>(`.react-flow__node[data-id="${moved}"]`)!;
     await waitFor(() => expect(wrapper).toHaveClass('selected'));
@@ -415,6 +415,322 @@ describe('Canvas view', () => {
     const graph = sampleGraph();
     push({ ok: true, graph: { ...graph, nodes: graph.nodes.map((each) => (each.id === 'span:s1:b' ? { ...each, description: 'Cart screen v2' } : each)) } });
     expect(await within(canvas).findByText('Cart screen v2')).toBeInTheDocument();
+  });
+
+  it('[spec:canvas-view#S18] puts the controls in a vertical icon toolbar inside the canvas', async () => {
+    const user = userEvent.setup();
+    renderCanvas();
+    const toolbar = await openCanvas(user);
+    const canvas = screen.getByRole('region', { name: 'Canvas' });
+    expect(canvas).toContainElement(toolbar);
+    expect(toolbar).toHaveAttribute('aria-orientation', 'vertical');
+    expect(toolbar.closest('.react-flow__panel')).toHaveClass('top', 'left');
+    for (const name of ['Fit view', 'Zoom in', 'Zoom out', 'Focus', 'Token heatmap', 'Outline', 'Full screen', 'Reset layout']) {
+      const button = within(toolbar).getByRole('button', { name });
+      expect(button).toHaveClass('nodrag', 'nopan');
+      expect(button).not.toHaveTextContent(name);
+    }
+    expect(within(toolbar).getByRole('button', { name: 'Focus' })).toHaveAttribute('aria-disabled', 'true');
+    expect(within(toolbar).getByRole('button', { name: 'Reset layout' })).toHaveAttribute('aria-disabled', 'true');
+
+    await user.click(within(toolbar).getByRole('button', { name: 'Show: Everything' }));
+    const levels = await screen.findAllByRole('menuitemradio');
+    expect(levels.map((each) => each.textContent)).toEqual(['Sessions only', 'Turns', 'Top-level agents', 'Everything']);
+    expect(screen.getByRole('menuitemradio', { name: 'Everything' })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('menuitemradio', { name: 'Turns' }));
+    expect(within(toolbar).getByRole('button', { name: 'Show: Turns' })).toBeInTheDocument();
+  });
+
+  it('[spec:canvas-view#S18] explains every toolbar button in a tooltip, on focus and on hover, disabled ones included', async () => {
+    const user = userEvent.setup();
+    renderCanvas();
+    const toolbar = await openCanvas(user);
+    const hints: [string, string][] = [
+      ['Fit view', 'Fit view'],
+      ['Zoom in', 'Zoom in'],
+      ['Zoom out', 'Zoom out'],
+      ['Show: Everything', 'Show: Everything'],
+      ['Focus', 'Focus: select an agent to focus on it'],
+      ['Token heatmap', 'Token heatmap: shade agents by the tokens of their subtree'],
+      ['Outline', 'Outline: the canvas as a keyboard-navigable list'],
+      ['Full screen', 'Full screen'],
+      ['Reset layout', 'Reset layout: put every moved node back'],
+    ];
+    for (const [name, hint] of hints) {
+      const button = within(toolbar).getByRole('button', { name });
+      act(() => button.focus());
+      const tooltip = await screen.findByRole('tooltip');
+      expect(tooltip).toHaveTextContent(hint);
+      expect(button).toHaveAttribute('aria-describedby', tooltip.id);
+    }
+
+    // The disabled Focus button stays reachable, explains itself and ignores a press.
+    const focus = within(toolbar).getByRole('button', { name: 'Focus' });
+    act(() => focus.focus());
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Focus: select an agent to focus on it');
+    await user.keyboard('{Enter}');
+    expect(focus).toHaveAttribute('aria-pressed', 'false');
+    act(() => focus.blur());
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+
+    await user.hover(within(toolbar).getByRole('button', { name: 'Reset layout' }));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Reset layout: put every moved node back');
+  });
+
+  it('[spec:canvas-view#S18] gives the toolbar one Tab stop and moves through it with Up, Down, Home and End', async () => {
+    const user = userEvent.setup();
+    renderCanvas();
+    const toolbar = await openCanvas(user);
+    const button = (name: string | RegExp) => within(toolbar).getByRole('button', { name });
+    const tabStops = () => within(toolbar).getAllByRole('button').filter((each) => each.tabIndex === 0);
+    expect(tabStops()).toEqual([button('Fit view')]);
+
+    act(() => button('Fit view').focus());
+    await user.keyboard('{ArrowDown}');
+    expect(button('Zoom in')).toHaveFocus();
+    expect(tabStops()).toEqual([button('Zoom in')]);
+    await user.keyboard('{End}');
+    expect(button('Reset layout')).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(button('Fit view')).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(button('Reset layout')).toHaveFocus();
+    await user.keyboard('{ArrowUp}{ArrowUp}{ArrowUp}{ArrowUp}');
+    expect(button('Focus')).toHaveFocus();
+    await user.keyboard('{Home}');
+    expect(button('Fit view')).toHaveFocus();
+
+    // Tab leaves the toolbar from wherever it is, and comes back to the button it left.
+    await user.keyboard('{End}{ArrowUp}');
+    expect(button('Full screen')).toHaveFocus();
+    await user.tab();
+    expect(toolbar).not.toContainElement(document.activeElement as HTMLElement);
+    await user.tab({ shift: true });
+    expect(button('Full screen')).toHaveFocus();
+
+    // Down on the Show trigger opens its menu and leaves the toolbar's focus alone.
+    await user.keyboard('{Home}{ArrowDown}{ArrowDown}{ArrowDown}');
+    const show = button(/^Show: /);
+    const focus = button('Focus');
+    expect(show).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
+    expect(focus).not.toHaveFocus();
+    expect(focus).toHaveAttribute('tabindex', '-1');
+    expect(show).toHaveAttribute('tabindex', '0');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    await waitFor(() => expect(show).toHaveFocus());
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('[spec:canvas-view#S12] opens the outline by default, to the right of the canvas, and toggles it', async () => {
+    const user = userEvent.setup();
+    renderCanvas();
+    await openCanvas(user);
+    const canvas = screen.getByRole('region', { name: 'Canvas' });
+    const outline = screen.getByRole('button', { name: 'Outline' });
+    expect(outline).toHaveAttribute('aria-pressed', 'true');
+    const tree = screen.getByRole('tree', { name: 'Canvas outline' });
+    expect(canvas.compareDocumentPosition(tree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(canvas).not.toContainElement(tree);
+
+    await user.click(outline);
+    expect(outline).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('tree', { name: 'Canvas outline' })).not.toBeInTheDocument();
+    await user.click(outline);
+    expect(screen.getByRole('tree', { name: 'Canvas outline' })).toBeInTheDocument();
+  });
+
+  describe('full screen', () => {
+    const restore: (() => void)[] = [];
+    afterEach(() => {
+      while (restore.length > 0) restore.pop()!();
+    });
+    /** Replaces `key` on `target` for this test only. */
+    function stub(target: object, key: string, descriptor: PropertyDescriptor) {
+      const was = Object.getOwnPropertyDescriptor(target, key);
+      Object.defineProperty(target, key, { configurable: true, ...descriptor });
+      restore.push(() => {
+        if (was !== undefined) Object.defineProperty(target, key, was);
+        else delete (target as Record<string, unknown>)[key];
+      });
+    }
+
+    it('[spec:canvas-view#S16] takes the canvas and its panels full screen and back', async () => {
+      // Full screen goes to whichever element asked for it: the mock's call context.
+      let granted = false;
+      const request = vi.fn(() => {
+        granted = true;
+        return Promise.resolve();
+      });
+      const exit = vi.fn(() => {
+        granted = false;
+        return Promise.resolve();
+      });
+      stub(document, 'fullscreenElement', { get: () => (granted ? (request.mock.contexts.at(-1) as Element) : null) });
+      stub(HTMLElement.prototype, 'requestFullscreen', { value: request });
+      stub(document, 'exitFullscreen', { value: exit });
+      const user = userEvent.setup();
+      renderCanvas();
+      await openCanvas(user);
+      const canvas = screen.getByRole('region', { name: 'Canvas' });
+
+      await user.click(screen.getByRole('button', { name: 'Full screen' }));
+      expect(request).toHaveBeenCalledTimes(1);
+      const container = request.mock.contexts[0] as HTMLElement;
+      expect(container).toContainElement(canvas);
+      expect(container).toContainElement(screen.getByRole('tree', { name: 'Canvas outline' }));
+      act(() => {
+        document.dispatchEvent(new Event('fullscreenchange'));
+      });
+      expect(await screen.findByRole('button', { name: 'Exit full screen' })).toBeInTheDocument();
+      expect(container).toHaveAttribute('data-full-screen', 'native');
+      expect(container).toHaveClass('h-full', 'bg-background');
+
+      await user.click(screen.getByRole('button', { name: 'Exit full screen' }));
+      expect(exit).toHaveBeenCalledTimes(1);
+      act(() => {
+        document.dispatchEvent(new Event('fullscreenchange'));
+      });
+      expect(await screen.findByRole('button', { name: 'Full screen' })).toBeInTheDocument();
+      expect(container).toHaveAttribute('data-full-screen', 'off');
+    });
+
+    /** Grants the Fullscreen API to whichever element asks, as the browser would. */
+    function grantFullScreen() {
+      let granted = false;
+      const request = vi.fn(() => {
+        granted = true;
+        return Promise.resolve();
+      });
+      stub(document, 'fullscreenElement', { get: () => (granted ? (request.mock.contexts.at(-1) as Element) : null) });
+      stub(HTMLElement.prototype, 'requestFullscreen', { value: request });
+      stub(document, 'exitFullscreen', {
+        value: vi.fn(() => {
+          granted = false;
+          return Promise.resolve();
+        }),
+      });
+      return request;
+    }
+
+    async function enterNative(user: ReturnType<typeof userEvent.setup>, request: ReturnType<typeof grantFullScreen>) {
+      await user.click(screen.getByRole('button', { name: 'Full screen' }));
+      act(() => {
+        document.dispatchEvent(new Event('fullscreenchange'));
+      });
+      await screen.findByRole('button', { name: 'Exit full screen' });
+      return request.mock.contexts.at(-1) as HTMLElement;
+    }
+
+    it('[spec:canvas-view#S16] [spec:canvas-view#S18] mounts tooltips and the Show menu inside the full-screen element', async () => {
+      const request = grantFullScreen();
+      const user = userEvent.setup();
+      renderCanvas();
+      const toolbar = await openCanvas(user);
+      const container = await enterNative(user, request);
+      expect(container).toHaveAttribute('data-full-screen', 'native');
+
+      act(() => within(toolbar).getByRole('button', { name: 'Zoom in' }).focus());
+      expect(container).toContainElement(await screen.findByRole('tooltip'));
+
+      await user.click(within(toolbar).getByRole('button', { name: /^Show: / }));
+      expect(container).toContainElement(await screen.findByRole('menu'));
+    });
+
+    it('[spec:canvas-view#S16] reads "Full screen" again when the canvas remounts after leaving while full screen', async () => {
+      const request = grantFullScreen();
+      const user = userEvent.setup();
+      const { push } = renderCanvas();
+      await openCanvas(user);
+      await enterNative(user, request);
+
+      push({ ok: true, graph: { ...sampleGraph(), groups: [] } });
+      expect(screen.queryByRole('toolbar', { name: 'Canvas controls' })).not.toBeInTheDocument();
+      push({ ok: true, graph: sampleGraph() });
+      expect(await screen.findByRole('button', { name: 'Full screen' })).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Canvas' }).closest('[data-full-screen]')).toHaveAttribute('data-full-screen', 'off');
+    });
+
+    it('[spec:canvas-view#S16] closes an open Show menu on Esc before leaving the overlay', async () => {
+      stub(HTMLElement.prototype, 'requestFullscreen', { value: undefined });
+      const user = userEvent.setup();
+      renderCanvas();
+      await openCanvas(user);
+      const container = screen.getByRole('region', { name: 'Canvas' }).closest<HTMLElement>('[data-full-screen]')!;
+      await user.click(screen.getByRole('button', { name: 'Full screen' }));
+      expect(container).toHaveAttribute('data-full-screen', 'overlay');
+
+      await user.click(screen.getByRole('button', { name: /^Show: / }));
+      expect(await screen.findByRole('menu')).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+      expect(container).toHaveAttribute('data-full-screen', 'overlay');
+      await user.keyboard('{Escape}');
+      expect(container).toHaveAttribute('data-full-screen', 'off');
+    });
+
+    it('[spec:canvas-view#S16] falls back to an overlay that Esc leaves when full screen is unavailable or refused', async () => {
+      stub(HTMLElement.prototype, 'requestFullscreen', { value: undefined });
+      const user = userEvent.setup();
+      renderCanvas();
+      await openCanvas(user);
+      const container = screen.getByRole('region', { name: 'Canvas' }).closest<HTMLElement>('[data-full-screen]')!;
+
+      await user.click(screen.getByRole('button', { name: 'Full screen' }));
+      expect(container).toHaveAttribute('data-full-screen', 'overlay');
+      expect(container).toHaveClass('fixed', 'inset-0', 'z-50');
+      expect(screen.getByRole('button', { name: 'Exit full screen' })).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      expect(container).toHaveAttribute('data-full-screen', 'off');
+      expect(screen.getByRole('button', { name: 'Full screen' })).toBeInTheDocument();
+
+      stub(HTMLElement.prototype, 'requestFullscreen', { value: vi.fn(() => Promise.reject(new Error('denied'))) });
+      await user.click(screen.getByRole('button', { name: 'Full screen' }));
+      await waitFor(() => expect(container).toHaveAttribute('data-full-screen', 'overlay'));
+      await user.click(screen.getByRole('button', { name: 'Exit full screen' }));
+      expect(container).toHaveAttribute('data-full-screen', 'off');
+    });
+  });
+
+  it('[spec:canvas-view#S17] marks an ended session frame green with the word Ended', async () => {
+    const user = userEvent.setup();
+    renderCanvas();
+    await openCanvas(user);
+    const canvas = screen.getByRole('region', { name: 'Canvas' });
+    await within(canvas).findByText('Old session');
+    const frame = canvas.querySelector<HTMLElement>('[data-kind="session"][data-session-status="ended"]')!;
+    expect(frame).toHaveClass('border-success/70');
+    const chip = within(frame).getByText('Ended').closest('[data-slot="session-status"]')!;
+    expect(chip).toHaveClass('text-[var(--canvas-success-text)]');
+    expect(chip.querySelector('svg')).not.toBeNull();
+  });
+
+  it('[spec:canvas-view#S17] marks an idle session and its idle main node as waiting', async () => {
+    const graph = sampleGraph();
+    const idle: TaskGraphResult = {
+      ok: true,
+      graph: {
+        ...graph,
+        groups: graph.groups.map((each) => (each.id === 'session:s1' ? { ...each, status: 'idle' } : each)),
+        nodes: graph.nodes.map((each) => (each.id === 'main:s1' ? { ...each, status: 'idle' } : each)),
+      },
+    };
+    const user = userEvent.setup();
+    renderCanvas(idle);
+    await openCanvas(user);
+    const canvas = screen.getByRole('region', { name: 'Canvas' });
+    await within(canvas).findByText('Cart rework');
+    const frame = canvas.querySelector<HTMLElement>('[data-kind="session"][data-session-status="idle"]')!;
+    expect(frame).toHaveClass('border-warning');
+    const chip = within(frame).getByText('Idle · waiting').closest('[data-slot="session-status"]')!;
+    expect(chip).toHaveTextContent(/waiting for input or has paused/);
+
+    const main = canvas.querySelector<HTMLElement>('.react-flow__node[data-id="main:s1"] [data-status]')!;
+    expect(main).toHaveAttribute('data-status', 'idle');
+    expect(main).toHaveClass('border-warning');
+    expect(within(main).getByText('Idle · waiting')).toHaveClass('text-[var(--canvas-warning-text)]');
   });
 
   it('[spec:canvas-view#S14] says when the installed CLI has no graph command', async () => {

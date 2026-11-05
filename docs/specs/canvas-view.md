@@ -52,17 +52,17 @@ The task board (`task-board.md`, ADR-0018) lists a session's tasks flat; the exe
 
 **Scenario S7: Collapse levels**
 - Given a project with several sessions and nested agents
-- When the user picks a collapse level (sessions only, turns, top-level agents, everything)
+- When the user picks a collapse level (sessions only, turns, top-level agents, everything) from the toolbar's level menu
 - Then nodes below that level are hidden, the hidden count is shown on the parent, and changing the level back restores them
 
 **Scenario S8: Focus mode**
 - Given a canvas with many nodes
-- When the user focuses one agent node
+- When the user selects one agent node and turns on the toolbar's Focus button
 - Then that node, its ancestors and its descendants stay prominent, everything else is dimmed, and leaving focus restores the full view
 
 **Scenario S9: Token heatmap toggle**
 - Given agent nodes with different token totals
-- When the user turns the heatmap on
+- When the user turns the toolbar's Token heatmap button on
 - Then node emphasis scales with each node's subtree tokens, nodes with unknown usage are shown as unknown rather than lowest, and turning it off restores the status styling
 
 **Scenario S10: Drag, persist and reset layout**
@@ -77,8 +77,8 @@ The task board (`task-board.md`, ADR-0018) lists a session's tasks flat; the exe
 
 **Scenario S12: Outline keyboard navigation**
 - Given the canvas is open
-- When the user switches to the outline view and uses the keyboard (arrow keys to move, expand and collapse, Enter to select)
-- Then the same hierarchy is reachable as an accessible tree, and selecting an item selects the matching node on the canvas
+- When the user uses the outline, open by default in a panel to the right of the canvas, with the keyboard (arrow keys to move, expand and collapse, Enter to select)
+- Then the same hierarchy is reachable as an accessible tree, selecting an item selects the matching node on the canvas, and the toolbar's Outline button hides and shows the panel
 
 **Scenario S13: Last output excerpt is redacted and capped**
 - Given an agent whose final message contains a secret-shaped value and runs over several lines and more than 140 characters
@@ -95,6 +95,21 @@ The task board (`task-board.md`, ADR-0018) lists a session's tasks flat; the exe
 - When the board record changes
 - Then the canvas reflects the change within a few seconds without the user reloading, and the user's dragged positions and current view are kept
 
+**Scenario S16: Full screen**
+- Given the canvas is open
+- When the user presses the toolbar's Full screen button
+- Then the canvas with its outline and details panels fills the screen, the button reads "Exit full screen", and pressing it or Esc returns to the normal view; where the system refuses or lacks full screen, the same area covers the app window instead, and Esc leaves it
+
+**Scenario S17: Ended and idle sessions stand out**
+- Given a session that has ended and a session, with its main node, that is idle
+- When the canvas renders them
+- Then the ended session's frame has a green border and the word "Ended" with an icon, and the idle session's frame and its main node have an amber border and the words "Idle · waiting" with an icon, explaining that the session may need the user's answer to continue
+
+**Scenario S18: Controls inside the canvas**
+- Given the canvas is open
+- When the user looks for the canvas controls
+- Then they are a vertical toolbar of icon buttons in the canvas's top-left corner, each named for assistive technology and explained by a tooltip, and the collapse level is chosen from a menu
+
 ### Out of Scope
 - Node actions (stop, re-run, open terminal, open worktree) — only the empty extension point ships
 - Editing the board or trace from the canvas
@@ -110,3 +125,4 @@ The task board (`task-board.md`, ADR-0018) lists a session's tasks flat; the exe
 - 2026-11-04 | software-architect | Created from the approved canvas-view plan | Spec for the MVP read-only canvas
 - 2026-11-04 | backend-developer (canvas view) | Out of Scope names every non-`spawn` edge kind, not only review edges | Schema 1 emits `spawn` edges only
 - 2026-11-04 | main conversation (/devteam:review) | Nodes carry `session_id`, `record_id`, `spawn_id`; a child session's PR chip and "Show on board" resolve against `record_id`; the main node shows the session's token total and an `idle` status; a frame or agent expanded by hand opens even where the collapse level folds it | /devteam:review findings (architect 1–2, code-reviewer 1–3, qa 1)
+- 2026-11-05 | frontend-developer (canvas toolbar) | S7–S9 and S12 name the in-canvas toolbar; the outline opens by default on the right; added S16 (full screen), S17 (ended and idle session highlights) and S18 (vertical icon toolbar inside the canvas) | Canvas toolbar plan approved by the user

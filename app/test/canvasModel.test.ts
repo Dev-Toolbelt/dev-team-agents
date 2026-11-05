@@ -215,7 +215,7 @@ describe('heat and tones', () => {
 
   it('[spec:canvas-view#S4] gives every status a word, not only a tone', () => {
     expect(statusTone('running')).toEqual({ tone: 'running', label: 'Running' });
-    expect(statusTone('idle')).toEqual({ tone: 'idle', label: 'Idle' });
+    expect(statusTone('idle')).toEqual({ tone: 'idle', label: 'Idle · waiting' });
     expect(statusTone('failed').label).toBe('Failed');
     expect(statusTone('interrupted').label).toBe('Interrupted');
     expect(statusTone(null).tone).toBe('unknown');

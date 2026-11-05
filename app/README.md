@@ -402,9 +402,14 @@ execution trace, so the renderer never re-derives a link.
   CLI's redacted excerpt (at most 140 characters) of the agent's final report.
 - **Layout:** deterministic by default. Dragged positions are kept per project in the renderer's
   `localStorage` and win over the computed ones; **Reset layout** clears them.
-- **Toolbar:** fit, zoom, collapse level (sessions, turns, top-level agents, everything), focus,
-  token heatmap, outline (a keyboard-navigable `role="tree"` list, the accessible fallback) and
-  reset. Ended sessions start collapsed; the Period filter applies.
+- **Toolbar:** a vertical strip of icon buttons inside the canvas, top-left, each with a tooltip:
+  fit, zoom, collapse level (a menu: sessions, turns, top-level agents, everything), focus, token
+  heatmap, outline, full screen and reset. The outline (a keyboard-navigable `role="tree"` list, the
+  accessible fallback) is open by default on the right. **Full screen** uses the Fullscreen API on
+  the canvas and its panels (Esc leaves); where that is missing or refused, an overlay over the
+  window stands in. Ended sessions start collapsed; the Period filter applies.
+- **Session status:** an ended session's frame has a green border and the word *Ended*; an idle one
+  an amber border and *Idle · waiting* (it may need your answer). An idle main node reads the same.
 - **Read-only:** nodes carry no actions yet. `canvasActions.ts` is the typed, empty registry a later
   change fills; a node shows its toolbar only when an action exists.
 
