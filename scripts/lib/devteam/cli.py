@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shlex
 import sys
@@ -18,7 +19,7 @@ from pathlib import Path
 from . import auth, bind as bind_module
 from . import auth_gate as gate
 from . import detect
-from . import qa_auth, backlog, catalog, check as check_module, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, repairs, store, tasks, tools, trace, insights, mining, update, upgrade, versions
+from . import qa_auth, backlog, graph, catalog, check as check_module, compat, creds, credentials_local, doctor, global_skills, integrations, migrate, notifications, paths, plugins, prefs, project, providers, registry, repairs, store, tasks, tools, trace, insights, mining, update, upgrade, versions
 from . import secrets as secrets_module
 from .errors import ConflictError, DevteamError, EnvError, UsageError
 from .console import stdin_is_console as _stdin_is_console
@@ -824,6 +825,17 @@ def _watch_interval(text):
     return value
 
 
+def _since_epoch(text):
+    # `float()` takes "nan" and "inf": a nan compares false to everything and would keep every session.
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("not a number: {!r}".format(text))
+    if not math.isfinite(value) or value < 0:
+        raise argparse.ArgumentTypeError("must be a finite epoch, 0 or more: {!r}".format(text))
+    return value
+
+
 def cmd_notifications_watch(args, emitter):
     def emit(event):
         human = None
@@ -965,6 +977,23 @@ def cmd_tasks_trace(args, emitter):
         lines.append("{} @ {}  {} tokens".format(label, turn["turn_at"] if turn["turn_at"] is not None else "?", turn["tokens"]))
         for node in turn["spans"]:
             _trace_lines(node, 1, lines)
+    return result, "\n".join(lines)
+
+
+def cmd_tasks_graph(args, emitter):
+    root = graph.project_root(args.project)
+    if root is None:
+        raise EnvError(
+            "no bound project {}".format(args.project),
+            hint="`devteam list` shows the bound projects and their ids.",
+        )
+    result = graph.build(root, args.project, since=args.since)
+    spans = sum(1 for n in result["nodes"] if n["kind"] != "main")
+    sessions = sum(1 for g in result["groups"] if g["kind"] == "session")
+    lines = ["{}  {} session(s) · {} agent span(s){}".format(
+        _short(args.project), sessions, spans, " · truncated" if result["truncated"] else "",
+    )]
+    lines.extend("  notice: {}".format(n) for n in result["notices"])
     return result, "\n".join(lines)
 
 
@@ -2205,6 +2234,13 @@ def build_parser():
     tasks_trace.add_argument("session", help="the session id")
     tasks_trace.add_argument("--path", help="the bound project (default: the current directory)")
     tasks_trace.set_defaults(func=cmd_tasks_trace)
+    tasks_graph = leaf(
+        tasks_parser, "graph", help="one project's sessions, turns and agent spans joined for the canvas view"
+    )
+    tasks_graph.add_argument("--project", required=True, metavar="PROJECT_ID")
+    tasks_graph.add_argument(
+        "--since", type=_since_epoch, metavar="EPOCH", help="drop ended sessions idle since before this")
+    tasks_graph.set_defaults(func=cmd_tasks_graph)
     tasks_list = leaf(tasks_parser, "list", help="every bound project with tasks, with derived state")
     tasks_filters(tasks_list)
     tasks_list.set_defaults(func=cmd_tasks_list)

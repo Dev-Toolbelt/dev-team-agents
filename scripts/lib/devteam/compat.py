@@ -513,6 +513,8 @@ READ_ONLY = {
     "and the decisions record; writes nothing",
     ("tasks", "trace"): "reads one session's execution trace in the project's machine-local "
     "state directory; writes nothing",
+    ("tasks", "graph"): "reads one project's session records and execution traces and joins "
+    "them for the canvas; writes nothing",
     ("cred", "backends"): "probes which secret stores this machine offers",
     ("backlog", "ready"): "reads the sprint files and the machine-local claims record; writes nothing",
     ("backlog", "lint"): "reads the sprint files; writes nothing",
