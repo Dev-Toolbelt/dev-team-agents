@@ -1,6 +1,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Tooltip as TooltipPrimitive } from "radix-ui"
+import { usePortalContainer } from "./portal-container"
 
 function TooltipProvider({
   delayDuration = 200,
@@ -28,8 +29,9 @@ function TooltipContent({
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+  const container = usePortalContainer()
   return (
-    <TooltipPrimitive.Portal>
+    <TooltipPrimitive.Portal container={container}>
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
@@ -51,12 +53,25 @@ function TooltipContent({
  *
  * `asChild` puts the trigger props on the child itself. A disabled button receives no
  * pointer events, so callers wrap one in a `<span>` first — the tooltip hangs on that.
+ * `open` and `onOpenChange` control it, for a trigger that must hold its tooltip back.
  */
-function Hint({ content, children }: { content: React.ReactNode; children: React.ReactElement }) {
+function Hint({
+  content,
+  side,
+  open,
+  onOpenChange,
+  children,
+}: {
+  content: React.ReactNode
+  side?: React.ComponentProps<typeof TooltipPrimitive.Content>["side"]
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  children: React.ReactElement
+}) {
   return (
-    <Tooltip>
+    <Tooltip {...(open !== undefined ? { open } : {})} {...(onOpenChange !== undefined ? { onOpenChange } : {})}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent>{content}</TooltipContent>
+      <TooltipContent {...(side !== undefined ? { side } : {})}>{content}</TooltipContent>
     </Tooltip>
   )
 }
