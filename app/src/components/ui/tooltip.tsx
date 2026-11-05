@@ -1,7 +1,6 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Tooltip as TooltipPrimitive } from "radix-ui"
-import { usePortalContainer } from "./portal-container"
 
 function TooltipProvider({
   delayDuration = 200,
@@ -29,9 +28,8 @@ function TooltipContent({
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
-  const container = usePortalContainer()
   return (
-    <TooltipPrimitive.Portal container={container}>
+    <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}

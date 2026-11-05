@@ -190,6 +190,36 @@ describe('Canvas view', () => {
     expect(agent).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('[spec:canvas-view#S19] shows the work without the agent name repeated, and the details in reading order', async () => {
+    const graph = sampleGraph();
+    const nodes = graph.nodes.map((node) =>
+      node.id === 'span:s1:a' ? { ...node, description: 'backend-developer: Build the cart API', model: 'claude-opus-5-5' } : node,
+    );
+    const user = userEvent.setup();
+    renderCanvas({ ok: true, graph: { ...graph, nodes } });
+    await openCanvas(user);
+    const canvas = screen.getByRole('region', { name: 'Canvas' });
+    expect(await within(canvas).findByText('Build the cart API')).toBeInTheDocument();
+    expect(within(canvas).queryByText('backend-developer: Build the cart API')).not.toBeInTheDocument();
+
+    const tree = screen.getByRole('tree', { name: 'Canvas outline' });
+    await user.click(within(tree).getByRole('treeitem', { name: 'backend-developer: Build the cart API' }));
+    const detail = await screen.findByRole('complementary', { name: 'backend-developer' });
+    expect(within(detail).getByRole('heading', { level: 4 })).toHaveTextContent(/^Build the cart API$/);
+    expect(within(detail).getByRole('heading', { level: 4 })).toHaveClass('text-base', 'font-semibold');
+    const labels = within(detail)
+      .getAllByRole('term')
+      .map((term) => term.textContent);
+    expect(labels.slice(0, 5)).toEqual(['Model', 'Tokens', 'Took', 'Started', 'Finished']);
+    const badge = (label: string) =>
+      within(detail)
+        .getAllByRole('term')
+        .find((term) => term.textContent === label)!
+        .nextElementSibling!.querySelector('[data-slot="badge"]');
+    expect(badge('Model')).toHaveTextContent('claude-opus-5-5');
+    expect(badge('Tokens')).toHaveTextContent('4k');
+  });
+
   it('[spec:canvas-view#S6] opens a PR only through the allow-listed link path', async () => {
     const user = userEvent.setup();
     const { bridge } = renderCanvas();
@@ -557,110 +587,56 @@ describe('Canvas view', () => {
       });
     }
 
-    it('[spec:canvas-view#S16] takes the canvas and its panels full screen and back', async () => {
-      // Full screen goes to whichever element asked for it: the mock's call context.
-      let granted = false;
-      const request = vi.fn(() => {
-        granted = true;
-        return Promise.resolve();
-      });
-      const exit = vi.fn(() => {
-        granted = false;
-        return Promise.resolve();
-      });
-      stub(document, 'fullscreenElement', { get: () => (granted ? (request.mock.contexts.at(-1) as Element) : null) });
+    it('[spec:canvas-view#S16] lays the canvas and its panels over the whole window and back, without the Fullscreen API', async () => {
+      // The session refuses the `fullscreen` permission, so the API must never be the path.
+      const request = vi.fn(() => Promise.resolve());
       stub(HTMLElement.prototype, 'requestFullscreen', { value: request });
-      stub(document, 'exitFullscreen', { value: exit });
       const user = userEvent.setup();
       renderCanvas();
       await openCanvas(user);
       const canvas = screen.getByRole('region', { name: 'Canvas' });
+      const container = canvas.closest<HTMLElement>('[data-full-screen]')!;
+      expect(container).toHaveAttribute('data-full-screen', 'off');
 
       await user.click(screen.getByRole('button', { name: 'Full screen' }));
-      expect(request).toHaveBeenCalledTimes(1);
-      const container = request.mock.contexts[0] as HTMLElement;
+      expect(request).not.toHaveBeenCalled();
+      expect(container).toHaveAttribute('data-full-screen', 'overlay');
+      expect(container).toHaveClass('fixed', 'inset-0', 'z-50', 'bg-background');
       expect(container).toContainElement(canvas);
       expect(container).toContainElement(screen.getByRole('tree', { name: 'Canvas outline' }));
-      act(() => {
-        document.dispatchEvent(new Event('fullscreenchange'));
-      });
-      expect(await screen.findByRole('button', { name: 'Exit full screen' })).toBeInTheDocument();
-      expect(container).toHaveAttribute('data-full-screen', 'native');
-      expect(container).toHaveClass('h-full', 'bg-background');
+      // Modal: the dialog names itself, and what it covers leaves the tab order.
+      expect(screen.getByRole('dialog', { name: 'Canvas full screen' })).toBe(container);
+      expect(container).toHaveAttribute('aria-modal', 'true');
+      const covered = Array.from(document.body.querySelectorAll('[inert]'));
+      expect(covered.length).toBeGreaterThan(0);
+      expect(covered.some((each) => each.contains(container))).toBe(false);
 
       await user.click(screen.getByRole('button', { name: 'Exit full screen' }));
-      expect(exit).toHaveBeenCalledTimes(1);
-      act(() => {
-        document.dispatchEvent(new Event('fullscreenchange'));
-      });
-      expect(await screen.findByRole('button', { name: 'Full screen' })).toBeInTheDocument();
+      expect(document.body.querySelector('[inert]')).toBeNull();
+      expect(screen.queryByRole('dialog', { name: 'Canvas full screen' })).not.toBeInTheDocument();
       expect(container).toHaveAttribute('data-full-screen', 'off');
+      expect(container).not.toHaveClass('fixed');
+      expect(screen.getByRole('button', { name: 'Full screen' })).toBeInTheDocument();
     });
 
-    /** Grants the Fullscreen API to whichever element asks, as the browser would. */
-    function grantFullScreen() {
-      let granted = false;
-      const request = vi.fn(() => {
-        granted = true;
-        return Promise.resolve();
-      });
-      stub(document, 'fullscreenElement', { get: () => (granted ? (request.mock.contexts.at(-1) as Element) : null) });
-      stub(HTMLElement.prototype, 'requestFullscreen', { value: request });
-      stub(document, 'exitFullscreen', {
-        value: vi.fn(() => {
-          granted = false;
-          return Promise.resolve();
-        }),
-      });
-      return request;
-    }
-
-    async function enterNative(user: ReturnType<typeof userEvent.setup>, request: ReturnType<typeof grantFullScreen>) {
-      await user.click(screen.getByRole('button', { name: 'Full screen' }));
-      act(() => {
-        document.dispatchEvent(new Event('fullscreenchange'));
-      });
-      await screen.findByRole('button', { name: 'Exit full screen' });
-      return request.mock.contexts.at(-1) as HTMLElement;
-    }
-
-    it('[spec:canvas-view#S16] [spec:canvas-view#S18] mounts tooltips and the Show menu inside the full-screen element', async () => {
-      const request = grantFullScreen();
-      const user = userEvent.setup();
-      renderCanvas();
-      const toolbar = await openCanvas(user);
-      const container = await enterNative(user, request);
-      expect(container).toHaveAttribute('data-full-screen', 'native');
-
-      act(() => within(toolbar).getByRole('button', { name: 'Zoom in' }).focus());
-      expect(container).toContainElement(await screen.findByRole('tooltip'));
-
-      await user.click(within(toolbar).getByRole('button', { name: /^Show: / }));
-      expect(container).toContainElement(await screen.findByRole('menu'));
-    });
-
-    it('[spec:canvas-view#S16] reads "Full screen" again when the canvas remounts after leaving while full screen', async () => {
-      const request = grantFullScreen();
-      const user = userEvent.setup();
-      const { push } = renderCanvas();
-      await openCanvas(user);
-      await enterNative(user, request);
-
-      push({ ok: true, graph: { ...sampleGraph(), groups: [] } });
-      expect(screen.queryByRole('toolbar', { name: 'Canvas controls' })).not.toBeInTheDocument();
-      push({ ok: true, graph: sampleGraph() });
-      expect(await screen.findByRole('button', { name: 'Full screen' })).toBeInTheDocument();
-      expect(screen.getByRole('region', { name: 'Canvas' }).closest('[data-full-screen]')).toHaveAttribute('data-full-screen', 'off');
-    });
-
-    it('[spec:canvas-view#S16] closes an open Show menu on Esc before leaving the overlay', async () => {
-      stub(HTMLElement.prototype, 'requestFullscreen', { value: undefined });
+    it('[spec:canvas-view#S16] leaves full screen on Esc', async () => {
       const user = userEvent.setup();
       renderCanvas();
       await openCanvas(user);
       const container = screen.getByRole('region', { name: 'Canvas' }).closest<HTMLElement>('[data-full-screen]')!;
       await user.click(screen.getByRole('button', { name: 'Full screen' }));
       expect(container).toHaveAttribute('data-full-screen', 'overlay');
+      await user.keyboard('{Escape}');
+      expect(container).toHaveAttribute('data-full-screen', 'off');
+      expect(screen.getByRole('button', { name: 'Full screen' })).toBeInTheDocument();
+    });
+
+    it('[spec:canvas-view#S16] closes an open Show menu on Esc before leaving full screen', async () => {
+      const user = userEvent.setup();
+      renderCanvas();
+      await openCanvas(user);
+      const container = screen.getByRole('region', { name: 'Canvas' }).closest<HTMLElement>('[data-full-screen]')!;
+      await user.click(screen.getByRole('button', { name: 'Full screen' }));
 
       await user.click(screen.getByRole('button', { name: /^Show: / }));
       expect(await screen.findByRole('menu')).toBeInTheDocument();
@@ -671,26 +647,18 @@ describe('Canvas view', () => {
       expect(container).toHaveAttribute('data-full-screen', 'off');
     });
 
-    it('[spec:canvas-view#S16] falls back to an overlay that Esc leaves when full screen is unavailable or refused', async () => {
-      stub(HTMLElement.prototype, 'requestFullscreen', { value: undefined });
+    it('[spec:canvas-view#S16] leaves full screen when nothing is left to show', async () => {
       const user = userEvent.setup();
-      renderCanvas();
+      const { push } = renderCanvas();
       await openCanvas(user);
-      const container = screen.getByRole('region', { name: 'Canvas' }).closest<HTMLElement>('[data-full-screen]')!;
-
       await user.click(screen.getByRole('button', { name: 'Full screen' }));
-      expect(container).toHaveAttribute('data-full-screen', 'overlay');
-      expect(container).toHaveClass('fixed', 'inset-0', 'z-50');
-      expect(screen.getByRole('button', { name: 'Exit full screen' })).toBeInTheDocument();
-      await user.keyboard('{Escape}');
-      expect(container).toHaveAttribute('data-full-screen', 'off');
-      expect(screen.getByRole('button', { name: 'Full screen' })).toBeInTheDocument();
 
-      stub(HTMLElement.prototype, 'requestFullscreen', { value: vi.fn(() => Promise.reject(new Error('denied'))) });
-      await user.click(screen.getByRole('button', { name: 'Full screen' }));
-      await waitFor(() => expect(container).toHaveAttribute('data-full-screen', 'overlay'));
-      await user.click(screen.getByRole('button', { name: 'Exit full screen' }));
-      expect(container).toHaveAttribute('data-full-screen', 'off');
+      push({ ok: true, graph: { ...sampleGraph(), groups: [] } });
+      expect(screen.queryByRole('toolbar', { name: 'Canvas controls' })).not.toBeInTheDocument();
+      expect(document.body.querySelector('[inert]')).toBeNull();
+      push({ ok: true, graph: sampleGraph() });
+      expect(await screen.findByRole('button', { name: 'Full screen' })).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Canvas' }).closest('[data-full-screen]')).toHaveAttribute('data-full-screen', 'off');
     });
   });
 

@@ -11,12 +11,12 @@ import {
   type NodeChange,
   type NodeTypes,
 } from '@xyflow/react';
-import { CircleAlert, X } from 'lucide-react';
+import { CircleAlert, Coins, Cpu, X } from 'lucide-react';
 
 import '../canvas.css';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PortalContainer } from '@/components/ui/portal-container';
 import { Empty } from '../Problem.js';
 import { formatDateTime, formatDuration, periodCutoff, type Period } from '../boardModel.js';
 import {
@@ -30,6 +30,7 @@ import {
   heatTokens,
   heatTone,
   layoutGraph,
+  nodeDescription,
   nodeTokensLabel,
   outlineTree,
   revealPlan,
@@ -370,8 +371,14 @@ function CanvasBoard({
   };
   const hasOverrides = Object.keys(overrides).length > 0;
   const fullScreen = useFullScreen(() => void flow.fitView({ padding: 0.1, duration: 200 }));
+  // Nothing left to show takes the canvas, and its full screen, away: it comes back windowed.
+  const empty = graph.groups.length === 0;
+  const leaveFullScreen = fullScreen.leave;
+  useEffect(() => {
+    if (empty) leaveFullScreen();
+  }, [empty, leaveFullScreen]);
 
-  if (graph.groups.length === 0) {
+  if (empty) {
     return <Empty>No session of this project has activity in this period.</Empty>;
   }
 
@@ -381,16 +388,10 @@ function CanvasBoard({
 
       <div
         ref={fullScreen.ref}
-        data-full-screen={fullScreen.mode}
-        className={`flex min-h-0 gap-3 ${
-          fullScreen.mode === 'off'
-            ? 'h-[max(28rem,calc(100vh-17rem))]'
-            : fullScreen.mode === 'native'
-              ? 'h-full bg-background p-3'
-              : 'fixed inset-0 z-50 bg-background p-3'
-        }`}
+        data-full-screen={fullScreen.on ? 'overlay' : 'off'}
+        {...(fullScreen.on ? { role: 'dialog', 'aria-modal': true, 'aria-label': 'Canvas full screen' } : {})}
+        className={`flex min-h-0 gap-3 ${fullScreen.on ? 'fixed inset-0 z-50 bg-background p-3' : 'h-[max(28rem,calc(100vh-17rem))]'}`}
       >
-        <PortalContainer.Provider value={fullScreen.mode === 'native' ? fullScreen.element : null}>
           <div className="min-w-0 flex-1 overflow-hidden rounded-lg border" aria-label="Canvas" role="region">
             <CanvasClock.Provider value={tick}>
               <ReactFlow<FlowNode, Edge>
@@ -429,7 +430,7 @@ function CanvasBoard({
                     onHeat={() => setHeatOn((was) => !was)}
                     outlineOn={outlineOn}
                     onOutline={() => setOutlineOn((was) => !was)}
-                    fullScreen={fullScreen.mode !== 'off'}
+                    fullScreen={fullScreen.on}
                     onFullScreen={fullScreen.toggle}
                     canReset={hasOverrides}
                     onReset={resetLayout}
@@ -462,48 +463,33 @@ function CanvasBoard({
               onShowOnBoard={onShowOnBoard}
             />
           ) : null}
-        </PortalContainer.Provider>
       </div>
     </div>
   );
 }
 
-type FullScreenMode = 'off' | 'native' | 'overlay';
-
 /**
- * Full screen for the canvas and its side panels. The Fullscreen API when the element offers it
- * (Esc leaves, and `fullscreenchange` reports either way out); otherwise, or when the request is
- * refused, an overlay over the window that Esc also leaves. `onChange` runs after each switch.
+ * Full screen for the canvas and its side panels: an overlay over the whole app window, which
+ * Esc or the toolbar button leaves. Not the Fullscreen API — the session refuses every
+ * permission (main/security.ts), `fullscreen` included, so a request there changes nothing.
+ * `onChange` runs after each switch, so the view can fit the new size.
  */
 function useFullScreen(onChange: () => void) {
+  const [on, setOn] = useState(false);
   const [element, setElement] = useState<HTMLDivElement | null>(null);
-  const [mode, setMode] = useState<FullScreenMode>('off');
   const onChangeRef = useRef(onChange);
   useEffect(() => {
     onChangeRef.current = onChange;
   });
 
   useEffect(() => {
-    if (element === null) return;
-    const sync = () => setMode((was) => (document.fullscreenElement === element ? 'native' : was === 'native' ? 'off' : was));
-    // A container that unmounted while full screen took its listener along: a new one starts from
-    // what the document says, and the old one leaves 'native' behind.
-    sync();
-    document.addEventListener('fullscreenchange', sync);
-    return () => {
-      document.removeEventListener('fullscreenchange', sync);
-      setMode((was) => (was === 'native' ? 'off' : was));
-    };
-  }, [element]);
-
-  useEffect(() => {
-    if (mode !== 'overlay') return;
+    if (!on) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !event.defaultPrevented) setMode('off');
+      if (event.key === 'Escape' && !event.defaultPrevented) setOn(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [mode]);
+  }, [on]);
 
   const first = useRef(true);
   useEffect(() => {
@@ -513,28 +499,34 @@ function useFullScreen(onChange: () => void) {
     }
     const frame = requestAnimationFrame(() => onChangeRef.current());
     return () => cancelAnimationFrame(frame);
-  }, [mode]);
+  }, [on]);
 
-  const toggle = useCallback(() => {
-    if (mode === 'native') {
-      if (typeof document.exitFullscreen === 'function') void document.exitFullscreen().catch(() => setMode('off'));
-      else setMode('off');
-      return;
+  // Modal while on: what the overlay covers leaves the tab order and the accessibility tree.
+  // Siblings along the path to <body> go inert; a portal mounted later (a tooltip, the Show
+  // menu) is a new child of <body> and stays live, and so do the toasts, which draw above it.
+  useEffect(() => {
+    if (!on || element === null) return;
+    const covered: Element[] = [];
+    for (let node: Element = element; node.parentElement !== null; node = node.parentElement) {
+      for (const sibling of Array.from(node.parentElement.children)) {
+        if (sibling === node || sibling.hasAttribute('inert') || isToaster(sibling)) continue;
+        covered.push(sibling);
+      }
     }
-    if (mode === 'overlay') {
-      setMode('off');
-      return;
-    }
-    if (element === null) return;
-    if (typeof element.requestFullscreen !== 'function') {
-      setMode('overlay');
-      return;
-    }
-    // Granted: `fullscreenchange` switches the mode. Refused: the overlay stands in.
-    element.requestFullscreen().catch(() => setMode('overlay'));
-  }, [mode, element]);
+    for (const each of covered) each.setAttribute('inert', '');
+    return () => {
+      for (const each of covered) each.removeAttribute('inert');
+    };
+  }, [on, element]);
 
-  return { ref: setElement, element, mode, toggle };
+  const toggle = useCallback(() => setOn((was) => !was), []);
+  const leave = useCallback(() => setOn(false), []);
+  return { ref: setElement, on, toggle, leave };
+}
+
+/** Sonner's toast region: rendered in place, not portalled, and kept usable over the overlay. */
+function isToaster(element: Element): boolean {
+  return element.hasAttribute('data-sonner-toaster') || element.querySelector(':scope > [data-sonner-toaster]') !== null;
 }
 
 function CanvasNotices({ graph }: { graph: TaskGraph }) {
@@ -578,12 +570,16 @@ function NodeDetail({
   onShowOnBoard: ((card: BoardCardRef) => void) | undefined;
 }) {
   const headingId = useId();
+  const agentId = useId();
   const status = statusTone(node.status);
   const StatusIcon = STATUS_ICON[status.tone];
   const elapsed = elapsedSeconds(node, now);
+  const agent = agentLabel(node);
+  const description = node.kind === 'main' ? null : nodeDescription(node);
   return (
     <aside
-      aria-labelledby={headingId}
+      aria-labelledby={description !== null ? agentId : headingId}
+      {...(description !== null ? { 'aria-describedby': headingId } : {})}
       className="w-80 shrink-0 space-y-3 overflow-auto rounded-lg border bg-card p-4 text-sm"
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
@@ -593,26 +589,44 @@ function NodeDetail({
       }}
     >
       <div className="flex items-start justify-between gap-2">
-        <h4 id={headingId} className="min-w-0 font-semibold break-words">
-          {agentLabel(node)}
-        </h4>
+        <div className="min-w-0 space-y-1">
+          {description !== null ? (
+            <p id={agentId} className="truncate text-xs font-medium text-muted-foreground" title={agent}>
+              {agent}
+            </p>
+          ) : null}
+          <p className={`flex items-center gap-1.5 text-xs font-medium ${STATUS_TEXT_CLASS[status.tone]}`}>
+            <StatusIcon className={`size-3.5 ${status.tone === 'running' ? 'animate-spin' : ''}`} aria-hidden="true" />
+            {status.label}
+          </p>
+        </div>
         <Button variant="ghost" size="sm" aria-label="Close details" onClick={onClose}>
           <X aria-hidden="true" />
         </Button>
       </div>
-      <p className={`flex items-center gap-1.5 text-xs font-medium ${STATUS_TEXT_CLASS[status.tone]}`}>
-        <StatusIcon className={`size-3.5 ${status.tone === 'running' ? 'animate-spin' : ''}`} aria-hidden="true" />
-        {status.label}
-      </p>
-      {node.description !== null && node.description !== '' ? <p className="break-words [overflow-wrap:anywhere]">{node.description}</p> : null}
+      <h4 id={headingId} className="text-base leading-snug font-semibold break-words [overflow-wrap:anywhere]">
+        {description ?? agent}
+      </h4>
       <dl className="space-y-1.5 text-xs">
-        <DetailRow label="Role">{ROLE_FAMILY_LABEL[roleFamily(node.agent, node.kind)]}</DetailRow>
-        {node.model !== null ? <DetailRow label="Model">{node.model}</DetailRow> : null}
-        {node.background ? <DetailRow label="Mode">Background</DetailRow> : null}
+        {node.model !== null ? (
+          <DetailRow label="Model">
+            <Badge variant="outline" className="max-w-full border-info font-mono text-foreground">
+              <Cpu aria-hidden="true" />
+              <span className="truncate">{node.model}</span>
+            </Badge>
+          </DetailRow>
+        ) : null}
+        <DetailRow label="Tokens">
+          <Badge variant="secondary" className="tabular-nums">
+            <Coins aria-hidden="true" />
+            {nodeTokensLabel(node)}
+          </Badge>
+        </DetailRow>
+        {elapsed !== null ? <DetailRow label={status.tone === 'running' ? 'Running for' : 'Took'}>{formatDuration(elapsed)}</DetailRow> : null}
         {node.started_at !== null ? <DetailRow label="Started">{formatDateTime(node.started_at)}</DetailRow> : null}
         {node.ended_at !== null ? <DetailRow label="Finished">{formatDateTime(node.ended_at)}</DetailRow> : null}
-        {elapsed !== null ? <DetailRow label={status.tone === 'running' ? 'Running for' : 'Took'}>{formatDuration(elapsed)}</DetailRow> : null}
-        <DetailRow label="Tokens">{nodeTokensLabel(node)}</DetailRow>
+        <DetailRow label="Role">{ROLE_FAMILY_LABEL[roleFamily(node.agent, node.kind)]}</DetailRow>
+        {node.background ? <DetailRow label="Mode">Background</DetailRow> : null}
         {node.kind !== 'main' ? (
           <DetailRow label="With sub-agents">{node.usage_complete ? formatTokens(node.subtree_tokens) : 'n/a'}</DetailRow>
         ) : null}

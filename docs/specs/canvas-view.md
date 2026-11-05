@@ -98,7 +98,7 @@ The task board (`task-board.md`, ADR-0018) lists a session's tasks flat; the exe
 **Scenario S16: Full screen**
 - Given the canvas is open
 - When the user presses the toolbar's Full screen button
-- Then the canvas with its outline and details panels fills the screen, the button reads "Exit full screen", and pressing it or Esc returns to the normal view; where the system refuses or lacks full screen, the same area covers the app window instead, and Esc leaves it
+- Then the canvas with its outline and details panels covers the whole app window, the button reads "Exit full screen", and pressing it or Esc returns to the normal view; while it is on, what it covers cannot take focus, and it closes by itself when nothing is left to show; it does not use the system Fullscreen API, whose permission the app's session refuses
 
 **Scenario S17: Ended and idle sessions stand out**
 - Given a session that has ended and a session, with its main node, that is idle
@@ -109,6 +109,11 @@ The task board (`task-board.md`, ADR-0018) lists a session's tasks flat; the exe
 - Given the canvas is open
 - When the user looks for the canvas controls
 - Then they are a vertical toolbar of icon buttons in the canvas's top-left corner, each named for assistive technology and explained by a tooltip, and the collapse level is chosen from a menu
+
+**Scenario S19: The work reads once, and the details lead with what matters**
+- Given an agent whose task text starts with its own name, as in "software-architect: Architect plan for VHI-712"
+- When the canvas shows its node and the user opens its details
+- Then the node's header names the agent and its text reads only "Architect plan for VHI-712"; the details panel shows that text as its title, then Model and Tokens as badges, then Took, Started and Finished, before the remaining facts
 
 ### Out of Scope
 - Node actions (stop, re-run, open terminal, open worktree) — only the empty extension point ships
@@ -126,3 +131,4 @@ The task board (`task-board.md`, ADR-0018) lists a session's tasks flat; the exe
 - 2026-11-04 | backend-developer (canvas view) | Out of Scope names every non-`spawn` edge kind, not only review edges | Schema 1 emits `spawn` edges only
 - 2026-11-04 | main conversation (/devteam:review) | Nodes carry `session_id`, `record_id`, `spawn_id`; a child session's PR chip and "Show on board" resolve against `record_id`; the main node shows the session's token total and an `idle` status; a frame or agent expanded by hand opens even where the collapse level folds it | /devteam:review findings (architect 1–2, code-reviewer 1–3, qa 1)
 - 2026-11-05 | frontend-developer (canvas toolbar) | S7–S9 and S12 name the in-canvas toolbar; the outline opens by default on the right; added S16 (full screen), S17 (ended and idle session highlights) and S18 (vertical icon toolbar inside the canvas) | Canvas toolbar plan approved by the user
+- 2026-11-05 | main conversation (canvas detail polish) | S16 covers the app window instead of the system full screen, which the session's permission policy refuses; added S19 (agent name not repeated in the node text, details panel order and badges) | User report: full screen did nothing; detail panel order requested by the user
