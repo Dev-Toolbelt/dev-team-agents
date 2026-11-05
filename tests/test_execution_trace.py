@@ -77,6 +77,33 @@ NESTED = {
 BUILTIN = {"claude": "Explore", "codex": "explorer", "opencode": "explore"}
 
 
+def _claude_report(rest, report):
+    (end,) = rest
+    response = dict(end["tool_response"], prompt="echoed prompt, never the excerpt")
+    if report is not None:
+        response["content"] = [{"type": "text", "text": report}]
+    return [dict(end, tool_response=response)]
+
+
+def _codex_report(rest, report):
+    ack, wait = rest
+    (ref,) = wait["tool_response"]["status"]
+    return [ack, dict(wait, tool_response={"status": {ref: {"completed": report}}})]
+
+
+def _opencode_report(rest, report):
+    (end,) = rest
+    if report is None:
+        return [dict(end, output="")]
+    return [dict(end, output="task_id: ses_x (to resume)\n\n<task_result>\n{}\n</task_result>".format(report))]
+
+
+#: How each provider's agent end carries the agent's final report (the `last_output` source):
+#: Claude Code's `Agent` result `content`, Codex's `wait_agent` `{"completed": <message>}`, opencode's
+#: `task` output `<task_result>`. ``report=None`` is an end that carries no report.
+WITH_REPORT = {"claude": _claude_report, "codex": _codex_report, "opencode": _opencode_report}
+
+
 class TraceCase(BoardCase):
     def run_cycle(self, provider, session, agent, call, at=T0, **extra):
         spawn, rest = CYCLES[provider](session, agent, call, **extra)
@@ -98,7 +125,7 @@ class TraceCase(BoardCase):
 
 class ProviderParityTest(unittest.TestCase):
     def test_every_provider_has_its_trace_capture_decided(self):
-        for table in (CYCLES, NESTED, BUILTIN):
+        for table in (CYCLES, NESTED, BUILTIN, WITH_REPORT):
             self.assertEqual(set(table), set(providers.ALL_PROVIDERS))
 
 
@@ -592,7 +619,7 @@ class CliTest(TraceCase):
         self.assertEqual(set(body) - {"ok"}, {"session_id", "provider", "harness_version", "totals", "turns"})
         node = body["turns"][0]["spans"][0]
         self.assertTrue({"agent", "kind", "status", "duration_s", "usage", "tokens", "subtree_tokens",
-                         "usage_complete", "findings", "children"} <= set(node))
+                         "usage_complete", "findings", "last_output", "children"} <= set(node))
         self.assertEqual(body["harness_version"], trace.harness_version())
         code, out, _ = self.run_cli("tasks", "trace", "s1", "--path", str(self.root))
         self.assertEqual(code, 0)
@@ -615,6 +642,147 @@ class CliTest(TraceCase):
                 self.assertEqual(code, 0, stdin)
 
 
+REPORT = (
+    "| Agent | Tier | Model | Effort |\n|---|---|---|---|\n| `backend-developer` | `backend-exec` | `sonnet` | `x` |\n"
+    "## Summary\n\n- Implemented   the endpoint\n  with api_key=SuperSecretValue123 kept out\n"
+    "```\nprint('code is never the excerpt')\n```\n"
+    + "more words " * 30 + "\n<!-- review-result: findings=0 -->\n"
+)
+EXPECTED_HEAD = "Implemented the endpoint with api_key=[redacted] kept out more words"
+
+
+class LastOutputTest(TraceCase):
+    """A short excerpt of each agent's final report on its span (docs/specs/execution-trace.md)."""
+
+    def run_report(self, provider, session, report, call="c1"):
+        spawn, rest = CYCLES[provider](session, AGENT, call)
+        trace.capture(self.root, spawn, now=T0)
+        for offset, payload in enumerate(WITH_REPORT[provider](rest, report), 1):
+            trace.capture(self.root, payload, now=T0 + offset)
+        return self.spans(session)[call]
+
+    def test_every_provider_keeps_a_redacted_single_line_capped_excerpt(self):
+        """[spec:execution-trace#S9] [spec:canvas-view#S13]"""
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                span = self.run_report(provider, "lo-" + provider, REPORT)
+                excerpt = span["last_output"]
+                self.assertTrue(excerpt.startswith(EXPECTED_HEAD), excerpt)
+                self.assertLessEqual(len(excerpt), trace.LAST_OUTPUT_MAX)
+                self.assertTrue(excerpt.endswith("\u2026"))
+                self.assertNotIn("\n", excerpt)
+                self.assertNotIn("SuperSecretValue123", excerpt)
+                self.assertNotIn("echoed prompt", excerpt)
+                self.assertNotIn("  ", excerpt)
+                # Never the full report.
+                self.assertNotIn("more words " * 30, json.dumps(span))
+
+    def test_a_short_report_is_kept_whole_and_shown_by_the_tree(self):
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                session = "ls-" + provider
+                self.run_report(provider, session, "All\n\n   done.\tShipped.")
+                self.assertEqual(self.spans(session)["c1"]["last_output"], "All done. Shipped.")
+                path = trace.trace_path(self.root, self.project_id, session)
+                node = trace.build(trace.load(path), now=T0 + 99)["turns"][0]["spans"][0]
+                self.assertEqual(node["last_output"], "All done. Shipped.")
+
+    def test_an_end_with_no_report_leaves_it_null(self):
+        """[spec:execution-trace#S9]"""
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                session = "ln-" + provider
+                span = self.run_report(provider, session, None)
+                self.assertEqual(span["status"], "completed")
+                self.assertIsNone(span["last_output"])
+                path = trace.trace_path(self.root, self.project_id, session)
+                self.assertIsNone(trace.build(trace.load(path), now=T0 + 99)["turns"][0]["spans"][0]["last_output"])
+                # A report of banner, markers and code only has no prose either.
+                span = self.run_report(provider, session, "| a | b |\n<!-- review-result: findings=0 -->\n```\nx\n```", call="c2")
+                self.assertIsNone(span["last_output"])
+
+    def test_a_failed_or_launched_agent_has_none(self):
+        failing = claude_spawn("s1", AGENT, "c2")
+        trace.capture(self.root, failing, now=T0)
+        trace.capture(self.root, dict(failing, hook_event_name="PostToolUseFailure", error="api_key=Secret12345678"), now=T0 + 1)  # gitleaks:allow
+        launch = claude_spawn("s1", AGENT, "c3", input={"run_in_background": True})
+        trace.capture(self.root, launch, now=T0 + 2)
+        trace.capture(self.root, dict(launch, hook_event_name="PostToolUse", tool_response={
+            "isAsync": True, "status": "async_launched", "agentId": "agBG",
+            "content": [{"type": "text", "text": "Async agent launched successfully."}]}), now=T0 + 3)
+        spans = self.spans()
+        self.assertIsNone(spans["c2"]["last_output"])
+        self.assertIsNone(spans["c3"]["last_output"])
+
+    def test_a_claude_background_hand_back_carries_its_excerpt(self):
+        transcript = self.tmp / "s1.jsonl"
+        transcript.write_text("", encoding="utf-8")
+        spawn, (end,) = claude_cycle("s1", AGENT, "toolu_bg", input={"run_in_background": True},
+                                     transcript_path=str(transcript))
+        trace.capture(self.root, spawn, now=T0)
+        trace.capture(self.root, dict(end, tool_response={"isAsync": True, "status": "async_launched", "agentId": "agBG"}), now=T0 + 1)
+        result = "Background work\nfinished; token=abcdefABCDEF1234567890\n&lt;!-- review-result: findings=1 --&gt;"  # gitleaks:allow
+        note = {"type": "queue-operation", "timestamp": STAMP,
+                "content": "<task-notification><tool-use-id>toolu_bg</tool-use-id><result>{}</result></task-notification>".format(result)}
+        with open(str(transcript), "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(note) + "\n")
+        trace.settle(self.root, {"session_id": "s1", "transcript_path": str(transcript)}, now=T0 + 5000)
+        span = self.spans()["toolu_bg"]
+        self.assertEqual(span["last_output"], "Background work finished; token=[redacted]")
+        self.assertEqual(span["findings"], 1)
+
+    def test_a_stored_excerpt_is_read_back_as_data(self):
+        """[spec:canvas-view#S13]"""
+        self.run_report("claude", "s1", "ok")
+        path = trace.trace_path(self.root, self.project_id, "s1")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["spans"][0]["last_output"] = "line one\nline\u200b two password=hunter2xyz " + "x" * 500
+        path.write_text(json.dumps(data), encoding="utf-8")
+        node = trace.build(trace.load(path), now=T0 + 9)["turns"][0]["spans"][0]
+        self.assertTrue(node["last_output"].startswith("line one line two password=[redacted] x"))
+        self.assertLessEqual(len(node["last_output"]), trace.LAST_OUTPUT_MAX)
+        data["spans"][0]["last_output"] = {"not": "text"}
+        path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertIsNone(trace.build(trace.load(path), now=T0 + 9)["turns"][0]["spans"][0]["last_output"])
+
+    def test_invisible_characters_are_deleted_before_redaction(self):
+        """[spec:canvas-view#S13]"""
+        # A zero-width space, a tag character or a variation selector inside a secret: spaced, they
+        # would split it into halves the redaction patterns no longer match. (U+2028/U+2029 are line
+        # breaks to `splitlines`, so they separate lines as a newline does.)
+        for mark in ("\u200b", "\U000e0041", "\ufe0f"):
+            with self.subTest(mark=ascii(mark)):
+                excerpt = trace.last_output("Done; password=hunter2" + mark + "xyzSECRET and more")
+                self.assertNotIn("SECRET", excerpt)
+                self.assertNotIn(mark, excerpt)
+                self.assertIn("[redacted]", excerpt)
+        self.assertEqual(trace.last_output("ok\u200b\U000e0041done"), "okdone")
+        self.assertEqual(trace.last_output("tab\tseparated words"), "tab separated words")
+
+    def test_the_invisible_set_covers_tags_selectors_and_separators(self):
+        for char in ("\U000e0000", "\U000e0041", "\U000e007f", "\ufe00", "\ufe0f", "\u2028", "\u2029"):
+            self.assertTrue(tasks._INVISIBLE.search(char), ascii(char))
+        self.assertIsNone(tasks._INVISIBLE.search("plain text \u00e9"))
+
+    def test_the_excerpt_is_bounded_however_large_the_report(self):
+        huge = "start\n" + ("y" * 200 + "\n") * 5000
+        excerpt = trace.last_output(huge)
+        self.assertTrue(excerpt.startswith("start y"))
+        self.assertLessEqual(len(excerpt), trace.LAST_OUTPUT_MAX)
+        for empty in (None, "", "   \n\t", 7, [], {}, {"content": []}):
+            self.assertIsNone(trace.last_output(empty))
+
+
+class CodexV2LastOutputTest(CodexV2Test):
+    def test_a_v2_span_takes_its_excerpt_from_the_final_answer(self):
+        self.spawn("c1", "/root/lobby_qa")
+        with open(str(self.parent), "a", encoding="utf-8") as handle:
+            handle.write(final_answer("/root/lobby_qa", text="Checked the lobby.\nAll green, secret=abc123def456\n"  # gitleaks:allow
+                                                             "<!-- review-result: findings=0 -->"))
+        trace.settle(self.root, {"session_id": "s1", "transcript_path": str(self.parent)}, now=T0 + 5000)
+        self.assertEqual(self.spans()["c1"]["last_output"], "Checked the lobby. All green, secret=[redacted]")
+
+
 @requires_bash()
 class TraceHookTest(tt.HookTest):
     def test_spawn_result_and_stop_flow_through_the_hooks_for_every_provider(self):
@@ -631,6 +799,18 @@ class TraceHookTest(tt.HookTest):
                 payload_file = self.tmp / "stop.json"
                 payload_file.write_text(json.dumps({"session_id": session}), encoding="utf-8")
                 self.run_script(STOP_SUB, "", extra_env={"DEVTEAM_HOOK_PAYLOAD": str(payload_file)})
+
+    def test_the_excerpt_reaches_the_span_through_the_hooks_for_every_provider(self):
+        for provider in providers.ALL_PROVIDERS:
+            with self.subTest(provider=provider):
+                session = "hl-" + provider
+                spawn, rest = CYCLES[provider](session, AGENT, "c1")
+                self.run_script(PRE_TOOL_USE, spawn)
+                for payload in WITH_REPORT[provider](rest, REPORT):
+                    self.run_script(POST_TOOL_USE, payload)
+                path = trace.trace_path(self.root, self.project_id, session)
+                (span,) = json.loads(path.read_text(encoding="utf-8"))["spans"]
+                self.assertTrue(span["last_output"].startswith(EXPECTED_HEAD), span["last_output"])
 
     def test_the_board_listing_ignores_the_trace_directory(self):
         spawn, rest = claude_cycle("s1", AGENT, "c1", cwd=str(self.root))

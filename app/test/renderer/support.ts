@@ -590,6 +590,8 @@ export function fakeBridge(overrides: Partial<DevteamBridge> = {}): DevteamBridg
     boardSettings: vi.fn(() => Promise.resolve(boardSettings())),
     setBoardSettings: vi.fn((settings: BoardSettings) => Promise.resolve({ ok: true, settings } as const)),
     openTaskLink: vi.fn(() => Promise.resolve({ ok: true } as const)),
+    taskGraph: vi.fn(() => Promise.resolve({ ok: false, reason: 'unavailable', detail: null } as const)),
+    onTaskGraph: vi.fn(() => () => undefined),
     ...overrides,
   };
 }

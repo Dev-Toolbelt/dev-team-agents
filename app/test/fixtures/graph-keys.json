@@ -1,0 +1,68 @@
+{
+  "edge": [
+    "from",
+    "id",
+    "kind",
+    "to"
+  ],
+  "graph": [
+    "as_of",
+    "edges",
+    "groups",
+    "nodes",
+    "notices",
+    "project_id",
+    "schema",
+    "truncated"
+  ],
+  "group": [
+    "at",
+    "branch",
+    "command",
+    "ended_at",
+    "id",
+    "kind",
+    "label",
+    "parent",
+    "provider",
+    "prs",
+    "session_id",
+    "started_at",
+    "status",
+    "tokens",
+    "usage_complete"
+  ],
+  "node": [
+    "agent",
+    "background",
+    "description",
+    "duration_s",
+    "ended_at",
+    "findings",
+    "group",
+    "id",
+    "kind",
+    "label",
+    "last_output",
+    "model",
+    "persona",
+    "persona_source",
+    "pr",
+    "record_id",
+    "session_id",
+    "spawn_id",
+    "started_at",
+    "status",
+    "subtree_tokens",
+    "task_key",
+    "todos",
+    "tokens",
+    "usage_complete",
+    "worktree"
+  ],
+  "todo": [
+    "content",
+    "key",
+    "status"
+  ]
+}
