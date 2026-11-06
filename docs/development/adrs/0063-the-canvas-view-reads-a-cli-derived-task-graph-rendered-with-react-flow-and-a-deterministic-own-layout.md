@@ -133,3 +133,14 @@ Forces:
 
 Usage figures follow ADR-0041 per provider; where a provider gives none, `tokens` is 0 with
 `usage_complete: false` and the app shows "n/a", never 0.
+
+## Amendment — 2026-11-06: the canvas applies the board's retention
+
+The canvas hides, client-side, what finished longer ago than the board's done retention
+(ADR-0018, default 24 hours): ended sessions holding no open PR/MR, dated by their end or, lacking
+it, their latest agent activity; and earlier turns of a session still open that hold no open PR/MR
+and have no running or idle agent. The latest turn of an open session is always drawn, and an ended
+session is kept or hidden whole. A
+toolbar toggle (on by default) turns it off. The filter removes whole frames after the period
+filter, so the deterministic layout is computed from what remains; the CLI graph and its JSON
+contract are unchanged.

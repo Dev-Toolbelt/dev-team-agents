@@ -300,3 +300,15 @@ ends at the parent's `Stop`; the subagent events are an additional, deduplicated
 | Parse plan and sprint documents | Only persisted plans are visible, at sprint granularity, with no in-progress signal |
 | One append-only event log for all sessions | Every reader replays the whole log, and one lock is shared by every concurrent session |
 | Snapshot only, no history | Cannot answer how long a task spent in each step, which is a stated requirement |
+
+## Amendment — 2026-11-06: retention in hours, ended sessions included
+
+- The done retention is counted in **hours** (default 24, 1–8760) and stored under
+  `boardDoneRetentionHours`. The day-based `boardDoneRetentionDays` key is no longer read, so every
+  install starts at 24 hours; the stale value is left in the file, unused, until the app's next
+  write of its settings drops it.
+- With the hide filter on, the kanban also hides every task of a session that **ended** longer ago
+  than the retention, and leaves that session out of the session filter. A session holding a
+  PR/MR Created task is never hidden that way: that work still waits for its merge.
+- Still hidden only. Records accumulate as stated in Consequences; deleting is a future explicit
+  command.

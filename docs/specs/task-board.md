@@ -474,8 +474,8 @@ another project's checkout is never this project's merge.
 **Finished work.** PR/MR Created counts as finished for `all_done`, `tasks.session_done`, stale and
 abandoned, so `tasks.session_done` fires while tasks wait in PR/MR Created. `durations.done` no
 longer includes the time a task spent in PR/MR Created; that time is `durations.pr_created`. The
-desktop app's done-retention filter hides old Done tasks only: a PR/MR Created task stays visible
-until its merge is observed.
+desktop app's done-retention filter hides old Done tasks and old ended sessions only: a PR/MR
+Created task stays visible until its merge is observed, and so does the ended session that holds it.
 
 **Known limits.** A merge is recorded only when the checkout it ran in is known and is not the
 merged branch, so catching `feat/x` up with `origin/feat/x` is never a merge. A merge done outside
@@ -530,8 +530,9 @@ Implementation details:
   and `HH:mm` (viewer's locale); a direct card numbers its prompts in the order sent; PR/MR badges
   (`#N` for GitHub PR, `!N` for GitLab MR, clickable to open in browser); issue badges (Jira `PROJ-12`,
   GitHub `owner/repo#45`, clickable); review status badges (**N findings**, **result not read**,
-  **pending**, or neutral **In review**). Filters: session, period, show/hide done older than
-  the retention setting, show/hide tasks without findings in review. *Time per step* (a disclosure
+  **pending**, or neutral **In review**). Filters: session, period, show/hide done tasks and
+  ended sessions older than the retention setting (an ended session past it also leaves the session
+  filter), show/hide tasks without findings in review. *Time per step* (a disclosure
   button) lists the time spent per step except Done, and a finished task's *Finished at* date and time;
   on hover/focus:
   link destination (host + path). Sessions as compact chips on one wrapping line: provider, PR/MR
@@ -548,7 +549,8 @@ Implementation details:
   and when that tab was on show the overview says "That project no longer has tasks." Tabs live in
   memory only and do not survive an app restart.
 - **Settings (app-local, `settings.ts`):** stale threshold (minutes, default 60), done retention
-  (days, default 7), *Keep unanswered direct work for* (hours, 1–720, default 24). Not
+  (hours, 1–8760, default 24, stored as `boardDoneRetentionHours`; the earlier day-based key is no
+  longer read, and the same value drives the canvas), *Keep unanswered direct work for* (hours, 1–720, default 24). Not
   preferences.json keys.
 - Resume commands (in the CLI's `tasks` output; the desktop app no longer shows or copies them): `cd <dir> && claude --resume <id>`, `cd <dir> && codex resume <id>`,
   `cd <dir> && opencode --session <id>`, where `<dir>` is the session's recorded `cwd` when that
@@ -619,6 +621,11 @@ Implementation details:
     enter PR/MR Created with badge `#7`; `cd <same> && gh pr merge 7` moves them to Done; the same
     PR in a repository no bound project names is not recorded, on every provider.
 
+27. **Given** the default retention (24 hours) and the hide filter on, **When** a task was completed
+    more than 24 hours ago, or its session ended more than 24 hours ago and holds no PR/MR Created
+    task, **Then** the kanban does not show it, the Done column says how many tasks and sessions are
+    hidden, and unticking the filter shows them again; nothing is deleted from the record.
+
 ### Out of Scope
 - Editing, moving or deleting tasks from the board (read-only).
 - A "Blocked" column and plan titles as activity names (need agent cooperation).
@@ -640,6 +647,7 @@ Implementation details:
 ### Amendment Log
 | Date | Change | Reason |
 |---|---|---|
+| 2026-11-06 | Done retention is in hours (default 24, 1–8760, `boardDoneRetentionHours`); the day-based key is no longer read, so every install moves to 24 hours. Retention also hides ended sessions (cards and session filter) unless they hold a PR/MR Created task, and the canvas applies the same value; added criterion 27 | User asked for finished tasks and sessions to be hidden after 24 hours on both the board and the canvas, for every user |
 | 2026-11-05 | `seo-specialist` ends its Quality Gate with the review-result marker (agent-lint, SubagentStop gate) without becoming a window trigger; Codex `wait_agent` skips reports from agents tracked as tasks | The SEO gate is a review, but the agent runs in the implementation phase of `/devteam:frontend` and `/devteam:fullstack`; filtering keeps Codex in line with Claude and opencode, which count only named review agents |
 | 2026-09-30 | `sessions_active` counts sessions whose status is not `ended` (active or idle); `tasks watch` also re-emits a project's `snapshot` on a 30 s clock refresh when the derived view changed (stale/abandoned move with time, not with the file); `record`/`mark` `--project-root` is optional (defaults to the resolved root); Stop marks idle through `stop/04b-task-board.sh`; the opencode plugin's `session.idle` payload now carries `session_id` so that hook can name the session | Spec was silent on these; each is needed for the stated behavior to hold |
 | 2026-09-30 | `ready` carries no extra keys; session ids that are not filename-safe are hashed by `record`, but the bash-side `mark` callers (Stop, SessionEnd) skip them, so such a session is never marked idle/ended | Provider ids in practice are UUIDs; skipping avoids a bash re-implementation of the hashing |

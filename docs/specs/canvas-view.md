@@ -115,6 +115,11 @@ The task board (`task-board.md`, ADR-0018) lists a session's tasks flat; the exe
 - When the canvas shows its node and the user opens its details
 - Then the node's header names the agent and its text reads only "Architect plan for VHI-712"; the details panel shows that text as its title, then Model and Tokens as badges, then Took, Started and Finished, before the remaining facts
 
+**Scenario S20: Finished work leaves the canvas after the retention**
+- Given the board's done retention (default 24 hours) and the toolbar's "Hide finished" toggle on, which it is by default
+- When a session ended longer ago than the retention and holds no open PR/MR, or a turn of a still-open session is not its latest, holds no open PR/MR, has no running or idle agent, and its last agent ended longer ago than the retention
+- Then that session or turn is not drawn, the toggle's tooltip says how many are hidden, turning the toggle off draws them again, and when every session in the period is hidden the canvas says so and offers "Show finished sessions"; nothing is deleted
+
 ### Out of Scope
 - Node actions (stop, re-run, open terminal, open worktree) — only the empty extension point ships
 - Editing the board or trace from the canvas
@@ -132,3 +137,4 @@ The task board (`task-board.md`, ADR-0018) lists a session's tasks flat; the exe
 - 2026-11-04 | main conversation (/devteam:review) | Nodes carry `session_id`, `record_id`, `spawn_id`; a child session's PR chip and "Show on board" resolve against `record_id`; the main node shows the session's token total and an `idle` status; a frame or agent expanded by hand opens even where the collapse level folds it | /devteam:review findings (architect 1–2, code-reviewer 1–3, qa 1)
 - 2026-11-05 | frontend-developer (canvas toolbar) | S7–S9 and S12 name the in-canvas toolbar; the outline opens by default on the right; added S16 (full screen), S17 (ended and idle session highlights) and S18 (vertical icon toolbar inside the canvas) | Canvas toolbar plan approved by the user
 - 2026-11-05 | main conversation (canvas detail polish) | S16 covers the app window instead of the system full screen, which the session's permission policy refuses; added S19 (agent name not repeated in the node text, details panel order and badges) | User report: full screen did nothing; detail panel order requested by the user
+- 2026-11-06 | main conversation (24-hour retention) | Added S20: ended sessions and finished turns older than the board's done retention are hidden, behind a toolbar toggle | User asked for finished tasks and sessions to be hidden after 24 hours on the board and the canvas

@@ -379,12 +379,14 @@ closed and reopened. It is read-only: nothing here edits, moves or deletes a tas
   or neutral **In Review**). A **Failed** badge marks a spawned agent run that failed. A worktree mark appears
   only on a task started in a linked worktree; its tooltip (hover or keyboard focus) names the worktree path and branch.
   PR/MR and issue links open in your system browser on the configured tracker host (GitHub, GitLab, or Jira),
-  protected by security validation. Filter by session or period, hide done tasks older than the retention, and
+  protected by security validation. Filter by session or period, hide done tasks and ended sessions older than the retention, and
   show/hide tasks with findings. Sessions are compact chips — provider, optional PR/MR badge, title or branch,
   status icon — with the counts in the chip's tooltip. The Done column is tinted green.
 - **Board settings** (app-local, in `settings.json`, not preferences): `boardStaleAfterMinutes`
-  (default 60, 5 to 1440) is passed to the CLI as `--stale-after`; `boardDoneRetentionDays`
-  (default 7, 1 to 365) is the kanban's default retention.
+  (default 60, 5 to 1440) is passed to the CLI as `--stale-after`; `boardDoneRetentionHours`
+  (default 24, 1 to 8760) is how long done tasks and ended sessions stay visible on the kanban and
+  the canvas. The earlier `boardDoneRetentionDays` key is no longer read. A session holding a PR/MR
+  Created task is never hidden.
 
 ### The Canvas view
 
@@ -404,7 +406,8 @@ execution trace, so the renderer never re-derives a link.
   `localStorage` and win over the computed ones; **Reset layout** clears them.
 - **Toolbar:** a vertical strip of icon buttons inside the canvas, top-left, each with a tooltip:
   fit, zoom, collapse level (a menu: sessions, turns, top-level agents, everything), focus, token
-  heatmap, outline, full screen and reset. The outline (a keyboard-navigable `role="tree"` list, the
+  heatmap, hide finished (on by default: ended sessions and finished turns older than the board's
+  retention are not drawn, unless they hold an open PR/MR), outline, full screen and reset. The outline (a keyboard-navigable `role="tree"` list, the
   accessible fallback) is open by default on the right. **Full screen** uses the Fullscreen API on
   the canvas and its panels (Esc leaves); where that is missing or refused, an overlay over the
   window stands in. Ended sessions start collapsed; the Period filter applies.
