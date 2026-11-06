@@ -26,10 +26,10 @@ beforeEach(async () => {
 
 describe('preload bridge — setBoardSettings', () => {
   it('sends all three board settings, and main accepts the payload', async () => {
-    await exposed!.setBoardSettings({ staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 48 });
+    await exposed!.setBoardSettings({ staleAfterMinutes: 30, doneRetentionHours: 14, directTodoTtlHours: 48 });
     const call = (invoke.mock.calls as unknown[][]).find((args) => args[0] === CHANNELS.setBoardSettings)!;
     const payload = call[1];
-    expect(payload).toEqual({ staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 48 });
+    expect(payload).toEqual({ staleAfterMinutes: 30, doneRetentionHours: 14, directTodoTtlHours: 48 });
     expect(boardSettingsProblem(payload)).toBeNull();
   });
 });

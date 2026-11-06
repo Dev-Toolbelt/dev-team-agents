@@ -417,10 +417,10 @@ describe('Board — accessibility and overflow', () => {
   });
 
   it('submits the settings with Enter and ignores a second submit while saving', async () => {
-    let finish: (value: { ok: true; settings: { staleAfterMinutes: number; doneRetentionDays: number; directTodoTtlHours: number } }) => void = () => undefined;
+    let finish: (value: { ok: true; settings: { staleAfterMinutes: number; doneRetentionHours: number; directTodoTtlHours: number } }) => void = () => undefined;
     const setBoardSettings = vi.fn(
       () =>
-        new Promise<{ ok: true; settings: { staleAfterMinutes: number; doneRetentionDays: number; directTodoTtlHours: number } }>((resolve) => {
+        new Promise<{ ok: true; settings: { staleAfterMinutes: number; doneRetentionHours: number; directTodoTtlHours: number } }>((resolve) => {
           finish = resolve;
         }),
     );
@@ -436,7 +436,7 @@ describe('Board — accessibility and overflow', () => {
     await user.keyboard('{Enter}');
     expect(setBoardSettings).toHaveBeenCalledTimes(1);
     await act(() => {
-      finish({ ok: true, settings: { staleAfterMinutes: 60, doneRetentionDays: 7, directTodoTtlHours: 24 } });
+      finish({ ok: true, settings: { staleAfterMinutes: 60, doneRetentionHours: 7, directTodoTtlHours: 24 } });
       return Promise.resolve();
     });
     expect(screen.queryByRole('dialog', { name: 'Board settings' })).not.toBeInTheDocument();
@@ -593,7 +593,7 @@ describe('Board kanban — durations on the minute clock', () => {
   });
 
   it('holds the clock at the snapshot time when the snapshot is newer than the sampled clock', async () => {
-    const retention = 7 * 86_400;
+    const retention = 24 * 3600;
     const done = boardTask({ key: 'd', content: 'Edge done', column: 'done', status: 'completed', completed_at: NOW + 1000 - retention - 10, status_since: NOW + 1000 - retention - 10 });
     await openKanban({ ...boardProject({ sessions: [boardSession({ tasks: [done] })] }), as_of: NOW + 1000 });
     expect(screen.queryByText('Edge done')).not.toBeInTheDocument();
@@ -601,7 +601,7 @@ describe('Board kanban — durations on the minute clock', () => {
   });
 
   it('shows the same task while the snapshot is not ahead of the clock', async () => {
-    const retention = 7 * 86_400;
+    const retention = 24 * 3600;
     const done = boardTask({ key: 'd', content: 'Edge done', column: 'done', status: 'completed', completed_at: NOW - retention + 990, status_since: NOW - retention + 990 });
     await openKanban({ ...boardProject({ sessions: [boardSession({ tasks: [done] })] }), as_of: NOW });
     expect(screen.getByText('Edge done')).toBeInTheDocument();

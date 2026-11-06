@@ -12,6 +12,10 @@ import {
   formatDateTime,
   formatDuration,
   formatDurationMinutes,
+  formatRetention,
+  hiddenNote,
+  isRetiredSession,
+  retentionCutoff,
   percent,
   percentLabels,
   timeInColumn,
@@ -200,7 +204,7 @@ describe('in review', () => {
   it('puts in-review tasks in their own column and filters to findings only', () => {
     const clean = boardTask({ key: 'clean', column: 'in_review', status: 'in_progress', review: { state: 'pending', findings: null, since: NOW - 10 } });
     const project = boardProject({ sessions: [boardSession({ tasks: [review, clean, boardTask({ key: 'plain' })] })] });
-    const filters = { sessionId: 'all', period: 'all', hideOldDone: true, retentionDays: 7 } as const;
+    const filters = { sessionId: 'all', period: 'all', hideOldDone: true, retentionHours: 168 } as const;
     expect(buildKanban(project, filters, NOW).in_review.map((i) => i.task.key)).toEqual(['rv', 'clean']);
     const only = buildKanban(project, { ...filters, onlyFindings: true }, NOW);
     expect(only.in_review.map((i) => i.task.key)).toEqual(['rv']);
@@ -296,7 +300,7 @@ describe('buildKanban', () => {
   const a = boardSession({ session_id: 'a', tasks: [later, first, doneOld, doneNew, doing] });
   const b = boardSession({ session_id: 'b', tasks: [boardTask({ key: 'b1' })] });
   const project = boardProject({ sessions: [a, b] });
-  const filters = { sessionId: 'all', period: 'all', hideOldDone: true, retentionDays: 7 } as const;
+  const filters = { sessionId: 'all', period: 'all', hideOldDone: true, retentionHours: 168 } as const;
 
   it('puts each task in its column, oldest first, done newest first', () => {
     const view = buildKanban(project, { ...filters, hideOldDone: false }, NOW);
@@ -329,6 +333,20 @@ describe('buildKanban', () => {
     expect(view.in_progress.map((i) => i.task.key)).toEqual(['work']);
     expect(view.hiddenDirect).toBe(1);
     expect(buildKanban(p, filters, NOW).hiddenDirect).toBe(0);
+  });
+
+  it('hides every task of a session that ended before the retention, and lifts it with the filter', () => {
+    const gone = boardSession({
+      session_id: 'gone', status: 'ended', ended_at: NOW - 200 * 3600, last_activity_at: NOW - 200 * 3600,
+      tasks: [boardTask({ key: 'stuck', column: 'in_progress', status: 'in_progress' })],
+    });
+    const p = boardProject({ sessions: [a, b, gone] });
+    const view = buildKanban(p, filters, NOW);
+    expect(view.hiddenSessions).toBe(1);
+    expect(view.in_progress.map((i) => i.task.key)).toEqual(['doing']);
+    const lifted = buildKanban(p, { ...filters, hideOldDone: false }, NOW);
+    expect(lifted.hiddenSessions).toBe(0);
+    expect(lifted.in_progress.map((i) => i.task.key).sort()).toEqual(['doing', 'stuck']);
   });
 
   it('never hides a task that is not done, however old', () => {
@@ -482,5 +500,42 @@ describe('sortProjectViews', () => {
   it('sorts by the app-local name when one is set', () => {
     const views = [view('a', '/r/alpha', 0), view('b', '/r/beta', 0)];
     expect(sortProjectViews(views, { b: 'Aardvark' }).map((v) => v.project.project_id)).toEqual(['b', 'a']);
+  });
+});
+
+describe('retention helpers', () => {
+  it('retentionCutoff counts back in hours', () => {
+    expect(retentionCutoff(24, NOW)).toBe(NOW - 86_400);
+  });
+
+  it('isRetiredSession holds only for an ended session past the cutoff', () => {
+    const cutoff = NOW - 86_400;
+    expect(isRetiredSession(boardSession({ status: 'ended', ended_at: cutoff - 1 }), cutoff)).toBe(true);
+    expect(isRetiredSession(boardSession({ status: 'ended', ended_at: cutoff + 1 }), cutoff)).toBe(false);
+    expect(isRetiredSession(boardSession({ status: 'ended', ended_at: null, last_activity_at: cutoff - 1 }), cutoff)).toBe(true);
+    expect(isRetiredSession(boardSession({ status: 'idle', last_activity_at: 1 }), cutoff)).toBe(false);
+    const waiting = boardTask({ key: 'pr', column: 'pr_created', status: 'completed' });
+    expect(isRetiredSession(boardSession({ status: 'ended', ended_at: cutoff - 1, tasks: [waiting] }), cutoff)).toBe(false);
+  });
+
+  it('buildKanban does not count a retired session that holds no task', () => {
+    const empty = boardSession({ session_id: 'empty', status: 'ended', ended_at: NOW - 200 * 3600, tasks: [] });
+    const view = buildKanban(boardProject({ sessions: [empty] }), { sessionId: 'all', period: 'all', hideOldDone: true, retentionHours: 24 }, NOW);
+    expect(view.hiddenSessions).toBe(0);
+  });
+
+  it('formatRetention reads whole days as days, else hours', () => {
+    expect(formatRetention(24)).toBe('1 day');
+    expect(formatRetention(168)).toBe('7 days');
+    expect(formatRetention(36)).toBe('36 hours');
+    expect(formatRetention(1)).toBe('1 hour');
+  });
+
+  it('hiddenNote names what the retention hides', () => {
+    expect(hiddenNote(0, 0)).toBeNull();
+    expect(hiddenNote(1, 0)).toBe('1 older done task is hidden');
+    expect(hiddenNote(3, 0)).toBe('3 older done tasks are hidden');
+    expect(hiddenNote(2, 1)).toBe('2 older done tasks and 1 ended session are hidden');
+    expect(hiddenNote(0, 1)).toBe('1 ended session is hidden');
   });
 });

@@ -10,6 +10,7 @@ import {
   effectiveCollapsed,
   explicitlyExpanded,
   filterGraphByPeriod,
+  filterGraphByRetention,
   focusSet,
   frameTokensLabel,
   heatTone,
@@ -28,7 +29,7 @@ import {
 } from '../src/renderer/canvasModel.js';
 import type { TaskGraph } from '../src/shared/api.js';
 import { NOW } from './fixtures/board.js';
-import { TURN, graphNode, sampleGraph } from './fixtures/canvasGraph.js';
+import { TURN, graphGroup, graphNode, sampleGraph, spawn } from './fixtures/canvasGraph.js';
 
 const ALL = { level: 'all' as const, collapsed: new Set<string>() };
 
@@ -183,6 +184,101 @@ describe('filterGraphByPeriod', () => {
     expect(narrowed.nodes.some((each) => each.group === 'session:s2')).toBe(false);
     expect(narrowed.edges.some((each) => each.from === 'main:s2')).toBe(false);
     expect(filterGraphByPeriod(sampleGraph(), null)).toEqual(sampleGraph());
+  });
+});
+
+describe('filterGraphByRetention', () => {
+  it('[spec:canvas-view#S20] hides an ended session that ended before the cutoff, with its nodes and edges', () => {
+    const view = filterGraphByRetention(sampleGraph(), NOW - 3000);
+    expect(view.hiddenSessions).toBe(1);
+    expect(view.graph.groups.map((each) => each.id)).toEqual(['session:s1', TURN]);
+    expect(view.graph.nodes.some((each) => each.group === 'session:s2')).toBe(false);
+    expect(view.graph.edges.some((each) => each.from === 'main:s2')).toBe(false);
+  });
+
+  it('[spec:canvas-view#S20] keeps an ended session that still holds an open PR/MR', () => {
+    const base = sampleGraph();
+    const graph: TaskGraph = {
+      ...base,
+      nodes: base.nodes.map((each) =>
+        each.id === 'span:s2:t1' ? { ...each, pr: { kind: 'pr' as const, number: 7, url: 'https://github.com/o/r/pull/7', state: 'open' as const } } : each,
+      ),
+    };
+    expect(filterGraphByRetention(graph, NOW - 3000).hiddenSessions).toBe(0);
+  });
+
+  it('[spec:canvas-view#S20] never hides an open session or its latest turn, however old', () => {
+    const view = filterGraphByRetention(sampleGraph(), NOW + 999_999);
+    expect(view.graph.groups.map((each) => each.id)).toEqual(['session:s1', TURN]);
+    expect(view.hiddenTurns).toBe(0);
+  });
+
+  it('[spec:canvas-view#S20] returns the graph unchanged when nothing is older than the cutoff', () => {
+    const graph = sampleGraph();
+    expect(filterGraphByRetention(graph, NOW - 99_999)).toEqual({ graph, hiddenSessions: 0, hiddenTurns: 0 });
+  });
+
+  it('[spec:canvas-view#S20] hides an earlier finished turn of an open session, but keeps one with a live agent or an open PR/MR', () => {
+    const base = sampleGraph();
+    const oldDone = `turn:s1:${NOW - 90_000}`;
+    const oldLive = `turn:s1:${NOW - 80_000}`;
+    const graph: TaskGraph = {
+      ...base,
+      groups: [
+        ...base.groups,
+        graphGroup({ id: oldDone, kind: 'turn', parent: 'session:s1', at: NOW - 90_000 }),
+        graphGroup({ id: oldLive, kind: 'turn', parent: 'session:s1', at: NOW - 80_000 }),
+      ],
+      nodes: [
+        ...base.nodes,
+        graphNode({ id: 'span:s1:old', group: oldDone, started_at: NOW - 90_000, ended_at: NOW - 89_000 }),
+        graphNode({ id: 'span:s1:idle', group: oldLive, status: 'idle', started_at: NOW - 80_000 }),
+      ],
+      edges: [...base.edges, spawn('main:s1', 'span:s1:old'), spawn('main:s1', 'span:s1:idle')],
+    };
+    const view = filterGraphByRetention(graph, NOW - 86_400);
+    expect(view.hiddenTurns).toBe(1);
+    expect(view.graph.groups.some((each) => each.id === oldDone)).toBe(false);
+    expect(view.graph.groups.some((each) => each.id === oldLive)).toBe(true);
+    expect(view.graph.nodes.some((each) => each.id === 'span:s1:old')).toBe(false);
+    expect(view.graph.edges.some((each) => each.to === 'span:s1:old')).toBe(false);
+
+    const withPr: TaskGraph = {
+      ...graph,
+      nodes: graph.nodes.map((each) =>
+        each.id === 'span:s1:old' ? { ...each, pr: { kind: 'pr' as const, number: 9, url: 'https://github.com/o/r/pull/9', state: 'open' as const } } : each,
+      ),
+    };
+    expect(filterGraphByRetention(withPr, NOW - 86_400).hiddenTurns).toBe(0);
+  });
+
+  it('[spec:canvas-view#S20] dates an ended session with no end by its latest agent activity, as the board does', () => {
+    const base = sampleGraph();
+    const graph: TaskGraph = {
+      ...base,
+      groups: base.groups.map((each) => (each.id === 'session:s2' ? { ...each, ended_at: null, started_at: NOW - 200_000 } : each)),
+      nodes: base.nodes.map((each) => (each.id === 'span:s2:t1' ? { ...each, started_at: NOW - 100, ended_at: NOW - 50 } : each)),
+    };
+    expect(filterGraphByRetention(graph, NOW - 86_400).hiddenSessions).toBe(0);
+    const quiet: TaskGraph = { ...graph, nodes: base.nodes };
+    expect(filterGraphByRetention(quiet, NOW - 86_400).hiddenSessions).toBe(1);
+  });
+
+  it('[spec:canvas-view#S20] never sheds single turns from an ended session it keeps', () => {
+    const base = sampleGraph();
+    const oldTurn = `turn:s2:${NOW - 90_000}`;
+    const graph: TaskGraph = {
+      ...base,
+      groups: [
+        ...base.groups.map((each) => (each.id === 'session:s2' ? { ...each, ended_at: NOW - 60 } : each)),
+        graphGroup({ id: oldTurn, kind: 'turn', parent: 'session:s2', at: NOW - 90_000 }),
+        graphGroup({ id: `turn:s2:${NOW - 100}`, kind: 'turn', parent: 'session:s2', at: NOW - 100 }),
+      ],
+      nodes: [...base.nodes, graphNode({ id: 'span:s2:old', group: oldTurn, started_at: NOW - 90_000, ended_at: NOW - 89_000 })],
+    };
+    const view = filterGraphByRetention(graph, NOW - 86_400);
+    expect(view.hiddenTurns).toBe(0);
+    expect(view.graph.groups.some((each) => each.id === oldTurn)).toBe(true);
   });
 });
 

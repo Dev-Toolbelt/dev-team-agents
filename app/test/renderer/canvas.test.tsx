@@ -13,7 +13,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { canvasActions } from '../../src/renderer/canvasActions.js';
 import { loadPositions, savePosition } from '../../src/renderer/canvasPositions.js';
 import { Board } from '../../src/renderer/screens/Board.js';
-import type { BoardFeed, TaskGraphResult } from '../../src/shared/api.js';
+import type { BoardFeed, BoardSession, TaskGraph, TaskGraphResult } from '../../src/shared/api.js';
 import { NOW, boardProject, boardSession, boardTask } from '../fixtures/board.js';
 import { TURN, graphNode, sampleGraph, spawn } from '../fixtures/canvasGraph.js';
 import { boardFeed, fakeBridge, installBridge } from './support.js';
@@ -58,7 +58,7 @@ function relativeX(canvas: HTMLElement, id: string): number {
   return x(`.react-flow__node[data-id="${id}"]`) - x('.react-flow__node[data-id^="turn:"]');
 }
 
-function feed(): BoardFeed {
+function feed(extra: readonly BoardSession[] = []): BoardFeed {
   return boardFeed({
     projects: [
       boardProject({
@@ -71,16 +71,17 @@ function feed(): BoardFeed {
             last_activity_at: NOW - 60,
             tasks: [boardTask({ key: 't4', content: 'backend-developer: Build the cart API', kind: 'agent', status: 'in_progress', column: 'in_progress' })],
           }),
+          ...extra,
         ],
       }),
     ],
   });
 }
 
-function renderCanvas(result: TaskGraphResult = { ok: true, graph: sampleGraph() }) {
+function renderCanvas(result: TaskGraphResult = { ok: true, graph: sampleGraph() }, extraSessions: readonly BoardSession[] = []) {
   let pushGraph: (next: TaskGraphResult) => void = () => undefined;
   const bridge = fakeBridge({
-    taskBoard: vi.fn(() => Promise.resolve(feed())),
+    taskBoard: vi.fn(() => Promise.resolve(feed(extraSessions))),
     onTaskBoard: vi.fn(() => () => undefined),
     taskGraph: vi.fn(() => Promise.resolve(result)),
     onTaskGraph: vi.fn((_projectId: string, listener: (next: TaskGraphResult) => void) => {
@@ -295,6 +296,20 @@ describe('Canvas view', () => {
     await waitFor(() => expect(document.activeElement).toHaveAttribute('data-card', 's1:t4'));
   });
 
+  it('takes the user to a card of a session the board retention hides, lifting the filter', async () => {
+    const user = userEvent.setup();
+    const gone = boardSession({
+      session_id: 's2', provider: 'codex', status: 'ended', ended_at: NOW - 2 * 86_400, last_activity_at: NOW - 2 * 86_400,
+      tasks: [boardTask({ key: 't1', content: 'qa-specialist: Check the release', kind: 'agent', status: 'completed', column: 'done', completed_at: NOW - 2 * 86_400 })],
+    });
+    renderCanvas(undefined, [gone]);
+    await openCanvas(user);
+    fireEvent.click(screen.getByRole('treeitem', { name: 'qa-specialist: Check the release' }));
+    await user.click(await screen.findByRole('button', { name: 'Show on board' }));
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('data-card', 's2:t1'));
+    expect(screen.getByRole('checkbox', { name: /hide done older than 1 day/i })).not.toBeChecked();
+  });
+
   it('[spec:canvas-view#S10] restores a stored position on mount and forgets it on Reset layout', async () => {
     localStorage.setItem('devteam.canvas.positions.v1:proj-a', JSON.stringify({ 'span:s1:b': { x: 700, y: 400 } }));
     const user = userEvent.setup();
@@ -455,7 +470,7 @@ describe('Canvas view', () => {
     expect(canvas).toContainElement(toolbar);
     expect(toolbar).toHaveAttribute('aria-orientation', 'vertical');
     expect(toolbar.closest('.react-flow__panel')).toHaveClass('top', 'left');
-    for (const name of ['Fit view', 'Zoom in', 'Zoom out', 'Focus', 'Token heatmap', 'Outline', 'Full screen', 'Reset layout']) {
+    for (const name of ['Fit view', 'Zoom in', 'Zoom out', 'Focus', 'Token heatmap', 'Hide finished older than 1 day', 'Outline', 'Full screen', 'Reset layout']) {
       const button = within(toolbar).getByRole('button', { name });
       expect(button).toHaveClass('nodrag', 'nopan');
       expect(button).not.toHaveTextContent(name);
@@ -482,6 +497,7 @@ describe('Canvas view', () => {
       ['Show: Everything', 'Show: Everything'],
       ['Focus', 'Focus: select an agent to focus on it'],
       ['Token heatmap', 'Token heatmap: shade agents by the tokens of their subtree'],
+      ['Hide finished older than 1 day', 'Hiding ended sessions and finished turns older than 1 day'],
       ['Outline', 'Outline: the canvas as a keyboard-navigable list'],
       ['Full screen', 'Full screen'],
       ['Reset layout', 'Reset layout: put every moved node back'],
@@ -507,6 +523,43 @@ describe('Canvas view', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Reset layout: put every moved node back');
   });
 
+  it('hides a session that ended more than a day ago, and the toolbar toggle brings it back', async () => {
+    const user = userEvent.setup();
+    const graph = sampleGraph();
+    const aged: TaskGraph = {
+      ...graph,
+      groups: graph.groups.map((each) => (each.id === 'session:s2' ? { ...each, started_at: NOW - 200_000, ended_at: NOW - 190_000 } : each)),
+    };
+    renderCanvas({ ok: true, graph: aged });
+    const toolbar = await openCanvas(user);
+    expect(screen.queryByText('Old session')).not.toBeInTheDocument();
+    const toggle = within(toolbar).getByRole('button', { name: 'Hide finished older than 1 day' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    act(() => toggle.focus());
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Hiding ended sessions and finished turns older than 1 day (1 hidden)');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(await screen.findAllByText('Old session')).not.toHaveLength(0);
+  });
+
+  it('offers to show finished sessions when the retention hides every one', async () => {
+    const user = userEvent.setup();
+    const graph = sampleGraph();
+    const ended: TaskGraph = {
+      ...graph,
+      groups: graph.groups.map((each) => (each.kind === 'session' ? { ...each, status: 'ended' as const, started_at: NOW - 200_000, ended_at: NOW - 190_000 } : each)),
+      // No open PR/MR either: that would keep its session on the canvas.
+      nodes: graph.nodes.map((each) => ({ ...each, pr: null })),
+    };
+    renderCanvas({ ok: true, graph: ended });
+    const list = await screen.findByRole('list', { name: 'Projects with tasks' });
+    await user.click(within(list).getByText('storefront').closest('button')!);
+    await user.click(within(await screen.findByRole('group', { name: 'View' })).getByRole('button', { name: 'Canvas' }));
+    expect(await screen.findByText(/finished more than 1 day ago and is hidden/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show finished sessions' }));
+    expect(await screen.findByRole('toolbar', { name: 'Canvas controls' })).toBeInTheDocument();
+  });
+
   it('[spec:canvas-view#S18] gives the toolbar one Tab stop and moves through it with Up, Down, Home and End', async () => {
     const user = userEvent.setup();
     renderCanvas();
@@ -525,7 +578,7 @@ describe('Canvas view', () => {
     expect(button('Fit view')).toHaveFocus();
     await user.keyboard('{ArrowUp}');
     expect(button('Reset layout')).toHaveFocus();
-    await user.keyboard('{ArrowUp}{ArrowUp}{ArrowUp}{ArrowUp}');
+    await user.keyboard('{ArrowUp}{ArrowUp}{ArrowUp}{ArrowUp}{ArrowUp}');
     expect(button('Focus')).toHaveFocus();
     await user.keyboard('{Home}');
     expect(button('Fit view')).toHaveFocus();

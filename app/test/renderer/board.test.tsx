@@ -406,8 +406,25 @@ describe('Project kanban', () => {
     expect(screen.getByText('Fresh chore')).toBeInTheDocument();
     expect(screen.queryByText('Ancient chore')).not.toBeInTheDocument();
     expect(screen.getByText('1 older done task is hidden')).toBeInTheDocument();
-    await user.click(screen.getByRole('checkbox', { name: /hide done older than 7 days/i }));
+    await user.click(screen.getByRole('checkbox', { name: /hide done older than 1 day/i }));
     expect(screen.getByText('Ancient chore')).toBeInTheDocument();
+  });
+
+  it('hides a session that ended more than a day ago, from the cards and the session filter; unticking shows it', async () => {
+    const live = boardSession({ session_id: 'live', tasks: [boardTask({ key: 'l', content: 'Live chore' })], last_activity_at: NOW - 60 });
+    const gone = boardSession({
+      session_id: 'gone', status: 'ended', ended_at: NOW - 2 * 86_400, last_activity_at: NOW - 2 * 86_400,
+      tasks: [boardTask({ key: 'g', content: 'Gone chore' })],
+    });
+    const { user } = await openKanban(boardProject({ sessions: [live, gone] }));
+    expect(screen.getByText('Live chore')).toBeInTheDocument();
+    expect(screen.queryByText('Gone chore')).not.toBeInTheDocument();
+    expect(screen.getByText('1 ended session is hidden')).toBeInTheDocument();
+    const options = () => within(screen.getByLabelText('Session')).getAllByRole('option').map((each) => (each as HTMLOptionElement).value);
+    expect(options()).toEqual(['all', 'live']);
+    await user.click(screen.getByRole('checkbox', { name: /hide done older than 1 day/i }));
+    expect(screen.getByText('Gone chore')).toBeInTheDocument();
+    expect(options()).toEqual(['all', 'live', 'gone']);
   });
 
   it('marks stale and abandoned tasks in words on the card', async () => {
@@ -639,17 +656,17 @@ describe('Board settings', () => {
     await user.click(screen.getByRole('button', { name: /board settings/i }));
     const dialog = await screen.findByRole('dialog', { name: 'Board settings' });
     const stale = within(dialog).getByLabelText('Stale after (minutes)');
-    const retention = within(dialog).getByLabelText('Show done for (days)');
+    const retention = within(dialog).getByLabelText('Show done for (hours)');
     expect(stale).toHaveValue(60);
-    expect(retention).toHaveValue(7);
+    expect(retention).toHaveValue(24);
     await user.clear(stale);
     await user.type(stale, '30');
     await user.clear(retention);
     await user.type(retention, '14');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
-    expect(bridge.setBoardSettings).toHaveBeenCalledWith({ staleAfterMinutes: 30, doneRetentionDays: 14, directTodoTtlHours: 24 });
+    expect(bridge.setBoardSettings).toHaveBeenCalledWith({ staleAfterMinutes: 30, doneRetentionHours: 14, directTodoTtlHours: 24 });
     await user.click(await card('storefront'));
-    expect(await screen.findByRole('checkbox', { name: /hide done older than 14 days/i })).toBeInTheDocument();
+    expect(await screen.findByRole('checkbox', { name: /hide done older than 14 hours/i })).toBeInTheDocument();
   });
 
   it('shows the main process’s refusal and keeps the form open', async () => {

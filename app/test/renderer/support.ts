@@ -601,7 +601,7 @@ export function boardFeed(overrides: Partial<BoardFeed> = {}): BoardFeed {
 }
 
 export function boardSettings(overrides: Partial<BoardSettings> = {}): BoardSettings {
-  return { staleAfterMinutes: 60, doneRetentionDays: 7, directTodoTtlHours: 24, ...overrides };
+  return { staleAfterMinutes: 60, doneRetentionHours: 24, directTodoTtlHours: 24, ...overrides };
 }
 
 export function notificationFeed(overrides: Partial<NotificationFeed> = {}): NotificationFeed {
