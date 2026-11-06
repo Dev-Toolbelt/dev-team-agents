@@ -284,9 +284,12 @@ export interface KanbanFilters {
   /** A session id, or `all`. */
   readonly sessionId: string;
   readonly period: Period;
-  /** Hide done tasks completed longer ago than `retentionDays`. */
+  /**
+   * Hide done tasks completed longer ago than `retentionHours`, and every task of a session that
+   * ended longer ago than that. Hidden, never deleted: unchecking the filter brings them back.
+   */
   readonly hideOldDone: boolean;
-  readonly retentionDays: number;
+  readonly retentionHours: number;
   /** Only tasks in review with findings. Optional so a caller that predates the filter keeps working. */
   readonly onlyFindings?: boolean;
   /**
@@ -310,6 +313,8 @@ export interface KanbanView {
   readonly done: readonly KanbanItem[];
   /** Done tasks the retention setting is hiding. */
   readonly hiddenDone: number;
+  /** Ended sessions the retention setting is hiding, with every task they hold. */
+  readonly hiddenSessions: number;
   /** "Direct work" cards in To Do the lifetime setting is hiding. */
   readonly hiddenDirect: number;
 }
@@ -318,8 +323,14 @@ export function buildKanban(project: BoardProject, filters: KanbanFilters, nowSe
   const sessions = sessionsInPeriod(project, filters.period, nowSeconds).filter(
     (session) => filters.sessionId === 'all' || session.session_id === filters.sessionId,
   );
-  const items: KanbanItem[] = sessions.flatMap((session) => session.tasks.map((task) => ({ session, task })));
-  const doneCutoff = nowSeconds - filters.retentionDays * DAY;
+  const doneCutoff = retentionCutoff(filters.retentionHours, nowSeconds);
+  // A retired session with no task hides no card, so it is not counted either.
+  const retired = new Set(
+    filters.hideOldDone ? sessions.filter((session) => session.tasks.length > 0 && isRetiredSession(session, doneCutoff)) : [],
+  );
+  const items: KanbanItem[] = sessions
+    .filter((session) => !retired.has(session))
+    .flatMap((session) => session.tasks.map((task) => ({ session, task })));
   let hiddenDone = 0;
   let hiddenDirect = 0;
   const visible = items.filter(({ task }) => {
@@ -344,8 +355,42 @@ export function buildKanban(project: BoardProject, filters: KanbanFilters, nowSe
       .filter((i) => i.task.column === 'done')
       .sort((a, b) => (b.task.completed_at ?? b.task.status_since) - (a.task.completed_at ?? a.task.status_since)),
     hiddenDone,
+    hiddenSessions: retired.size,
     hiddenDirect,
   };
+}
+
+/** Epoch seconds before which a finished task or an ended session is hidden. */
+export function retentionCutoff(retentionHours: number, nowSeconds: number): number {
+  return nowSeconds - retentionHours * 3600;
+}
+
+/** A retention as a label: whole days when it divides evenly (`24 hours` reads `1 day`), else hours. */
+export function formatRetention(hours: number): string {
+  if (hours % 24 === 0) {
+    const days = hours / 24;
+    return `${days} ${days === 1 ? 'day' : 'days'}`;
+  }
+  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+}
+
+/** The Done column's note on what the retention hides, or `null` when it hides nothing. */
+export function hiddenNote(hiddenDone: number, hiddenSessions: number): string | null {
+  const parts: string[] = [];
+  if (hiddenDone > 0) parts.push(`${hiddenDone} older done ${hiddenDone === 1 ? 'task' : 'tasks'}`);
+  if (hiddenSessions > 0) parts.push(`${hiddenSessions} ended ${hiddenSessions === 1 ? 'session' : 'sessions'}`);
+  if (parts.length === 0) return null;
+  return `${parts.join(' and ')} ${hiddenDone + hiddenSessions === 1 ? 'is' : 'are'} hidden`;
+}
+
+/**
+ * An ended session whose end (or, lacking it, last activity) is older than `cutoff`. A session
+ * holding a PR/MR Created task never is: that work waits for its merge, and retention hides
+ * finished work only.
+ */
+export function isRetiredSession(session: BoardSession, cutoff: number): boolean {
+  if (session.status !== 'ended' || (session.ended_at ?? session.last_activity_at) >= cutoff) return false;
+  return !session.tasks.some((task) => task.column === 'pr_created');
 }
 
 /** A "Direct work" card in To Do whose last turn is older than `ttlHours`. */

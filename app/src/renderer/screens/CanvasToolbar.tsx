@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
-import { Crosshair, Flame, Layers, ListTree, Maximize2, Minimize2, RotateCcw, Scan, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArchiveX, Crosshair, Flame, Layers, ListTree, Maximize2, Minimize2, RotateCcw, Scan, ZoomIn, ZoomOut } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +30,13 @@ export interface CanvasToolbarProps {
   readonly onFocus: () => void;
   readonly heatOn: boolean;
   readonly onHeat: () => void;
+  /** Ended sessions and finished turns older than the retention are hidden. */
+  readonly hideOldOn: boolean;
+  readonly onHideOld: () => void;
+  /** The retention as a label (`1 day`, `36 hours`). */
+  readonly retentionLabel: string;
+  /** How many sessions and turns the retention hides right now. */
+  readonly hiddenCount: number;
   readonly outlineOn: boolean;
   readonly onOutline: () => void;
   readonly fullScreen: boolean;
@@ -220,6 +227,20 @@ export function CanvasToolbar(props: CanvasToolbarProps) {
         onClick={props.onHeat}
       >
         <Flame aria-hidden="true" />
+      </ToolButton>
+      <ToolButton
+        id="hide-old"
+        roving={roving}
+        label={`Hide finished older than ${props.retentionLabel}`}
+        hint={
+          props.hideOldOn
+            ? `Hiding ended sessions and finished turns older than ${props.retentionLabel}${props.hiddenCount > 0 ? ` (${props.hiddenCount} hidden)` : ''}`
+            : `Hide ended sessions and finished turns older than ${props.retentionLabel}`
+        }
+        pressed={props.hideOldOn}
+        onClick={props.onHideOld}
+      >
+        <ArchiveX aria-hidden="true" />
       </ToolButton>
       <Divider />
       <ToolButton

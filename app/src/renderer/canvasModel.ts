@@ -138,6 +138,82 @@ export function filterGraphByPeriod(graph: TaskGraph, cutoff: number | null): Ta
   return { ...graph, groups, nodes, edges };
 }
 
+// ── retention ────────────────────────────────────────────────────────────────
+
+export interface RetentionView {
+  readonly graph: TaskGraph;
+  /** Ended sessions the retention hides. */
+  readonly hiddenSessions: number;
+  /** Finished turns of still-open sessions the retention hides. */
+  readonly hiddenTurns: number;
+}
+
+const LIVE_NODE: ReadonlySet<GraphNodeStatus> = new Set(['running', 'idle']);
+
+/**
+ * The graph without what finished before `cutoff` (hidden, never deleted): an ended session whose
+ * end (or, lacking it, start) is older and that holds no open PR/MR, and inside a session still open, a turn that is not the
+ * session's latest, holds no open PR/MR, has no running or idle agent, and whose last agent ended (or, with none, which
+ * started) before `cutoff`. The latest turn of an open session always stays: it may still be live.
+ */
+export function filterGraphByRetention(graph: TaskGraph, cutoff: number): RetentionView {
+  const sessions = graph.groups.filter((each) => each.kind === 'session');
+  const parentOf = new Map(graph.groups.map((each) => [each.id, each.parent] as const));
+  const sessionOfGroup = (group: string) => parentOf.get(group) ?? group;
+  // The board falls back to a session's last activity when it has no end; the graph's nearest
+  // equivalent is the latest moment any of its agents started or ended.
+  const lastActivity = new Map<string, number>();
+  for (const node of graph.nodes) {
+    const at = Math.max(node.ended_at ?? 0, node.started_at ?? 0);
+    const session = sessionOfGroup(node.group);
+    lastActivity.set(session, Math.max(lastActivity.get(session) ?? 0, at));
+  }
+  // A session with an open PR/MR still waits for its merge, as the board's PR/MR Created column does.
+  const openPr = graph.nodes.filter((each) => each.pr?.state === 'open');
+  const awaitingMerge = new Set(openPr.map((each) => sessionOfGroup(each.group)));
+  const holdsOpenPr = new Set(openPr.map((each) => each.group));
+  const retiredSessions = new Set(
+    sessions
+      .filter((each) => each.status === 'ended' && (each.ended_at ?? Math.max(lastActivity.get(each.id) ?? 0, each.started_at ?? 0)) < cutoff)
+      .filter((each) => !awaitingMerge.has(each.id))
+      .map((each) => each.id),
+  );
+  const nodesByGroup = new Map<string, GraphNode[]>();
+  for (const node of graph.nodes) {
+    const list = nodesByGroup.get(node.group) ?? [];
+    list.push(node);
+    nodesByGroup.set(node.group, list);
+  }
+  const latestTurn = new Map<string, GraphGroup>();
+  for (const turn of graph.groups) {
+    if (turn.kind !== 'turn' || turn.parent === null) continue;
+    const was = latestTurn.get(turn.parent);
+    if (was === undefined || (turn.at ?? 0) > (was.at ?? 0) || ((turn.at ?? 0) === (was.at ?? 0) && turn.id > was.id)) {
+      latestTurn.set(turn.parent, turn);
+    }
+  }
+  const openSessions = new Set(sessions.filter((each) => each.status !== 'ended').map((each) => each.id));
+  const retiredTurns = new Set<string>();
+  for (const turn of graph.groups) {
+    // Only an open session sheds turns; an ended one is kept or hidden whole.
+    if (turn.kind !== 'turn' || turn.parent === null || !openSessions.has(turn.parent)) continue;
+    if (latestTurn.get(turn.parent) === turn || holdsOpenPr.has(turn.id)) continue;
+    const members = nodesByGroup.get(turn.id) ?? [];
+    if (members.some((each) => each.status !== null && LIVE_NODE.has(each.status))) continue;
+    const last = members.reduce((latest, each) => Math.max(latest, each.ended_at ?? each.started_at ?? 0), turn.at ?? turn.started_at ?? 0);
+    if (last < cutoff) retiredTurns.add(turn.id);
+  }
+  if (retiredSessions.size === 0 && retiredTurns.size === 0) return { graph, hiddenSessions: 0, hiddenTurns: 0 };
+  const groups = graph.groups.filter(
+    (each) => !retiredSessions.has(each.id) && !retiredTurns.has(each.id) && !(each.parent !== null && retiredSessions.has(each.parent)),
+  );
+  const groupIds = new Set(groups.map((each) => each.id));
+  const nodes = graph.nodes.filter((each) => groupIds.has(each.group));
+  const nodeIds = new Set(nodes.map((each) => each.id));
+  const edges = graph.edges.filter((each) => nodeIds.has(each.from) && nodeIds.has(each.to));
+  return { graph: { ...graph, groups, nodes, edges }, hiddenSessions: retiredSessions.size, hiddenTurns: retiredTurns.size };
+}
+
 /** Sessions that start collapsed: the ended ones. */
 export function defaultCollapsed(graph: TaskGraph): ReadonlySet<string> {
   return new Set(graph.groups.filter((each) => each.kind === 'session' && each.status === 'ended').map((each) => each.id));

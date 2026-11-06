@@ -52,6 +52,10 @@ import {
   percentLabels,
   splitAgentTask,
   sessionsInPeriod,
+  formatRetention,
+  hiddenNote,
+  isRetiredSession,
+  retentionCutoff,
   stepDurations,
   timeInColumn,
   countFindings,
@@ -81,7 +85,7 @@ import {
 const EMPTY_FEED: BoardFeed = { status: 'starting', detail: null, projects: [] };
 const DEFAULT_SETTINGS: BoardSettings = {
   staleAfterMinutes: BOARD_SETTING_BOUNDS.staleAfterMinutes.fallback,
-  doneRetentionDays: BOARD_SETTING_BOUNDS.doneRetentionDays.fallback,
+  doneRetentionHours: BOARD_SETTING_BOUNDS.doneRetentionHours.fallback,
   directTodoTtlHours: BOARD_SETTING_BOUNDS.directTodoTtlHours.fallback,
 };
 
@@ -744,6 +748,7 @@ function ProjectPanel({
           <Canvas
             project={project}
             period={period}
+            retentionHours={settings.doneRetentionHours}
             clock={clock}
             active={active && mode === 'canvas'}
             onShowOnBoard={(card) => {
@@ -800,7 +805,13 @@ function Kanban({
   const findingsId = useId();
   const findingsHintId = `${findingsId}-hint`;
 
-  const sessionsInRange = useMemo(() => sessionsInPeriod(project, period, coarseNow), [project, period, coarseNow]);
+  const sessionsInPeriodRange = useMemo(() => sessionsInPeriod(project, period, coarseNow), [project, period, coarseNow]);
+  // An ended session past the retention leaves the session filter too, while old done is hidden.
+  const sessionsInRange = useMemo(() => {
+    if (!hideOldDone) return sessionsInPeriodRange;
+    const cutoff = retentionCutoff(settings.doneRetentionHours, coarseNow);
+    return sessionsInPeriodRange.filter((each) => !isRetiredSession(each, cutoff));
+  }, [sessionsInPeriodRange, hideOldDone, settings.doneRetentionHours, coarseNow]);
   // A session that vanished from the snapshot or fell out of the period must not leave the filter selecting nothing.
   const effectiveSession = sessionsInRange.some((each) => each.session_id === sessionId) ? sessionId : 'all';
   const shownSessions = useMemo(
@@ -817,7 +828,7 @@ function Kanban({
   // A session dropped whole has no card or period, so its tasks join the notice only on the whole project.
   const unshown = countUnshown(
     shownSessions,
-    effectiveSession === 'all' && sessionsInRange.length === project.sessions.length ? (project.droppedTasks ?? 0) : 0,
+    effectiveSession === 'all' && sessionsInPeriodRange.length === project.sessions.length ? (project.droppedTasks ?? 0) : 0,
   );
   const view = useMemo(
     () =>
@@ -827,13 +838,13 @@ function Kanban({
           sessionId: effectiveSession,
           period,
           hideOldDone,
-          retentionDays: settings.doneRetentionDays,
+          retentionHours: settings.doneRetentionHours,
           onlyFindings: findingsOn,
           directTodoTtlHours: settings.directTodoTtlHours,
         },
         coarseNow,
       ),
-    [project, effectiveSession, period, hideOldDone, findingsOn, settings.doneRetentionDays, settings.directTodoTtlHours, coarseNow],
+    [project, effectiveSession, period, hideOldDone, findingsOn, settings.doneRetentionHours, settings.directTodoTtlHours, coarseNow],
   );
   // Only an in-progress card in a live session needs seconds; In Review and the rest read the minute clock.
   const anyRunning = view.in_progress.some((item) => isRunning(item.session, item.task));
@@ -852,7 +863,7 @@ function Kanban({
       sessionId: reveal.sessionId,
       period,
       hideOldDone,
-      retentionDays: settings.doneRetentionDays,
+      retentionHours: settings.doneRetentionHours,
       onlyFindings,
       directTodoTtlHours: settings.directTodoTtlHours,
     };
@@ -911,7 +922,7 @@ function Kanban({
         <span className="flex items-center gap-2">
           <Checkbox id={hideId} checked={hideOldDone} onCheckedChange={(checked) => setHideOldDone(checked === true)} />
           <Label htmlFor={hideId} className="text-sm">
-            Hide done older than {settings.doneRetentionDays} {settings.doneRetentionDays === 1 ? 'day' : 'days'}
+            Hide done older than {formatRetention(settings.doneRetentionHours)}
           </Label>
         </span>
         <span className="flex items-center gap-2" title={findingsUnavailable ? 'No task in this view has findings' : undefined}>
@@ -958,7 +969,7 @@ function Kanban({
             items={view.done}
             now={coarseNow}
             asOf={project.as_of}
-            note={view.hiddenDone > 0 ? `${view.hiddenDone} older done ${view.hiddenDone === 1 ? 'task is' : 'tasks are'} hidden` : null}
+            note={hiddenNote(view.hiddenDone, view.hiddenSessions)}
           />
         </KanbanRow>
       )}
@@ -1356,19 +1367,19 @@ const TaskCard = memo(function TaskCard({
 function BoardSettingsControl({ settings, onSaved }: { settings: BoardSettings; onSaved: (settings: BoardSettings) => void }) {
   const [open, setOpen] = useState(false);
   const [stale, setStale] = useState(String(settings.staleAfterMinutes));
-  const [retention, setRetention] = useState(String(settings.doneRetentionDays));
+  const [retention, setRetention] = useState(String(settings.doneRetentionHours));
   const [directTtl, setDirectTtl] = useState(String(settings.directTodoTtlHours));
   const [problem, setProblem] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const staleBounds = BOARD_SETTING_BOUNDS.staleAfterMinutes;
-  const retentionBounds = BOARD_SETTING_BOUNDS.doneRetentionDays;
+  const retentionBounds = BOARD_SETTING_BOUNDS.doneRetentionHours;
   const directTtlBounds = BOARD_SETTING_BOUNDS.directTodoTtlHours;
 
   useEffect(() => {
     if (!open) return;
     setStale(String(settings.staleAfterMinutes));
-    setRetention(String(settings.doneRetentionDays));
+    setRetention(String(settings.doneRetentionHours));
     setDirectTtl(String(settings.directTodoTtlHours));
     setProblem(null);
   }, [open, settings]);
@@ -1381,7 +1392,7 @@ function BoardSettingsControl({ settings, onSaved }: { settings: BoardSettings; 
     try {
       const answer = await window.devteam.setBoardSettings({
         staleAfterMinutes: Number(stale),
-        doneRetentionDays: Number(retention),
+        doneRetentionHours: Number(retention),
         directTodoTtlHours: Number(directTtl),
       });
       if (answer.ok) {
@@ -1425,7 +1436,7 @@ function BoardSettingsControl({ settings, onSaved }: { settings: BoardSettings; 
             </p>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="board-done-retention">Show done for (days)</Label>
+            <Label htmlFor="board-done-retention">Show done for (hours)</Label>
             <Input
               id="board-done-retention"
               type="number"
@@ -1436,7 +1447,8 @@ function BoardSettingsControl({ settings, onSaved }: { settings: BoardSettings; 
               onChange={(event) => setRetention(event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              The kanban hides done tasks older than this by default ({retentionBounds.min} to {retentionBounds.max}).
+              Done tasks, ended sessions and finished canvas turns older than this are hidden by default ({retentionBounds.min} to{' '}
+              {retentionBounds.max}).
             </p>
           </div>
           <div className="space-y-1">

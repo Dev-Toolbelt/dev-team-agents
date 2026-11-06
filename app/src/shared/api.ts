@@ -1882,8 +1882,12 @@ export type OpenTaskLinkAnswer = { readonly ok: true } | { readonly ok: false; r
 export interface BoardSettings {
   /** An in-progress task older than this, in a live session, is flagged stale. */
   readonly staleAfterMinutes: number;
-  /** The kanban hides done tasks older than this by default. */
-  readonly doneRetentionDays: number;
+  /**
+   * Done tasks, ended sessions and finished canvas turns are hidden this many hours after they
+   * finished (hidden, never deleted). Stored under `boardDoneRetentionHours`; the earlier
+   * `boardDoneRetentionDays` key is no longer read, so every install starts at the 24-hour default.
+   */
+  readonly doneRetentionHours: number;
   /** A "Direct work" card left in To Do (a turn that only read) is hidden after this long idle. */
   readonly directTodoTtlHours: number;
 }
@@ -1895,7 +1899,7 @@ export type BoardSettingsAnswer =
 /** The bounds `boardSettings` enforces; shared so the form and the main process agree. */
 export const BOARD_SETTING_BOUNDS = {
   staleAfterMinutes: { min: 5, max: 1440, fallback: 60 },
-  doneRetentionDays: { min: 1, max: 365, fallback: 7 },
+  doneRetentionHours: { min: 1, max: 8760, fallback: 24 },
   directTodoTtlHours: { min: 1, max: 720, fallback: 24 },
 } as const;
 

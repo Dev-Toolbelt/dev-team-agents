@@ -18,7 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Empty } from '../Problem.js';
-import { formatDateTime, formatDuration, periodCutoff, type Period } from '../boardModel.js';
+import { formatDateTime, formatDuration, formatRetention, periodCutoff, retentionCutoff, type Period } from '../boardModel.js';
 import {
   ROLE_FAMILY_LABEL,
   agentLabel,
@@ -26,6 +26,7 @@ import {
   explicitlyExpanded,
   elapsedSeconds,
   filterGraphByPeriod,
+  filterGraphByRetention,
   focusSet,
   heatTokens,
   heatTone,
@@ -114,12 +115,15 @@ function useTaskGraph(projectId: string, active: boolean): TaskGraphResult | nul
 export function Canvas({
   project,
   period,
+  retentionHours,
   active,
   clock = Date.now,
   onShowOnBoard,
 }: {
   project: BoardProject;
   period: Period;
+  /** Hours after which ended sessions and finished turns are hidden (the board's retention). */
+  retentionHours: number;
   active: boolean;
   clock?: () => number;
   onShowOnBoard?: (card: BoardCardRef) => void;
@@ -133,6 +137,7 @@ export function Canvas({
         graph={result.graph}
         projectId={project.project_id}
         period={period}
+        retentionHours={retentionHours}
         active={active}
         clock={clock}
         onShowOnBoard={onShowOnBoard}
@@ -166,6 +171,7 @@ function CanvasBoard({
   graph: fullGraph,
   projectId,
   period,
+  retentionHours,
   active,
   clock,
   onShowOnBoard,
@@ -173,6 +179,7 @@ function CanvasBoard({
   graph: TaskGraph;
   projectId: string;
   period: Period;
+  retentionHours: number;
   active: boolean;
   clock: () => number;
   onShowOnBoard: ((card: BoardCardRef) => void) | undefined;
@@ -180,7 +187,14 @@ function CanvasBoard({
   const flow = useReactFlow();
   const coarseNow = Math.max(useClock(clock, 60, active), fullGraph.as_of);
   const cutoff = periodCutoff(period, coarseNow);
-  const graph = useMemo(() => filterGraphByPeriod(fullGraph, cutoff), [fullGraph, cutoff]);
+  const inPeriod = useMemo(() => filterGraphByPeriod(fullGraph, cutoff), [fullGraph, cutoff]);
+  const [hideOldOn, setHideOldOn] = useState(true);
+  const retention = useMemo(
+    () => (hideOldOn ? filterGraphByRetention(inPeriod, retentionCutoff(retentionHours, coarseNow)) : null),
+    [hideOldOn, inPeriod, retentionHours, coarseNow],
+  );
+  const graph = retention?.graph ?? inPeriod;
+  const hiddenOld = retention === null ? 0 : retention.hiddenSessions + retention.hiddenTurns;
   const anyRunning = useMemo(() => graph.nodes.some((each) => each.status === 'running'), [graph]);
   const tick = Math.max(useClock(clock, 1, active && anyRunning), fullGraph.as_of);
 
@@ -379,6 +393,19 @@ function CanvasBoard({
   }, [empty, leaveFullScreen]);
 
   if (empty) {
+    // Everything the period keeps finished before the retention: say so, and offer the way back.
+    if (hiddenOld > 0) {
+      return (
+        <div className="space-y-3">
+          <Empty>Every session in this period finished more than {formatRetention(retentionHours)} ago and is hidden.</Empty>
+          <div className="flex justify-center">
+            <Button variant="outline" size="sm" onClick={() => setHideOldOn(false)}>
+              Show finished sessions
+            </Button>
+          </div>
+        </div>
+      );
+    }
     return <Empty>No session of this project has activity in this period.</Empty>;
   }
 
@@ -428,6 +455,10 @@ function CanvasBoard({
                     onFocus={() => setFocusOn((was) => !was)}
                     heatOn={heatOn}
                     onHeat={() => setHeatOn((was) => !was)}
+                    hideOldOn={hideOldOn}
+                    onHideOld={() => setHideOldOn((was) => !was)}
+                    retentionLabel={formatRetention(retentionHours)}
+                    hiddenCount={hiddenOld}
                     outlineOn={outlineOn}
                     onOutline={() => setOutlineOn((was) => !was)}
                     fullScreen={fullScreen.on}

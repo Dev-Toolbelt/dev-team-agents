@@ -106,9 +106,9 @@ export function registerTaskBoardIpc(deps: TaskBoardIpcDeps): void {
   handle(CHANNELS.setBoardSettings, async (_event, raw: unknown): Promise<BoardSettingsAnswer> => {
     const problem = boardSettingsProblem(raw);
     if (problem !== null) return { ok: false, message: problem };
-    const { staleAfterMinutes, doneRetentionDays, directTodoTtlHours } = raw as BoardSettings;
+    const { staleAfterMinutes, doneRetentionHours, directTodoTtlHours } = raw as BoardSettings;
     try {
-      return { ok: true, settings: await deps.saveBoardSettings({ staleAfterMinutes, doneRetentionDays, directTodoTtlHours }) };
+      return { ok: true, settings: await deps.saveBoardSettings({ staleAfterMinutes, doneRetentionHours, directTodoTtlHours }) };
     } catch (error) {
       return { ok: false, message: `The settings could not be saved: ${String(error)}` };
     }

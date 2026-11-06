@@ -66,7 +66,7 @@ export interface AppSettings {
 
 export const DEFAULT_BOARD_SETTINGS: BoardSettings = Object.freeze({
   staleAfterMinutes: BOARD_SETTING_BOUNDS.staleAfterMinutes.fallback,
-  doneRetentionDays: BOARD_SETTING_BOUNDS.doneRetentionDays.fallback,
+  doneRetentionHours: BOARD_SETTING_BOUNDS.doneRetentionHours.fallback,
   directTodoTtlHours: BOARD_SETTING_BOUNDS.directTodoTtlHours.fallback,
 });
 
@@ -79,7 +79,7 @@ function clampSetting(value: unknown, bounds: { readonly min: number; readonly m
 export function readBoardSettings(record: Record<string, unknown>): BoardSettings {
   return {
     staleAfterMinutes: clampSetting(record['boardStaleAfterMinutes'], BOARD_SETTING_BOUNDS.staleAfterMinutes),
-    doneRetentionDays: clampSetting(record['boardDoneRetentionDays'], BOARD_SETTING_BOUNDS.doneRetentionDays),
+    doneRetentionHours: clampSetting(record['boardDoneRetentionHours'], BOARD_SETTING_BOUNDS.doneRetentionHours),
     directTodoTtlHours: clampSetting(record['boardDirectTodoTtlHours'], BOARD_SETTING_BOUNDS.directTodoTtlHours),
   };
 }
@@ -93,7 +93,7 @@ export function boardSettingsProblem(value: unknown): string | null {
   const record = value as Record<string, unknown>;
   const checks = [
     ['staleAfterMinutes', 'the stale threshold (minutes)', BOARD_SETTING_BOUNDS.staleAfterMinutes],
-    ['doneRetentionDays', 'the done retention (days)', BOARD_SETTING_BOUNDS.doneRetentionDays],
+    ['doneRetentionHours', 'the done retention (hours)', BOARD_SETTING_BOUNDS.doneRetentionHours],
     ['directTodoTtlHours', 'the direct work to-do lifetime (hours)', BOARD_SETTING_BOUNDS.directTodoTtlHours],
   ] as const;
   for (const [key, label, bounds] of checks) {
@@ -267,7 +267,7 @@ async function writeSettingsNow(
   // board stays exactly as it was.
   const board = patch.board ?? current.board;
   if (board.staleAfterMinutes !== DEFAULT_BOARD_SETTINGS.staleAfterMinutes) payload['boardStaleAfterMinutes'] = board.staleAfterMinutes;
-  if (board.doneRetentionDays !== DEFAULT_BOARD_SETTINGS.doneRetentionDays) payload['boardDoneRetentionDays'] = board.doneRetentionDays;
+  if (board.doneRetentionHours !== DEFAULT_BOARD_SETTINGS.doneRetentionHours) payload['boardDoneRetentionHours'] = board.doneRetentionHours;
   if (board.directTodoTtlHours !== DEFAULT_BOARD_SETTINGS.directTodoTtlHours) payload['boardDirectTodoTtlHours'] = board.directTodoTtlHours;
   const projectFolders = patch.projectFolders ?? current.projectFolders;
   if (!isEmptyFolders(projectFolders)) payload['projectFolders'] = projectFolders;
