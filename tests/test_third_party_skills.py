@@ -238,6 +238,22 @@ class ThirdPartyExtractionTest(unittest.TestCase):
         os.chmod(dest / "SKILL.md", 0o755)
         self.assertNotEqual(before, helper.tree_hash(dest))
 
+    @unittest.skipIf(os.name == "nt", "Windows has no POSIX executable bit to compare the git index against")
+    def test_hash_from_the_git_index_matches_the_filesystem_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "demo"
+            root.mkdir()
+            (root / "SKILL.md").write_bytes(SKILL)
+            (root / "tool.cjs").write_bytes(b"x")
+            os.chmod(root / "tool.cjs", 0o755)
+            subprocess.run(["git", "-C", tmp, "init", "-q"], check=True)
+            subprocess.run(["git", "-C", tmp, "add", "."], check=True)
+            expected = helper.tree_hash(root)
+            self.assertEqual(helper._git_executables(root), {"tool.cjs"})
+            os.chmod(root / "tool.cjs", 0o644)
+            with mock.patch.object(helper, "EXEC_BIT_FROM_GIT", True):
+                self.assertEqual(helper.tree_hash(root), expected)
+
     def test_refuses_unsafe_archives(self):
         cases = {
             "symlink": [("skills/demo/SKILL.md", SKILL, "file"), ("skills/demo/x", "/etc/passwd", "symlink")],

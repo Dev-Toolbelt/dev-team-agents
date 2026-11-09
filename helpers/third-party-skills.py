@@ -20,6 +20,7 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -29,6 +30,8 @@ from pathlib import Path, PurePosixPath
 REPO_ROOT = Path(__file__).resolve().parent.parent
 THIRD_PARTY_DIR = REPO_ROOT / "skills" / "third-party"
 MANIFEST = THIRD_PARTY_DIR / "sources.json"
+#: Windows has no POSIX executable bit, so there the flag comes from the git index.
+EXEC_BIT_FROM_GIT = os.name == "nt"
 TARBALL_URL = "https://codeload.github.com/{repo}/tar.gz/{commit}"
 #: Caps on the whole decompressed archive, not only on the skill's own subset, so a
 #: decompression bomb is stopped while it is being read.
@@ -42,6 +45,19 @@ ROOT_FILES = {"README.md", "sources.json"}
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+
+
+def _git_executables(root):
+    """Paths under root, relative to it, that the git index records as executable."""
+    listing = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-s", "-z"],
+        capture_output=True, text=True, encoding="utf-8", check=True,
+    ).stdout
+    return {
+        entry.split("\t", 1)[1]
+        for entry in listing.split("\0")
+        if entry.startswith("100755 ")
+    }
 
 
 def tree_hash(root):
@@ -63,8 +79,10 @@ def tree_hash(root):
                     raise ValueError(f"{root.name}: {rel} is not a regular file")
                 entries.append((rel, path))
     digest = hashlib.sha256()
+    git_executables = _git_executables(root) if EXEC_BIT_FROM_GIT else None
     for rel, path in sorted(entries, key=lambda item: item[0]):
-        executable = b"x" if path.stat().st_mode & stat.S_IXUSR else b"-"
+        is_executable = rel in git_executables if EXEC_BIT_FROM_GIT else path.stat().st_mode & stat.S_IXUSR
+        executable = b"x" if is_executable else b"-"
         digest.update(rel.encode() + b"\0" + executable + b"\0")
         digest.update(hashlib.sha256(path.read_bytes()).digest())
     return digest.hexdigest()
