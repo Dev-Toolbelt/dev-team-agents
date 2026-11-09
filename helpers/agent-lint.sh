@@ -437,9 +437,9 @@ check_verbatim_wording() {
 # failed spawn is trivially narrated as a success (see the skill's Spawn
 # Integrity section).
 ROSTER_FILE="$REPO_ROOT/skills/architecture/orchestration/SKILL.md"
-# Deliberately absent from the roster: the orchestrators themselves, and the
+# Deliberately absent from the roster: the orchestrator persona, and the
 # onboarding agent, which the user invokes and no orchestrator delegates to.
-ROSTER_EXEMPT=("software-architect" "setup-assistant" "orchestrator")
+ROSTER_EXEMPT=("setup-assistant" "orchestrator")
 
 # ── The orchestrator persona is never a spawn target ─────────────────────────
 # agents/orchestrator.md runs only as the main session (ADR-0062): spawned, it

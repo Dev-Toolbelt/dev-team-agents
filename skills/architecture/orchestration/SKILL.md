@@ -128,6 +128,7 @@ model-identity skill — the orchestrator never names a model.
 
 | Agent | Tier | Role |
 |---|---|---|
+| `software-architect` | `reasoning` | Architecture decisions, contracts, ADRs |
 | `backend-developer` | `backend-exec` | Server-side implementation |
 | `frontend-developer` | `frontend` | Client-side implementation |
 | `mobile-developer` | `backend-exec` | Mobile implementation |
