@@ -145,6 +145,39 @@ function markSecret(doc: Record<string, unknown>, tokens: string[]): void {
   if (!names.has(key)) parent[CREDENTIALS_SECRETS_KEY] = [...names, key].sort();
 }
 
+/** A copied group as the working copy draws it: what the CLI stores anew reads as not stored yet. */
+function copiedView(node: unknown): unknown {
+  if (isSecretLeaf(node)) {
+    const external = node.stored === 'op' || node.stored === 'bw' || node.stored === 'invalid';
+    return typeof node.stored === 'string' && !external ? { ...node, stored: CREDENTIALS_STORED_PENDING } : { ...node };
+  }
+  if (Array.isArray(node)) return node.map(copiedView);
+  if (isRecord(node)) return Object.fromEntries(Object.entries(node).map(([key, value]) => [key, copiedView(value)]));
+  return node;
+}
+
+/** Place the key at `tokens` right before its sibling `before`, or last when `null`. */
+function reorderIn(doc: Record<string, unknown>, tokens: string[], before: string[] | null): void {
+  const key = tokens[tokens.length - 1] ?? '';
+  const target = before === null ? null : (before[before.length - 1] ?? '');
+  if (key === target) return;
+  const parent = tokens.slice(0, -1).reduce<unknown>(step, doc);
+  if (Array.isArray(parent)) {
+    const source = Number(key);
+    const at = target === null ? parent.length : Number(target);
+    const item: unknown = parent[source];
+    parent.splice(source, 1);
+    parent.splice(at > source ? at - 1 : at, 0, item);
+  } else if (isRecord(parent)) {
+    const rest = Object.entries(parent).filter(([name]) => name !== key);
+    const at = target === null ? rest.length : rest.findIndex(([name]) => name === target);
+    if (at < 0) return;
+    rest.splice(at, 0, [key, parent[key]]);
+    for (const name of Object.keys(parent)) delete parent[name];
+    for (const [name, value] of rest) parent[name] = value;
+  }
+}
+
 /** The working copy: `data` with `ops` applied in order. Never mutates `data`. */
 export function applyOps(data: Doc, ops: readonly CredentialsPatchOp[]): Doc {
   const doc = structuredClone(data) as Record<string, unknown>;
@@ -159,6 +192,8 @@ export function applyOps(data: Doc, ops: readonly CredentialsPatchOp[]): Doc {
       setIn(doc, tokens, referenceLeaf(CREDENTIALS_STORED_PENDING));
       markSecret(doc, tokens);
     } else if (op.op === 'unset') unsetIn(doc, tokensOf(op.pointer));
+    else if (op.op === 'copy') setIn(doc, tokensOf(op.pointer), copiedView(tokensOf(op.from).reduce<unknown>(step, doc)));
+    else if (op.op === 'reorder') reorderIn(doc, tokensOf(op.pointer), op.before === null ? null : tokensOf(op.before));
     else {
       const value = tokensOf(op.from).reduce<unknown>(step, doc);
       unsetIn(doc, tokensOf(op.from));
@@ -193,6 +228,10 @@ export type Edit =
   | { kind: 'remove'; path: Path }
   | { kind: 'rename'; path: Path; to: string }
   | { kind: 'move'; path: Path; into: Path }
+  /** A new sibling right after the group; secrets it holds are copied by the CLI, unseen here. */
+  | { kind: 'duplicate'; path: Path }
+  /** Right before the sibling at `before`, or last among its siblings when `null`. */
+  | { kind: 'reorder'; path: Path; before: Path | null }
   | { kind: 'secret'; path: Path; marked: boolean }
   | { kind: 'production'; path: Path; on: boolean };
 
@@ -248,6 +287,20 @@ export function moveTargets(doc: Doc, path: Path): Path[] {
   return out;
 }
 
+/** The first free `<key>-copy`, `<key>-copy-2`… among the keys of `parent`. */
+export function duplicateName(parent: Record<string, unknown>, key: string): string {
+  if (!(`${key}-copy` in parent)) return `${key}-copy`;
+  let suffix = 2;
+  while (`${key}-copy-${suffix}` in parent) suffix += 1;
+  return `${key}-copy-${suffix}`;
+}
+
+/** The siblings the editor draws at `parent`, in order: reserved keys are controls, never rows. */
+function visibleKeys(node: unknown): (string | number)[] {
+  if (Array.isArray(node)) return node.map((_, index) => index);
+  return isRecord(node) ? Object.keys(node).filter((key) => !isReserved(key)) : [];
+}
+
 /** The ops that make `edit`, given the working copy `doc` it was made against. */
 export function opsFor(doc: Doc, edit: Edit): CredentialsPatchOp[] {
   switch (edit.kind) {
@@ -289,6 +342,27 @@ export function opsFor(doc: Doc, edit: Edit): CredentialsPatchOp[] {
         ops.push(listOp(edit.into, names));
       }
       return ops;
+    }
+    case 'duplicate': {
+      const from = edit.path[edit.path.length - 1];
+      const parent = edit.path.slice(0, -1);
+      const siblings = valueAt(doc, parent);
+      if (typeof from !== 'string' || !isRecord(siblings)) return [];
+      const copy = [...parent, duplicateName(siblings, from)];
+      const keys = visibleKeys(siblings);
+      const next = keys[keys.indexOf(from) + 1];
+      return [
+        { op: 'copy', from: pointerOf(edit.path), pointer: pointerOf(copy) },
+        ...(next === undefined ? [] : [{ op: 'reorder', pointer: pointerOf(copy), before: pointerOf([...parent, next]) } as const]),
+      ];
+    }
+    case 'reorder': {
+      const keys = visibleKeys(valueAt(doc, edit.path.slice(0, -1)));
+      const key = edit.path[edit.path.length - 1];
+      const before = edit.before === null ? undefined : edit.before[edit.before.length - 1];
+      // Dropped where it already is: nothing to save.
+      if (key === undefined || before === key || keys[keys.indexOf(key) + 1] === before) return [];
+      return [{ op: 'reorder', pointer: pointerOf(edit.path), before: edit.before === null ? null : pointerOf(edit.before) }];
     }
     case 'secret': {
       const parent = edit.path.slice(0, -1);

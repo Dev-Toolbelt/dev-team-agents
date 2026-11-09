@@ -608,6 +608,7 @@ export async function run<T>(
   validate: (body: Record<string, unknown>) => T | string,
   secretStdin?: string,
   redactAlso?: readonly string[],
+  redactOnFailure?: readonly string[],
 ): Promise<OperationResult<T>> {
   const problem = argvProblem(args);
   if (problem !== null) {
@@ -634,6 +635,7 @@ export async function run<T>(
       // For this one call only; a `CliContext` is reused and may be logged.
       ...(secretStdin !== undefined ? { secretStdin } : {}),
       ...(redactAlso !== undefined && redactAlso.length > 0 ? { redactAlso } : {}),
+      ...(redactOnFailure !== undefined && redactOnFailure.length > 0 ? { redactOnFailure } : {}),
     }),
     validate,
   );
@@ -1499,10 +1501,12 @@ export function credentialsOpsProblem(ops: unknown): string | null {
   for (const entry of ops) {
     if (!isRecord(entry)) return 'an edit is not an object';
     const { op, pointer } = entry;
-    if (op !== 'set' && op !== 'set-secret' && op !== 'unset' && op !== 'move') {
-      return 'an edit\'s op is `set`, `set-secret`, `unset` or `move`';
+    if (op !== 'set' && op !== 'set-secret' && op !== 'unset' && op !== 'move' && op !== 'copy' && op !== 'reorder') {
+      return 'an edit\'s op is `set`, `set-secret`, `unset`, `move`, `copy` or `reorder`';
     }
-    const pointers = op === 'move' ? [pointer, entry['from']] : [pointer];
+    if (op === 'reorder' && !('before' in entry)) return 'a `reorder` edit needs `before`';
+    const before = op === 'reorder' && entry['before'] !== null ? [entry['before']] : [];
+    const pointers = op === 'move' || op === 'copy' ? [pointer, entry['from']] : [pointer, ...before];
     for (const candidate of pointers) {
       const problem = credentialsPointerProblem(candidate);
       if (problem !== null) return problem;
@@ -1533,14 +1537,16 @@ function normalizeOps(ops: readonly CredentialsPatchOp[]): CredentialsPatchOp[] 
       ? { op: 'set', pointer: entry.pointer, value: entry.value }
       : entry.op === 'set-secret'
         ? { op: 'set-secret', pointer: entry.pointer, value: entry.value }
-        : entry.op === 'move'
-          ? { op: 'move', from: entry.from, pointer: entry.pointer }
-          : { op: 'unset', pointer: entry.pointer },
+        : entry.op === 'move' || entry.op === 'copy'
+          ? { op: entry.op, from: entry.from, pointer: entry.pointer }
+          : entry.op === 'reorder'
+            ? { op: 'reorder', pointer: entry.pointer, before: entry.before }
+            : { op: 'unset', pointer: entry.pointer },
   );
 }
 
 /**
- * Every string value a set of ops writes, at any depth. Redacted from any captured output:
+ * Every string value a set of ops writes, at any depth. Redacted from a failed call's output:
  * which fields are secret is the CLI's default-deny decision (ADR-0024), so the app does not
  * keep a second, narrower list of secret names.
  */
@@ -1554,6 +1560,11 @@ export function secretValuesOf(ops: readonly CredentialsPatchOp[]): string[] {
   };
   for (const entry of ops) if (entry.op === 'set' || entry.op === 'set-secret') collect(entry.value);
   return [...found];
+}
+
+/** The values a patch stores outside the file: the CLI never echoes them, on success or failure. */
+function typedSecretsOf(ops: readonly CredentialsPatchOp[]): string[] {
+  return [...new Set(ops.flatMap((entry) => (entry.op === 'set-secret' ? [entry.value] : [])))];
 }
 
 /** `cred local show|init|patch --json`. */
@@ -1654,6 +1665,8 @@ export async function credentialsLocalPatch(
     ['cred', 'local', 'patch', '--path', path, '--expect-hash', expectHash],
     asCredentialsLocalView,
     payload,
+    typedSecretsOf(normalized),
+    // On success the CLI's own default-deny view is what the screen draws (ADR-0024).
     secretValuesOf(normalized),
   );
   // Exit 0 followed by a document this app cannot read: the write happened, the answer did not

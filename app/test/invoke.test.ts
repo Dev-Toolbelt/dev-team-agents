@@ -377,11 +377,12 @@ describe('quitting the app with CLI children in flight', () => {
 describe('secret stdin', () => {
   const SECRET = 'tok_s3cr3t-"quoted"-value';
 
-  function withStdin(scenario: string, secretStdin?: string, extraEnv: Record<string, string> = {}) {
+  function withStdin(scenario: string, secretStdin?: string, extraEnv: Record<string, string> = {}, options: { redactOnFailure?: readonly string[] } = {}) {
     return invokeDevteam({
       ...fakeCli(['integrations', 'connect']),
       env: { FAKE_DEVTEAM_SCENARIO: scenario, ...extraEnv },
       ...(secretStdin !== undefined ? { secretStdin } : {}),
+      ...options,
     });
   }
 
@@ -408,6 +409,19 @@ describe('secret stdin', () => {
     expect(result.document.body['stdin']).toBe('[redacted]');
     expect(result.stderr).toBe('got [redacted]\n');
     expect(JSON.stringify(result)).not.toContain('s3cr3t');
+  });
+
+  it('keeps failure-only values in a successful document', async () => {
+    const worked = await withStdin('echo-stdin', SECRET, { FAKE_DEVTEAM_ECHO: '1' }, { redactOnFailure: ['integrations'] });
+    if (!ranAndAnswered(worked)) throw new Error('expected a document');
+    if (worked.document.kind !== 'payload') throw new Error('expected a payload');
+    expect(worked.document.body['argv']).toEqual(['integrations', 'connect', '--json']);
+  });
+
+  it('masks failure-only values when the call fails', async () => {
+    const failed = await withStdin('findings-payload', SECRET, {}, { redactOnFailure: ['no core'] });
+    expect(JSON.stringify(failed)).not.toContain('no core');
+    expect(JSON.stringify(failed)).toContain('[redacted]');
   });
 
   it('survives a child that exits without reading stdin (EPIPE)', async () => {

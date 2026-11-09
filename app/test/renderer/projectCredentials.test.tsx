@@ -6,7 +6,7 @@
 import './setup.js';
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -571,6 +571,63 @@ describe('ProjectCredentials — free-form editor', () => {
     await screen.findByText('a-b');
     const ids = [...document.querySelectorAll('[id]')].map((node) => node.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('ProjectCredentials — duplicating and reordering', () => {
+  it('duplicates a group as pending changes, sent as ops on save', async () => {
+    const { bridge, user } = renderTab();
+    await user.click(await screen.findByRole('button', { name: 'Duplicate example › staging' }));
+    expect(screen.getByText('staging-copy')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(bridge.credentialsLocalPatch).toHaveBeenCalled());
+    expect(vi.mocked(bridge.credentialsLocalPatch).mock.calls[0]?.[2]).toEqual([
+      { op: 'copy', from: '/example/staging', pointer: '/example/staging-copy' },
+      { op: 'reorder', pointer: '/example/staging-copy', before: '/example/production' },
+    ]);
+  });
+
+  it('moves a row with the arrow keys and keeps focus on it', async () => {
+    const { onDirtyChange, user } = renderTab();
+    const grip = await screen.findByRole('button', { name: 'Reorder example › staging' });
+    grip.focus();
+    await user.keyboard('{ArrowUp}');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(0);
+    await user.keyboard('{ArrowDown}');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(1);
+    expect(screen.getByRole('button', { name: 'Reorder example › staging' })).toHaveFocus();
+  });
+
+  it('drags a row past a sibling, and only siblings accept the drop', async () => {
+    const { bridge, user } = renderTab();
+    const grip = await screen.findByRole('button', { name: 'Reorder example › staging' });
+    const row = (name: string) => screen.getByRole('button', { name: `Reorder ${name}` }).closest('li') as HTMLElement;
+    const dataTransfer = { setData: vi.fn(), setDragImage: vi.fn(), effectAllowed: '', dropEffect: '' };
+    fireEvent.dragStart(grip, { dataTransfer });
+    expect(fireEvent.dragOver(row('work_feedback_active'), { dataTransfer, clientY: 0 })).toBe(true);
+    expect(screen.queryByTestId('credentials-drop-line')).not.toBeInTheDocument();
+    expect(fireEvent.dragOver(row('example › production'), { dataTransfer, clientY: 0 })).toBe(false);
+    expect(screen.getByTestId('credentials-drop-line')).toBeInTheDocument();
+    fireEvent.drop(row('example › production'), { dataTransfer });
+    await user.click(screen.getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(bridge.credentialsLocalPatch).toHaveBeenCalled());
+    expect(vi.mocked(bridge.credentialsLocalPatch).mock.calls[0]?.[2]).toEqual([
+      { op: 'reorder', pointer: '/example/staging', before: null },
+    ]);
+  });
+
+  it('offers no grip among integer-like keys, whose order JavaScript cannot keep', async () => {
+    const view = credentialsView({ data: { ports: { '8080': 'a', '2024': 'b' }, other: 'c' } });
+    renderTab({ credentialsLocalShow: vi.fn(() => Promise.resolve(ok(view))) });
+    await screen.findByRole('button', { name: 'Reorder ports' });
+    expect(screen.queryByRole('button', { name: 'Reorder ports › 8080' })).not.toBeInTheDocument();
+  });
+
+  it('offers no grip while searching', async () => {
+    const { user } = renderTab();
+    await screen.findByRole('button', { name: 'Reorder example › staging' });
+    await user.type(screen.getByRole('searchbox', { name: 'Search credentials' }), 'staging');
+    expect(screen.queryByRole('button', { name: /^Reorder/ })).not.toBeInTheDocument();
   });
 });
 

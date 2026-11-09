@@ -1,5 +1,5 @@
-import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, FolderInput, FolderPlus, KeyRound, Lock, LockOpen, Pencil, Plus, Search, ShieldAlert, ShieldCheck, Trash2, TriangleAlert } from 'lucide-react';
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, CopyPlus, FolderInput, FolderPlus, GripVertical, KeyRound, Lock, LockOpen, Pencil, Plus, Search, ShieldAlert, ShieldCheck, Trash2, TriangleAlert } from 'lucide-react';
+import { useEffect, useRef, useState, type ComponentProps, type DragEvent, type ReactNode, type RefObject } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -109,6 +109,8 @@ interface Ctx {
   pending: ReadonlySet<string>;
   /** Drops the typed secret or reference waiting for `pointer`. */
   onForget: (pointer: string) => void;
+  /** The row being dragged: one drag crosses the nested lists, and only siblings accept it. */
+  dragged: RefObject<Path | null>;
 }
 
 /**
@@ -141,8 +143,9 @@ export function CredentialsEditor({
 }) {
   const [query, setQuery] = useState('');
   const [bulk, setBulk] = useState<Bulk | null>(null);
+  const dragged = useRef<Path | null>(null);
   const hits = searchHits(doc, query);
-  const ctx: Ctx = { doc, disabled, hits, bulk, onEdit, onProblem, onCopySecret, copyBlocked, onSecureNow, secureBlocked, pending, onForget };
+  const ctx: Ctx = { doc, disabled, hits, bulk, onEdit, onProblem, onCopySecret, copyBlocked, onSecureNow, secureBlocked, pending, onForget, dragged };
   const empty = hits !== null && hits.size === 0;
   const hasGroups = Object.entries(doc).some(([key, value]) => !isReserved(key) && isContainer(value));
   // A search opens every group it matches, so neither action would change what is drawn.
@@ -196,28 +199,169 @@ function Children({ ctx, path, node, depth }: { ctx: Ctx; path: Path; node: unkn
       ? Object.entries(node).filter(([key]) => !isReserved(key))
       : [];
   const shown = entries.filter(([key]) => ctx.hits === null || ctx.hits.has(pointerOf([...path, key])));
+  const [drop, setDrop] = useState<{ key: string | number; side: DropSide } | null>(null);
+  const [refocus, setRefocus] = useState<string | null>(null);
+  // A list item changes index when it moves, so keyboard focus has to follow it by hand.
+  useEffect(() => {
+    if (refocus === null) return;
+    document.getElementById(`${slug(refocus)}-drag`)?.focus();
+    setRefocus(null);
+  }, [refocus]);
+  const keys = entries.map(([key]) => key);
+  const isList = Array.isArray(node);
+  // JavaScript always lists integer-like object keys first, so their order cannot be drawn.
+  const reorderable = ctx.hits === null && keys.length > 1 && (isList || !keys.some((key) => /^(0|[1-9]\d*)$/.test(String(key))));
+  // Pending writes are tracked by pointer, and moving a list item changes the pointers around it.
+  const reorderBlocked = ctx.disabled || (isList && ctx.pending.size > 0);
+  // List rows are keyed by index: a new generation stops local state staying at the old index.
+  const [generation, setGeneration] = useState(0);
+  const [announcement, setAnnouncement] = useState('');
+  const place = (key: string | number, before: string | number | null): void => {
+    ctx.onEdit({ kind: 'reorder', path: [...path, key], before: before === null ? null : [...path, before] });
+    if (isList) setGeneration((current) => current + 1);
+  };
+  const step = (key: string | number, delta: -1 | 1): void => {
+    const at = keys.indexOf(key);
+    const landing = at + delta;
+    if (landing < 0 || landing >= keys.length) return;
+    place(key, delta === -1 ? (keys[landing] ?? null) : (keys[at + 2] ?? null));
+    setRefocus(pointerOf([...path, isList ? landing : key]));
+    setAnnouncement(`Moved ${labelOf([...path, key])} to position ${landing + 1} of ${keys.length}`);
+  };
+  const accepts = (): boolean => {
+    const source = ctx.dragged.current;
+    return reorderable && !reorderBlocked && source !== null && pointerOf(source.slice(0, -1)) === pointerOf(path);
+  };
+  const endDrag = (): void => {
+    ctx.dragged.current = null;
+    setDrop(null);
+  };
+  const onDragOver = (event: DragEvent<HTMLLIElement>, key: string | number): void => {
+    if (!accepts()) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const box = event.currentTarget.getBoundingClientRect();
+    const side: DropSide = event.clientY < box.top + box.height / 2 ? 'before' : 'after';
+    if (drop?.key !== key || drop.side !== side) setDrop({ key, side });
+  };
+  const onDrop = (event: DragEvent<HTMLLIElement>): void => {
+    if (!accepts()) return;
+    event.preventDefault();
+    const source = ctx.dragged.current?.[path.length];
+    if (source !== undefined && drop !== null) {
+      place(source, drop.side === 'before' ? drop.key : (keys[keys.indexOf(drop.key) + 1] ?? null));
+    }
+    endDrag();
+  };
+  const handleFor = (row: string | number): ReactNode =>
+    reorderable ? (
+      <DragHandle
+        path={[...path, row]}
+        disabled={reorderBlocked}
+          blockedByPending={!ctx.disabled && reorderBlocked}
+        onStart={() => {
+          ctx.dragged.current = [...path, row];
+        }}
+        onEnd={endDrag}
+        onStep={(delta) => step(row, delta)}
+      />
+    ) : null;
   if (shown.length === 0 && ctx.hits === null) return <p className="text-sm text-muted-foreground">Empty.</p>;
   return (
-    <ul className="space-y-2" role="list">
-      {shown.map(([key, value], index) => {
-        // Alternate rows over what is shown (a search filters the list), so neighbours stay
-        // apart at a glance; counted per list, so a group's own rows start over.
-        const stripe = index % 2 === 1 ? 'odd' : 'even';
-        return (
-          <li key={String(key)} data-stripe={stripe}>
-            {isContainer(value) ? (
-              <Group ctx={ctx} path={[...path, key]} node={value} depth={depth} stripe={stripe} />
-            ) : (
-              <Field ctx={ctx} path={[...path, key]} value={value} stripe={stripe} />
-            )}
-          </li>
-        );
-      })}
-    </ul>
+    <>
+      <span className="sr-only" role="status">
+      {announcement}
+    </span>
+      <ul className="space-y-2" role="list">
+        {shown.map(([key, value], index) => {
+          // Alternate rows over what is shown (a search filters the list), so neighbours stay
+          // apart at a glance; counted per list, so a group's own rows start over.
+          const stripe = index % 2 === 1 ? 'odd' : 'even';
+          return (
+            <li
+              key={isList ? `${generation}:${key}` : String(key)}
+              data-stripe={stripe}
+              className="relative"
+              onDragOver={(event) => onDragOver(event, key)}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDrop(null);
+              }}
+              onDrop={onDrop}
+            >
+              {drop?.key === key ? (
+                <span
+                  aria-hidden="true"
+                  data-testid="credentials-drop-line"
+                  className={cn('pointer-events-none absolute inset-x-0 z-10 h-0.5 rounded bg-primary', drop.side === 'before' ? '-top-1' : '-bottom-1')}
+                />
+              ) : null}
+              {isContainer(value) ? (
+                <Group ctx={ctx} path={[...path, key]} node={value} depth={depth} stripe={stripe} handle={handleFor(key)} />
+              ) : (
+                <Field ctx={ctx} path={[...path, key]} value={value} stripe={stripe} handle={handleFor(key)} />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 
 type Stripe = 'odd' | 'even';
+type DropSide = 'before' | 'after';
+
+/** Only this grip starts a drag, so selecting text in a field never does. */
+const DRAG_TYPE = 'application/x-devteam-credential-row';
+
+function DragHandle({
+  path,
+  disabled,
+  blockedByPending,
+  onStart,
+  onEnd,
+  onStep,
+}: {
+  path: Path;
+  disabled: boolean;
+  blockedByPending: boolean;
+  onStart: () => void;
+  onEnd: () => void;
+  onStep: (delta: -1 | 1) => void;
+}) {
+  return (
+    <Hint content={blockedByPending ? 'Save or discard the pending secret first' : 'Drag to reorder, or use the up and down arrows'}>
+      <span className="inline-flex">
+        <Button
+          id={`${slug(pointerOf(path))}-drag`}
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          draggable={!disabled}
+          aria-label={`Reorder ${labelOf(path)}`}
+          aria-keyshortcuts="ArrowUp ArrowDown"
+          className="h-7 cursor-grab px-1 text-muted-foreground active:cursor-grabbing"
+          onDragStart={(event) => {
+            onStart();
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData(DRAG_TYPE, pointerOf(path));
+            const row = event.currentTarget.closest('li');
+            if (row !== null) event.dataTransfer.setDragImage(row, 12, 12);
+          }}
+          onDragEnd={onEnd}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            onStep(event.key === 'ArrowUp' ? -1 : 1);
+          }}
+        >
+          <GripVertical aria-hidden="true" />
+        </Button>
+      </span>
+    </Hint>
+  );
+}
 
 /** The second, fourth… row of a list: a faint tint, the same in both schemes through `--muted`. */
 const STRIPE_CLASS: Readonly<Record<Stripe, string>> = { odd: 'bg-muted/40', even: 'bg-transparent' };
@@ -228,12 +372,14 @@ function Group({
   node,
   depth,
   stripe = 'even',
+  handle,
 }: {
   ctx: Ctx;
   path: Path;
   node: Record<string, unknown> | unknown[];
   depth: number;
   stripe?: Stripe;
+  handle?: ReactNode;
 }) {
   const [open, setOpen] = useState(ctx.bulk?.open ?? depth < 2);
   // A fresh object per click, so repeating an action still reaches a group toggled by hand since.
@@ -247,6 +393,7 @@ function Group({
   return (
     <section aria-labelledby={`${id}-name`} className={cn('rounded-lg border', STRIPE_CLASS[stripe])}>
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+        {handle}
         <IconAction
           label={`${expanded ? 'Collapse' : 'Expand'} ${labelOf(path)}`}
           hint={expanded ? 'Collapse' : 'Expand'}
@@ -287,13 +434,14 @@ function Group({
   );
 }
 
-function Field({ ctx, path, value, stripe = 'even' }: { ctx: Ctx; path: Path; value: unknown; stripe?: Stripe }) {
+function Field({ ctx, path, value, stripe = 'even', handle }: { ctx: Ctx; path: Path; value: unknown; stripe?: Stripe; handle?: ReactNode }) {
   const id = slug(pointerOf(path));
   const key = path[path.length - 1];
   const markedHere = typeof key === 'string' && markedIn(valueAt(ctx.doc, path.slice(0, -1))).has(key);
   const hidden = isSecretLeaf(value) || markedHere;
   return (
     <div className={cn('-mx-2 flex flex-wrap items-center gap-2 rounded-md px-2 py-1', STRIPE_CLASS[stripe])}>
+      {handle}
       <div className="w-48 min-w-0 shrink-0">
         <KeyName path={path} id={`${id}-name`} />
       </div>
@@ -664,6 +812,16 @@ function RowActions({ ctx, path }: { ctx: Ctx; path: Path }) {
     <div className="flex items-center">
       {typeof key === 'string' ? <RenameButton ctx={ctx} path={path} /> : null}
       {typeof key === 'string' ? <MoveButton ctx={ctx} path={path} /> : null}
+      {typeof key === 'string' && isContainer(valueAt(ctx.doc, path)) ? (
+        <IconAction
+          label={`Duplicate ${labelOf(path)}`}
+          hint="Duplicate"
+          disabled={ctx.disabled}
+          onClick={() => ctx.onEdit({ kind: 'duplicate', path })}
+        >
+          <CopyPlus aria-hidden="true" />
+        </IconAction>
+      ) : null}
       <IconAction label={`Remove ${labelOf(path)}`} hint="Remove" danger disabled={ctx.disabled} onClick={() => ctx.onEdit({ kind: 'remove', path })}>
         <Trash2 aria-hidden="true" />
       </IconAction>

@@ -1341,7 +1341,16 @@ describe('credentialsOpsProblem — what `cred local patch` may be sent', () => 
   });
 
   it('refuses an unknown op', () => {
-    expect(credentialsOpsProblem([{ op: 'copy', from: '/c', pointer: '/d' }])).toMatch(/`set`, `set-secret`, `unset` or `move`/);
+    expect(credentialsOpsProblem([{ op: 'nuke', pointer: '/d' }])).toMatch(/`copy` or `reorder`/);
+  });
+
+  it('accepts copy and reorder, and refuses them malformed', () => {
+    expect(credentialsOpsProblem([{ op: 'copy', from: '/c', pointer: '/d' }])).toBeNull();
+    expect(credentialsOpsProblem([{ op: 'reorder', pointer: '/c', before: '/d' }])).toBeNull();
+    expect(credentialsOpsProblem([{ op: 'reorder', pointer: '/c', before: null }])).toBeNull();
+    expect(credentialsOpsProblem([{ op: 'copy', from: 'c', pointer: '/d' }])).toMatch(/JSON pointer/);
+    expect(credentialsOpsProblem([{ op: 'reorder', pointer: '/c' }])).toMatch(/needs `before`/);
+    expect(credentialsOpsProblem([{ op: 'reorder', pointer: '/c', before: 'd' }])).toMatch(/JSON pointer/);
   });
 
   it('accepts set-secret with a non-empty text value, and nothing else', () => {

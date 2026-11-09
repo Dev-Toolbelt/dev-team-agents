@@ -111,6 +111,11 @@ export interface InvokeOptions {
    * single secret inside it could be echoed on its own in an error message.
    */
   readonly redactAlso?: readonly string[];
+  /**
+   * Values to redact from a failure only. A successful document stays as the CLI wrote it, because
+   * the caller draws it: a value the user typed into a visible field must come back readable.
+   */
+  readonly redactOnFailure?: readonly string[];
 }
 
 export const REDACTED = '[redacted]';
@@ -410,10 +415,14 @@ export async function invokeDevteam(options: InvokeOptions): Promise<CliResult> 
   }
 
   const durationMs = Date.now() - startedAt;
-  const redactAll = (text: string): string =>
-    (options.redactAlso ?? []).reduce(redactSecret, redactSecret(text, options.secretStdin));
-  const stdout = redactAll(Buffer.concat(stdoutChunks).toString('utf8'));
-  const stderr = redactAll(Buffer.concat(stderrChunks).toString('utf8'));
+  const redactAll = (text: string, also: readonly string[]): string =>
+    [...(options.redactAlso ?? []), ...also].reduce(redactSecret, redactSecret(text, options.secretStdin));
+  const failureOnly = options.redactOnFailure ?? [];
+  const rawStdout = Buffer.concat(stdoutChunks).toString('utf8');
+  const succeeded =
+    spawnError === null && overflow.which === null && timedOutWith === null && exitCode === 0 && parseSingleDocument(rawStdout).ok;
+  const stdout = redactAll(rawStdout, succeeded ? [] : failureOnly);
+  const stderr = redactAll(Buffer.concat(stderrChunks).toString('utf8'), failureOnly);
 
   if (spawnError !== null) {
     // ENOENT is the first-run state a real user hits: no `devteam` where we looked.

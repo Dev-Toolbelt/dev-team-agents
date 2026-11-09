@@ -31,6 +31,41 @@ describe('applyOps', () => {
   });
 });
 
+describe('reorder and copy', () => {
+  it('reorders object keys and list items like the CLI does', () => {
+    const out = applyOps({ a: 1, b: 2, c: 3, list: ['x', 'y', 'z'] }, [
+      { op: 'reorder', pointer: '/c', before: '/a' },
+      { op: 'reorder', pointer: '/list/0', before: null },
+    ]);
+    expect(Object.keys(out)).toEqual(['c', 'a', 'b', 'list']);
+    expect(out['list']).toEqual(['y', 'z', 'x']);
+    expect(applyOps({ list: ['x', 'y', 'z'] }, [{ op: 'reorder', pointer: '/list/0', before: '/list/2' }])['list']).toEqual(['y', 'x', 'z']);
+  });
+
+  it('drops a row where it already is as no edit', () => {
+    const doc = { a: 1, b: 2, $secrets: ['a'] };
+    expect(opsFor(doc, { kind: 'reorder', path: ['a'], before: ['b'] })).toEqual([]);
+    expect(opsFor(doc, { kind: 'reorder', path: ['a'], before: ['a'] })).toEqual([]);
+    expect(opsFor(doc, { kind: 'reorder', path: ['b'], before: null })).toEqual([]);
+    expect(opsFor(doc, { kind: 'reorder', path: ['b'], before: ['a'] })).toEqual([{ op: 'reorder', pointer: '/b', before: '/a' }]);
+  });
+
+  it('duplicates a group right after it, under the first free name', () => {
+    const doc = { app: { host: 'h' }, 'app-copy': {}, other: {} };
+    const ops = opsFor(doc, { kind: 'duplicate', path: ['app'] });
+    expect(ops[0]).toEqual({ op: 'copy', from: '/app', pointer: '/app-copy-2' });
+    expect(Object.keys(applyOps(doc, ops))).toEqual(['app', 'app-copy-2', 'app-copy', 'other']);
+  });
+
+  it('draws a copied secret as not stored yet, and a password-manager reference as it is', () => {
+    const leaf = { secret: true, set: true, marked: true };
+    const doc = { app: { $secrets: ['a', 'b'], a: { ...leaf, stored: 'keychain' }, b: { ...leaf, stored: 'op' } } };
+    const copy = applyOps(doc, [{ op: 'copy', from: '/app', pointer: '/dup' }])['dup'] as Record<string, Record<string, unknown>>;
+    expect(copy['a']?.['stored']).not.toBe('keychain');
+    expect(copy['b']?.['stored']).toBe('op');
+  });
+});
+
 describe('record', () => {
   it('folds consecutive sets of one pointer into the last, and keeps everything else', () => {
     const ops = record([], { op: 'set', pointer: '/a', value: '1' }, { op: 'set', pointer: '/a', value: '12' });

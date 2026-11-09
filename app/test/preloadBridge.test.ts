@@ -51,4 +51,17 @@ describe('preload bridge — credentialsLocalPatch', () => {
     ]);
     expect(credentialsOpsProblem(ops)).toBeNull();
   });
+
+  it('keeps `from` on a copy and `before` on a reorder, including null', async () => {
+    invoke.mockClear();
+    const sent = [
+      { op: 'copy', from: '/example', pointer: '/example-copy' },
+      { op: 'reorder', pointer: '/example-copy', before: '/api' },
+      { op: 'reorder', pointer: '/api', before: null },
+    ] as const;
+    await exposed!.credentialsLocalPatch('p1', 'a'.repeat(64), sent);
+    const ops = (invoke.mock.calls as unknown[][]).find((args) => args[0] === CHANNELS.credentialsLocalPatch)![3];
+    expect(ops).toEqual(sent);
+    expect(credentialsOpsProblem(ops)).toBeNull();
+  });
 });

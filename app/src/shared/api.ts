@@ -923,7 +923,11 @@ export type CredentialsPatchOp =
   /** ADR-0053: the CLI moves `value` into the OS secret store and writes a `{"$ref"}` leaf in its place. */
   | { readonly op: 'set-secret'; readonly pointer: string; readonly value: string }
   | { readonly op: 'unset'; readonly pointer: string }
-  | { readonly op: 'move'; readonly from: string; readonly pointer: string };
+  | { readonly op: 'move'; readonly from: string; readonly pointer: string }
+  /** Duplicates a group under a new key of an object; each secret the CLI stored for it gets its own new reference. */
+  | { readonly op: 'copy'; readonly from: string; readonly pointer: string }
+  /** Moves `pointer` right before its sibling `before`, or to the end of its parent when `null`. */
+  | { readonly op: 'reorder'; readonly pointer: string; readonly before: string | null };
 
 /** `details.reason` of a `patch` refused because a plaintext secret was set inside `$production` (ADR-0053 § 4). */
 export const CREDENTIALS_PLAINTEXT_IN_PRODUCTION = 'plaintext-in-production';
