@@ -25,6 +25,19 @@
       ],
       "sha256": "ee49fd5455606f49f2f162277e904da6e0eec2b661c674ed2fa0c9358badbfe7"
     },
+    "security-audit": {
+      "repo": "cloudflare/security-audit-skill",
+      "commit": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8",
+      "path": "skills/security-audit",
+      "exclude": [
+        "*.test.cjs"
+      ],
+      "license": "MIT",
+      "license_files": [
+        "LICENSE"
+      ],
+      "sha256": "c713eab68698002338da193cb8f4b5b9a1a6b44190f493119358dbdfd5ffbe45"
+    },
     "stop-slop": {
       "repo": "hardikpandya/stop-slop",
       "commit": "8da1f030185bdfe8471220585162991eaeb970e9",

@@ -49,6 +49,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 | Compliance work, or the project references ISO 27001 / SGSI controls | `skills/security/iso27001-sgsi/SKILL.md` |
 | Running scanners against the repository (see Tooling & Dependency Audit) | `skills/security/dependency-audit/SKILL.md` |
 | A finding concerns secrets or sensitive data left in code comments | `skills/shared/comments-policy/SKILL.md` |
+| Vulnerability research, triage of a specific finding, or a parent flow that runs the vendored `security-audit` workflow | `skills/security/third-party-security-skills/SKILL.md` |
 
 **Security checklist — security-audit column only.** Read its `## Ownership Boundary — Security Audit vs QA` section **first**, then cover only the security-audit column: A02, A05, A06, A08, A10, HTTP security headers, LGPD/GDPR, and secrets/credentials. Anything on the behavioral-QA side gets one line flagged `[cross-boundary → qa-specialist]`, never a full analysis. On A03 Injection, state whether you observed the structural weakness (parameterized queries, escaping) rather than runtime rejection.
 

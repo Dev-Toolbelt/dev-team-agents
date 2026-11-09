@@ -41,6 +41,7 @@ TOOLS = {"claude": (), "opencode": ("bash", "python3", "jq"), "codex": ("bash", 
 ROUTING_SKILLS = (
     REPO_ROOT / "skills" / "design" / "third-party-design-skills" / "SKILL.md",
     REPO_ROOT / "skills" / "shared" / "third-party-writing-skills" / "SKILL.md",
+    REPO_ROOT / "skills" / "security" / "third-party-security-skills" / "SKILL.md",
 )
 
 

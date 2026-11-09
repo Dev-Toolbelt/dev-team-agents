@@ -137,6 +137,12 @@ class CompactRoutingTest(unittest.TestCase):
             with self.subTest(agent=name):
                 self.assertTrue((REPO_ROOT / "agents" / (name + ".md")).is_file())
 
+    def test_a_full_audit_routes_to_the_security_command(self):
+        # The vendored security-audit skill would otherwise start its own workflow (ADR-0047).
+        row = next((l for l in _template_block().splitlines() if l.startswith("| `security-specialist`")), "")
+        for needle in ("end-to-end audit", "pen test", "/devteam:security", "$devteam-security"):
+            self.assertIn(needle, row)
+
     def test_health_check_migrates_the_verbose_section(self):
         self.assertIn(self.VERBOSE_NEEDLE, CHECKS.read_text(encoding="utf-8"))
         self.assertNotIn(self.VERBOSE_NEEDLE, _template_block())

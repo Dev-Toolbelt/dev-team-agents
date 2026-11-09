@@ -51,7 +51,7 @@ INACTIVE_AGENTS: [none|comma-separated agent names]
 |---|---|
 | `backend-test-specialist` / `frontend-test-specialist` | `TESTS_REQUIRED=yes` after backend / frontend work, or tests are requested |
 | `code-reviewer` | a review is requested, or before merging — it routes to the backend/frontend reviewers |
-| `security-specialist` | a security review is requested, or a release touches auth, payments or user data |
+| `security-specialist` | a security review is requested, or a release touches auth, payments or user data. A full or end-to-end audit, pen test or audit report of the codebase runs the `security` command (`/devteam:security`, `$devteam-security`), never a skill's own audit workflow |
 | `qa-specialist` | behavior must be validated against acceptance criteria, after implementation |
 | `technical-writer` | documentation is requested, or after a significant change ships |
 | `seo-specialist` | a public, indexable page (site, landing, blog, store) was built or changed |

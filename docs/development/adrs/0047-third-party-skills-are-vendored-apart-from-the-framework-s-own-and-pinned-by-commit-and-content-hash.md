@@ -3,7 +3,7 @@
 **Date:** 2026-10-25  
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
-**Applies to:** `skills/third-party/**`, `helpers/third-party-skills.py`, `skills/design/third-party-design-skills/SKILL.md`, `skills/shared/third-party-writing-skills/SKILL.md`, `tests/test_third_party_skills.py`  
+**Applies to:** `skills/third-party/**`, `helpers/third-party-skills.py`, `skills/design/third-party-design-skills/SKILL.md`, `skills/shared/third-party-writing-skills/SKILL.md`, `skills/security/third-party-security-skills/SKILL.md`, `tests/test_third_party_skills.py`  
 **Relates to:** [ADR-0020](0020-the-cli-manages-the-providers-global-skill-directories.md) (user-level skills), [ADR-0040](0040-provenance-and-content-hash-for-skills-installed-into-the-providers-global-skill-directories.md) (content hash)
 
 ## Context
@@ -69,3 +69,21 @@ The design and writing agents should be able to use well-known community skills 
 > coreyhaines31/marketingskills, zubair-trabzada/geo-seo-claude) adapted into
 > `skills/design/seo-optimization/`, whose *Rejected third-party claims* table records what was
 > left out.
+
+> **Amendment (2026-11-06) — a security category, and a skill whose full workflow runs only from the main conversation.**
+> `security-audit` (cloudflare/security-audit-skill) is the first vendored security skill; its routing
+> skill is `skills/security/third-party-security-skills/SKILL.md`, loaded by `security-specialist`.
+> Its two Node validators read local files and use no network, so Decision 6 keeps them; they run only
+> with a `node` already on `PATH`, never through `npx`, and their upstream tests are excluded. Its
+> full audit mode spawns hunters and independent verifiers, so that mode runs only with the main
+> conversation as the parent (`/devteam:security`), every upstream agent role mapped to a read-only
+> `security-specialist` spawn that returns text while the parent writes and runs target code.
+> Outside a full audit's hunter or verifier role, a spawned agent uses the skill as guidance only, by
+> framework rule rather than by provider capability. The full audit mode has not yet been run end to
+> end on any provider; the same rules hold on all three, with waves batched under any cap on parallel
+> agents. Because the skill's own description would start its workflow directly, the
+> `security-specialist` row of the instruction-file routing section (`skills/shared/auto-routing/SKILL.md`)
+> sends a full or end-to-end audit, pen test or audit report to the `security` command. The
+> `devteam:routing v3` marker is unchanged, and nothing rewrites an existing v3 section (setup only
+> appends it; the health check migrates only the pre-v3 form), so a project bound before this change
+> gets the row only when its section is merged by hand.
