@@ -310,7 +310,7 @@ Canonical close for any flow that changed code and whose recommended next step i
 | `auto` | Do not ask: say in one line that the review runs per `review_gate_mode`, then act as if `Review <scope> (Recommended)` was picked |
 | `skip` | Do not ask: go to the command's hand-off and prefix it with `review skipped (review_gate_mode=skip)` |
 
-The mode covers this gate only — a command's mandatory review phase and a project rule that requires a review still run.
+The mode covers this gate and, for `auto` only, the findings question of `/devteam:sprint` Step 5 — a command's mandatory review phase and a project rule that requires a review still run.
 
 **Build the options from the session, not a fixed list** (max 4 incl. Other, in the user's language):
 

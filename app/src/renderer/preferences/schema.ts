@@ -307,7 +307,7 @@ export const FIELDS: readonly Field[] = [
       type: 'cards',
       options: [
         { value: 'ask', label: 'Ask each time', description: 'Offer the review, recommended by default, and let you choose.' },
-        { value: 'auto', label: 'Review automatically', description: 'Run the recommended review right away, without asking.' },
+        { value: 'auto', label: 'Review automatically', description: 'Run the recommended review right away and apply sprint findings, without asking.' },
         { value: 'skip', label: "Don't review", description: 'Go straight to the commit or PR hand-off, with no review prompt, even for sensitive changes.' },
       ],
     },

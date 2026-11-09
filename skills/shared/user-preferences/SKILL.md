@@ -104,7 +104,7 @@ the user never saw a prompt, and that reads as "no". `devteam prefs list` report
 | `worktree_path` | string | `".worktrees"` | Directory where worktrees are created |
 | `worktree_docker_isolate` | bool | `true` | Isolated Docker Compose stack per worktree (when Docker present) |
 | `qa_browser` | string or null | `null` | Browser used when the in-app browser is unavailable — `qa-specialist` and the Visual Check Gate (`null` = ask on first use) |
-| `review_gate_mode` | string | `"ask"` | Review Next-Step Gate behavior: `ask`, `auto` (review without asking), or `skip` |
+| `review_gate_mode` | string | `"ask"` | Review Next-Step Gate behavior: `ask`, `auto` (review without asking; `/devteam:sprint` also applies task findings without asking), or `skip` |
 | `ci_cd_detected` | bool or null | `null` | Cached GitHub Actions detection (`null` = unchecked) |
 | `recall_active` | bool | `true` | Per-prompt recall pointers from the ADR, wiki and reuse retrieval indexes (ADR-0048) |
 | `check_active` | bool | `true` | The `devteam check` pre-flight that compares the branch diff with base-branch decisions in `/devteam:pr` and `/devteam:push` (ADR-0049) |
