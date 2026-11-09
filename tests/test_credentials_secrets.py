@@ -572,5 +572,108 @@ class FailureAuditTest(SecretCase):
         )
 
 
+class CopyAndReorderTests(SecretCase):
+    def stored(self):
+        self.patch([{"op": "set-secret", "pointer": "/app/staging/password", "value": PW}], BASE)
+        return self.disk()["app"]["staging"]["password"]
+
+    def test_copy_gives_a_stored_secret_its_own_reference(self):
+        with FakeStore().active() as store:
+            original = self.stored()
+            state = self.patch([{"op": "copy", "from": "/app/staging", "pointer": "/app/copy"}])
+            copied = self.disk()["app"]["copy"]["password"]
+            self.assertNotEqual(copied["$ref"], original["$ref"])
+            self.assertEqual(store.values[copied["$ref"]], PW)
+            self.assertEqual(self.disk()["app"]["copy"]["$secrets"], ["password"])
+            self.assertNotIn(PW, json.dumps(state))
+            self.assertIn("local-duplicate", self.audit_text())
+            self.patch([{"op": "set-secret", "pointer": "/app/copy/password", "value": "other-value-1"}])
+            self.assertEqual(store.values[original["$ref"]], PW)
+
+    def test_copy_resolves_nothing_from_a_tracked_file(self):
+        with FakeStore().active() as store:
+            self.stored()
+            before = dict(store.values)
+            with mock.patch.object(cl, "tracked_state", lambda root: "tracked"), self.assertRaises(EnvError) as ctx:
+                self.patch([{"op": "copy", "from": "/app/staging", "pointer": "/app/copy"}])
+            self.assertEqual(ctx.exception.details["reason"], "tracked-file")
+            self.assertEqual(store.values, before)
+
+    def test_copy_keeps_a_password_manager_reference_as_it_is(self):
+        ref = {"$ref": "op://v/i/f"}
+        with FakeStore().active() as store:
+            self.patch([{"op": "copy", "from": "/g", "pointer": "/h"}], {"g": {"token": ref}})
+            self.assertEqual(self.disk()["h"]["token"], ref)
+            self.assertEqual(store.values, {})
+
+    def test_a_failed_patch_leaves_no_copied_value_behind(self):
+        with FakeStore().active() as store:
+            self.stored()
+            before = dict(store.values)
+            with self.assertRaises(UsageError):
+                self.patch([
+                    {"op": "copy", "from": "/app/staging", "pointer": "/app/copy"},
+                    {"op": "move", "from": "/nope", "pointer": "/x"},
+                ])
+            self.assertEqual(store.values, before)
+
+    def test_copy_refuses_what_it_must_not_write(self):
+        doc = {"g": {"a": 1}, "h": {}, "v": 1, "m": {"in": {"a": 1}}, "$secrets": ["m"], "l": [1]}
+        for op in (
+            {"op": "copy", "from": "/v", "pointer": "/w"},
+            {"op": "copy", "from": "/g", "pointer": "/h"},
+            {"op": "copy", "from": "/g", "pointer": "/g/inner"},
+            {"op": "copy", "from": "/g", "pointer": "/l/-"},
+            {"op": "copy", "from": "/g", "pointer": "/$secrets"},
+            {"op": "copy", "from": "/m/in", "pointer": "/n"},
+            {"op": "copy", "from": "/nope", "pointer": "/n"},
+        ):
+            with self.subTest(op=op), self.assertRaises(UsageError):
+                self.patch([op], doc)
+
+    def test_copy_cannot_leave_production(self):
+        doc = {"prod": {"$production": True, "sub": {"url": "u"}}, "dev": {}}
+        with self.assertRaises(UsageError) as ctx:
+            self.patch([{"op": "copy", "from": "/prod/sub", "pointer": "/dev/sub"}], doc)
+        self.assertEqual(ctx.exception.details["reason"], "copy-out-of-production")
+        self.patch([{"op": "copy", "from": "/prod/sub", "pointer": "/prod/sub2"}], doc)
+        self.assertEqual(self.disk()["prod"]["sub2"], {"url": "u"})
+        self.patch([{"op": "copy", "from": "/prod", "pointer": "/prod2"}], doc)
+        self.assertIs(self.disk()["prod2"]["$production"], True)
+
+    def test_copy_into_a_reference_is_refused(self):
+        with self.assertRaises(UsageError):
+            self.patch([{"op": "copy", "from": "/g", "pointer": "/k/x"}], {"g": {"a": 1}, "k": {"$ref": "op://v/i/f"}})
+
+    def test_copy_under_production_refuses_a_new_plaintext_secret(self):
+        with self.assertRaises(UsageError):
+            self.patch([{"op": "copy", "from": "/p", "pointer": "/q"}], {"p": {"$production": True, "token": PW}})
+
+    def test_reorder_changes_only_the_order(self):
+        doc = {"a": 1, "$secrets": ["c"], "b": {"x": 1}, "c": PW, "l": ["x", "y", "z"]}
+        self.patch([{"op": "reorder", "pointer": "/c", "before": "/a"}], doc)
+        self.assertEqual(list(self.disk()), ["c", "a", "$secrets", "b", "l"])
+        self.assertEqual(self.disk()["c"], PW)
+        self.patch([{"op": "reorder", "pointer": "/a", "before": None}])
+        self.assertEqual(list(self.disk())[-1], "a")
+        self.patch([{"op": "reorder", "pointer": "/l/0", "before": "/l/2"}])
+        self.assertEqual(self.disk()["l"], ["y", "x", "z"])
+        self.patch([{"op": "reorder", "pointer": "/l/2", "before": "/l/0"}])
+        self.assertEqual(self.disk()["l"], ["z", "y", "x"])
+        self.patch([{"op": "reorder", "pointer": "/l/0", "before": None}])
+        self.assertEqual(self.disk()["l"], ["y", "x", "z"])
+
+    def test_reorder_refuses_a_malformed_target(self):
+        doc = {"g": {"a": 1, "b": 2}, "h": 1}
+        for op in (
+            {"op": "reorder", "pointer": "/g/a"},
+            {"op": "reorder", "pointer": "/g/a", "before": "/h"},
+            {"op": "reorder", "pointer": "/g/a", "before": "/g/nope"},
+            {"op": "reorder", "pointer": "/g/nope", "before": None},
+        ):
+            with self.subTest(op=op), self.assertRaises(UsageError):
+                self.patch([op], doc)
+
+
 if __name__ == "__main__":
     unittest.main()

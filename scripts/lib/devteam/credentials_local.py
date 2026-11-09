@@ -62,7 +62,7 @@ _URL_QUERY = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://[^?#]*[?#]")
 #: Pasted key material (PEM, OpenSSH).
 _KEY_MATERIAL = "-----BEGIN"
 
-OPS = ("set", "unset", "move", "set-secret")
+OPS = ("set", "unset", "move", "set-secret", "copy", "reorder")
 
 #: ADR-0053 § 1: a value may be the reserved leaf ``{"$ref": <ref>, "$backend": <name>}``.
 #: ``$backend`` is recorded only for a ``devteam/`` ref; ``op://`` and ``bw://`` refs are
@@ -1093,6 +1093,78 @@ def _apply_move(doc, source, target, op):
         _mark_moved(doc, target, op["pointer"])
 
 
+def _apply_reorder(doc, tokens, op):
+    """Place the key at ``tokens`` right before its sibling ``before``, or last when ``None``.
+
+    Only the order changes, so no value is read and the other keys keep their relative order.
+    """
+    before = None if op["before"] is None else _tokens(op["before"])
+    _lookup(doc, tokens, op["pointer"])
+    if before is not None:
+        _lookup(doc, before, op["before"])
+    if before == tokens:
+        return
+    parent = _lookup(doc, tokens[:-1], op["pointer"])
+    if isinstance(parent, list):
+        source = _index(tokens[-1], op["pointer"])
+        at = len(parent) if before is None else _index(before[-1], op["before"])
+        item = parent.pop(source)
+        parent.insert(at - 1 if at > source else at, item)
+        return
+    moved = (tokens[-1], parent[tokens[-1]])
+    items = [item for item in parent.items() if item[0] != tokens[-1]]
+    at = len(items) if before is None else [name for name, _ in items].index(before[-1])
+    items.insert(at, moved)
+    parent.clear()
+    parent.update(items)
+
+
+def _copied(node, tokens, production, project_id, created, root):
+    """``node`` with each of this project's stored secrets copied under a new reference.
+
+    A shared reference would make replacing the copy change the original too. ``op://``, ``bw://``
+    and foreign references are never written through, so they are kept as they are.
+    """
+    if is_ref_leaf(node):
+        if ref_kind(node) != "devteam" or _ref_owner(node) != project_id:
+            return copy.deepcopy(node)
+        value = resolve_leaf(node, project_id, "local-duplicate", _pointer(tokens), root=root)
+        return _store_secret(value, project_id, production, None, created)
+    if isinstance(node, dict):
+        production = production or node.get(PRODUCTION_KEY) is True
+        return {key: _copied(item, tokens + [key], production, project_id, created, root) for key, item in node.items()}
+    if isinstance(node, list):
+        return [_copied(item, tokens + [str(i)], production, project_id, created, root) for i, item in enumerate(node)]
+    return node
+
+
+def _apply_copy(doc, source, target, op, project_id, created, root):
+    """Duplicate the group at ``from`` as a new key, without any value reaching the caller.
+
+    Refuses a scalar, a group hidden by a key on its path (the app cannot see what it would
+    copy), an existing destination and a destination inside the group itself.
+    """
+    value = _lookup(doc, source, op["from"])
+    if not isinstance(value, (dict, list)) or is_ref_leaf(value):
+        raise UsageError("{!r}: only a group can be copied".format(op["from"]))
+    if target[: len(source)] == source:
+        raise UsageError("{!r} cannot be copied inside itself".format(op["from"]))
+    if _hidden_by_key(doc, source, value):
+        raise UsageError("{!r}: a hidden group cannot be copied".format(op["from"]))
+    destination = _quiet(doc, target[:-1])
+    if not isinstance(destination, dict) or is_ref_leaf(destination) or target[-1] in (SECRETS_KEY, PRODUCTION_KEY, REF_KEY, BACKEND_KEY):
+        raise UsageError("{!r}: a copy needs a new key inside a group".format(op["pointer"]))
+    if target[-1] in _quiet(doc, target[:-1]):
+        raise UsageError("{!r} already exists".format(op["pointer"]))
+    production = _production_along(doc, target[:-1])
+    if _production_along(doc, source[:-1]) and not production:
+        raise UsageError(
+            "{!r}: a production group cannot be copied outside $production".format(op["from"]),
+            details={"reason": "copy-out-of-production"},
+        )
+    _apply_set(doc, target, _copied(value, source, production, project_id, created, root), op["pointer"])
+
+
 def _hidden_by_name(key, value):
     return not isinstance(value, (dict, list)) and _secret_ish(key)
 
@@ -1157,11 +1229,17 @@ def _validate_ops(ops):
     for position, op in enumerate(ops):
         if not isinstance(op, dict) or op.get("op") not in OPS:
             raise UsageError(
-                "operation {} must be an object with op 'set', 'unset', 'move' or 'set-secret'".format(position)
+                "operation {} must be an object with op 'set', 'unset', 'move', 'set-secret', "
+                "'copy' or 'reorder'".format(position)
             )
         _tokens(op.get("pointer"))
-        if op["op"] == "move":
+        if op["op"] in ("move", "copy"):
             _tokens(op.get("from"))
+        if op["op"] == "reorder":
+            if "before" not in op:
+                raise UsageError("operation {} ('reorder') carries no 'before'".format(position))
+            if op["before"] is not None and _tokens(op["before"])[:-1] != _tokens(op["pointer"])[:-1]:
+                raise UsageError("operation {} ('reorder'): 'before' must be a sibling".format(position))
         if op["op"] == "set":
             if "value" not in op:
                 raise UsageError("operation {} ('set') carries no value".format(position))
@@ -1456,6 +1534,10 @@ def apply_patch(project_root, ops, expect_hash):
                     _apply_set_secret(working, tokens, op, project_id, created)
                 elif op["op"] == "move":
                     _apply_move(working, _tokens(op["from"]), tokens, op)
+                elif op["op"] == "copy":
+                    _apply_copy(working, _tokens(op["from"]), tokens, op, project_id, created, project_root)
+                elif op["op"] == "reorder":
+                    _apply_reorder(working, tokens, op)
                 else:
                     _apply_unset(working, tokens, op["pointer"])
             _refuse_new_production_plaintext(original, working)

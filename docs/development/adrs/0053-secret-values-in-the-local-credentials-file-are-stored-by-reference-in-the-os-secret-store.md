@@ -66,7 +66,8 @@ connected integration, an MCP server's own tools or the project's local `.env`. 
 not stored is stored by the user — never typed or pasted into the chat. The closed list lives in
 `skills/shared/credentials/SKILL.md` § 3b.
 
-Every resolution — `copy-value`, `exec`, and the QA sign-in of ADR-0054 — appends an audit line to
+Every resolution — `copy-value`, `exec`, the `copy` patch op that duplicates a group, and the QA
+sign-in of ADR-0054 — appends an audit line to
 the machine-local `audit.log` (ADR-0010 format: never the value, nothing derived from it).
 
 **A tracked file resolves nothing.** When `credentials.local.json` is tracked by git, every

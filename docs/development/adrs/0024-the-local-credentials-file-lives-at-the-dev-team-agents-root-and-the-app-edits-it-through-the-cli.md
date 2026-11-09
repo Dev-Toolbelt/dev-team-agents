@@ -108,7 +108,7 @@ credential guard hook already treats the basename as a secret at any path.
 |---------|-----------|----------------|
 | `cred local show` | Reads the file; never prints a secret value | `{path, exists, valid, error, hash, data}` |
 | `cred local init` | Writes the canonical template; refuses if the file exists | same as `show` |
-| `cred local patch --expect-hash H` | Reads `[{op:"set"\|"unset"\|"move", pointer, value?, from?}]` from **stdin**, applies all ops atomically, refuses on hash mismatch or invalid JSON | same as `show` |
+| `cred local patch --expect-hash H` | Reads `[{op:"set"\|"unset"\|"move"\|"copy"\|"reorder", pointer, value?, from?, before?}]` from **stdin**, applies all ops atomically, refuses on hash mismatch or invalid JSON | same as `show` |
 
 - `error` is `null` or `{message, line, column}` when `valid` is false; `data` is then `null`.
 - `hash` is an HMAC-SHA256 of the raw bytes keyed with a random machine-local key
@@ -134,6 +134,15 @@ credential guard hook already treats the basename as a secret at any path.
   it, or a secret-looking name) stays hidden: the new name is added to the destination's
   `$secrets` unless it looks secret itself, and the move is refused when that cannot be done (a
   list, a malformed `$secrets`, a name too long to mark, a reserved key as the new name).
+- `copy` (`{from, pointer}`) duplicates a visible group under a new key, so the app can duplicate
+  what it cannot read. Each stored `devteam/` secret of this project gets a new reference and its own
+  stored value, audited as `local-duplicate`, because a shared reference would make replacing the copy
+  change the original; `op://`, `bw://` and foreign references are kept as they are. It refuses a
+  scalar, a group hidden by a key on its path, an existing destination, a destination inside the
+  group or inside a reference, and a copy from under a production ancestor to a place that is not
+  production.
+- `reorder` (`{pointer, before}`) places a key or list item right before the sibling at `before`, or
+  last when `before` is `null`. Only the order changes.
 - `patch` preserves every key it does not touch, including keys unknown to the template, and writes
   two-space-indented JSON with a trailing newline, mode `0600`, atomically.
 
@@ -157,7 +166,7 @@ default when absent, so the template leaves them out. Two keys are reserved in a
 The marks are sibling keys rather than wrappers around values (`{"$secret": "x"}`), so a value
 stays a plain string for a hand edit and for an agent reading the file. The `$` prefix keeps a
 group the user names `production` from colliding with the flag. The app is a tree editor that
-journals the user's edits as `set`/`unset`/`move` ops, applies them to its working copy with the
+journals the user's edits as patch ops, applies them to its working copy with the
 same semantics the CLI applies on disk, and sends them with the hash it loaded.
 
 ## Consequences

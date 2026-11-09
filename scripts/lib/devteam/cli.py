@@ -2500,7 +2500,7 @@ def build_parser():
         "init", help="create the file from the canonical template; refuses if it exists"
     ).set_defaults(func=cmd_cred_local_init)
     cred_local_patch = cred_local_leaf(
-        "patch", help="apply set/unset/move operations read from stdin, atomically"
+        "patch", help="apply set/unset/move/set-secret/copy/reorder operations read from stdin, atomically"
     )
     cred_local_patch.add_argument(
         "--expect-hash", dest="expect_hash", required=True,
