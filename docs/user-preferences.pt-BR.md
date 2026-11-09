@@ -105,7 +105,7 @@ scripts/lib/preferences-defaults.json
 | `worktree_path` | `".worktrees"` | string | Diretório-raiz onde as worktrees são criadas |
 | `worktree_docker_isolate` | `true` | bool | Se Docker Compose deve ser isolado por worktree |
 | `qa_browser` | `null` | string ou null | Navegador preferido quando o browser do app não está disponível — testes de QA e a conferência visual após trabalho de UI |
-| `review_gate_mode` | `"ask"` | string | O que acontece quando um trabalho que alterou código termina: `ask` mostra a escolha de review, `auto` roda o review recomendado sem perguntar, `skip` vai direto para o hand-off de commit/PR |
+| `review_gate_mode` | `"ask"` | string | O que acontece quando um trabalho que alterou código termina: `ask` mostra a escolha de review, `auto` também faz o `/devteam:sprint` aplicar os achados das tarefas sem perguntar e roda o review recomendado sem perguntar, `skip` vai direto para o hand-off de commit/PR |
 | `ci_cd_detected` | `null` | bool ou null | Estado em cache da detecção de CI/CD |
 | `recall_active` | `true` | bool | Ponteiros de recall por prompt a partir dos índices de ADR, wiki e reuso (ADR-0048) |
 | `check_active` | `true` | bool | Pré-checagem `devteam check` que compara o diff da branch com as decisões da base em `/devteam:pr` e `/devteam:push` (ADR-0049) |
