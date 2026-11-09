@@ -21,14 +21,46 @@ This applies to:
 
 ---
 
+## Documented Answer First
+
+During approved work, a question the project's documents already answer is a defect of the flow. Before a question reaches the user, or an `## Open Decisions` block leaves a sub-agent, look for the answer.
+
+Applies to every agent executing an approved plan, sprint or spec, and to the orchestrator relaying for it. It does not apply to planning conversations, whose job is to collect decisions, or to approvals and the Command Run Plan below.
+
+**Lookup order:**
+
+| # | Where | How |
+|---|---|---|
+| 1 | The task: description, `Refs`, `Covers` scenarios, contract | Read in full |
+| 2 | Project instruction files, code standards, reuse guidelines | Read the sections on the topic |
+| 3 | The document that owns the topic: API contracts, database, architecture, tech stack, design system | Resolve it per `skills/shared/project-context/SKILL.md` § Doc Layout |
+| 4 | ADR index and wiki index | Grep the task's terms and their synonyms, then open every match |
+| 5 | Scope overview and, in the `gated` layout, PRD, glossary, NFR and the `## Answers` of `docs/source/` | Grep the topic |
+
+An answer counts only when it is explicit and current: an Accepted ADR, or a document with no historical banner (`skills/shared/docs-sync/SKILL.md` § Document Lifecycle). Before applying one found in rows 1, 3 or 5, check it against rows 2 and 4. On interface shape the contract wins over the spec, with no question (`spec-gate` § Scope Lock). Existing code is never an explicit answer; it only shapes a technical default below.
+
+**What the search found decides the next step.** Any matching Question row wins over the default row:
+
+| Result | Next step |
+|---|---|
+| An explicit answer | Apply it and list it under `Answered from` in the report, with file and section. No question |
+| Two sources disagree | Question citing both, per the Contradiction Guard |
+| Silent, and the answer changes what a user observes or a business rule | Question |
+| Silent, and the choice touches security, compliance, money or deleting data, or is hard to reverse (public contract, new dependency) | Question |
+| Silent, and the detail is technical and easy to change (naming, internal structure, error mapping inside the project's conventions) | Apply the base standard, or the target module's existing pattern, and list it under `Assumptions` in the report. No question. In the `gated` layout, a default that sets a fact an owner doc holds also follows `skills/shared/doc-flow/SKILL.md` § Owner Rule |
+
+Every question that survives carries `Searched:` with the documents consulted, so the reader sees why the documents did not settle it. The orchestrator shows the user each task's `Assumptions` and `Answered from`; those lists are how a wrong default or citation gets caught.
+
+---
+
 ## Sub-agent Question Relay
 
 A spawned sub-agent cannot reach the user: on Claude Code the question tool is absent from its tool list, and on every provider only its final message returns. So a sub-agent whose workflow needs a user decision or an approval does **not** ask — it relays.
 
 | Side | Rule |
 |---|---|
-| **Sub-agent** | When the question tool is not in its tool list, stop at the decision point and end the report with an `## Open Decisions` block: one numbered item per question, each with its options and a recommended default. Write nothing that depends on the answers — except gated stage 1 drafts with `[A<n>]` assumptions (`skills/shared/doc-flow/SKILL.md` § Stages → Stages 0 and 1). An approval gate (scope, plan, document review) is an Open Decision with Approve / Change options |
-| **Orchestrator** | Ask every item with `AskUserQuestion` in as few calls as the question tool allows, then continue the **same** sub-agent with the answers (`SendMessage` where available); without a continuation mechanism, re-spawn it with the original task plus the answered decisions. Never answer an item on the user's behalf |
+| **Sub-agent** | When the question tool is not in its tool list, stop at the decision point and end the report with an `## Open Decisions` block: one numbered item per question, each with its options, a recommended default and, during approved work, the `Searched:` line of § Documented Answer First. Write nothing that depends on the answers — except gated stage 1 drafts with `[A<n>]` assumptions (`skills/shared/doc-flow/SKILL.md` § Stages → Stages 0 and 1). An approval gate (scope, plan, document review) is an Open Decision with Approve / Change options and no `Searched:` line; a `PLAN_APPROVED:` line removes the plan gate (`skills/shared/plan-mode/SKILL.md`) |
+| **Orchestrator** | During approved work, check each item that is not an approval gate against § Documented Answer First. An item a document explicitly answers goes back to the sub-agent with the file and section, and the user sees one line saying so. Ask every other item with `AskUserQuestion` in as few calls as the question tool allows, then continue the **same** sub-agent with the answers (`SendMessage` where available); without a continuation mechanism, re-spawn it with the original task plus the answered decisions. Outside that case, never answer an item on the user's behalf, and never answer an approval gate at all; a recommended default or existing code is not a source |
 | **Loop** | Repeat until a report carries no `## Open Decisions` block. A report that asked in plain text instead is relayed the same way, never treated as approved |
 
 ---

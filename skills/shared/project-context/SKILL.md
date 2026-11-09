@@ -123,8 +123,11 @@ Before starting any task, load context in this order (read what exists — skip 
 6. AGENTS.md                             ← agent-specific instructions for this project
 7. .claude/settings.json                 ← Claude Code configuration
 8. .agents/ (directory)                  ← project-level agent overrides
-9. architecture docs (resolved per § Doc Layout) ← architecture, code-standards, tech-stack
-10. docs/backlog/                ← current sprint and task context
+9. architecture docs (resolved per § Doc Layout) ← architecture, code-standards, tech-stack; in the
+                                             gated layout also prd, glossary, nfr and the answers
+                                             under source — grep, open what the task touches
+10. docs/backlog/                ← current sprint and task context, and the overview of the
+                                             task's scope
 11. docs/wiki/README.md          ← retrieval index; grep it for the task's keywords and
                                              open only the entries that match
 12. extra context_paths                   ← additional knowledge folders this project declares;
@@ -229,7 +232,7 @@ When a conflict exists between our base standard and a project convention:
 | Project uses tabs, we recommend spaces | Use tabs |
 | Project has no defined convention | Apply our base standard |
 | Project explicitly states "do not use X" | Never use X, even if we recommend it |
-| Project is ambiguous or silent on a topic | Apply our base standard and note the assumption |
+| Project is ambiguous or silent on a topic | Apply our base standard and note the assumption; during approved work, `skills/shared/interaction-patterns/SKILL.md` § Documented Answer First says when silence is a question instead |
 
 **Explicit beats implicit.** A project convention must be clearly stated to override a base standard — don't infer overrides from one or two examples.
 

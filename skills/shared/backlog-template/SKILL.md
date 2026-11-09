@@ -147,6 +147,7 @@ wave order; the waves are also what lets the per-task strategy of
 **Worktree branch**: [suggested `<context>/<brief-title>`, e.g. `feat/user-schema` — used only by the per-task strategy]
 **Spec**: [`docs/specs/<feature>.md` (+ `-contract.md` if the gate fired), or "none — see spec-gate skip reason"]
 **Covers**: [scenario IDs from the spec this task delivers, e.g. `S1, S3` — omit when Spec is "none"]
+**Refs**: [optional — ADRs, wiki entries or doc sections that already decide details of this task, e.g. `docs/development/architecture.md § Queues`; omit when none]
 **Depends on**: [TASK-XXX or "none"]
 **Status**: [ ] Pending  <!-- [ ] Pending → [~] In progress → [x] Done; the executing command updates it -->
 **Started**: —  <!-- § Time Tracking: set with [~] In progress -->

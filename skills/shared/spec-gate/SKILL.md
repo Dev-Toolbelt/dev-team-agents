@@ -87,7 +87,7 @@ anything else:
 | A sprint file or `<scope-slug> <n>` | Every task of that sprint — this is `/devteam:sprint`'s input; a single-task command asks which task |
 | A spec path | The spec itself, with no task |
 
-From the task, read `**Spec**:` (spec, plus contract when listed) and `**Covers**:` (the scenario
+From the task, read `**Spec**:` (spec, plus contract when listed), `**Refs**:` when present, and `**Covers**:` (the scenario
 IDs this task delivers; a task written before the field existed covers the whole spec). The task's
 scope is **those scenarios only** — the Scope Lock below
 applies to them, not to the whole spec. A task whose `**Spec**:` is `none` keeps its own
@@ -113,8 +113,9 @@ Every coding agent (`backend-developer`, `frontend-developer`, `mobile-developer
 
 - Implement what the criteria require — nothing the criteria don't cover.
 - If the task seems to need something the spec doesn't state (a field, a flow branch, an error
-  case), **stop and ask** — via `AskUserQuestion` if it has a finite set of reasonable answers,
-  otherwise flag it to the user in plain text. Do not assume and proceed.
+  case), resolve it per `skills/shared/interaction-patterns/SKILL.md` § Documented Answer First: a
+  spec is business-level, so what it omits is often decided in another document. Stop and ask only
+  when that section's result table says so.
 - If the spec and its contract disagree, the contract wins on interface shape; a business
   contradiction goes back to `product-analyst`, not a silent implementation choice.
 - **Gated layout only** (`bash .dev-team-agents/scripts/doc-path.sh --layout` prints `gated`): before
@@ -125,10 +126,11 @@ Every coding agent (`backend-developer`, `frontend-developer`, `mobile-developer
 
 <HARD-GATE>
 A feature is never marked implemented or `done` while an open assumption remains. Every assumption
-made during execution resolves, before hand-off, to exactly one of: an answered question, a spec
-amendment (see Living Spec below), or an explicit blocker stated to the user. "I assumed X and moved
-on" is not a valid end state at any severity — this holds even when the assumption turned out
-correct.
+made during execution resolves, before hand-off, to exactly one of: a documented answer cited in the
+report, a technical default listed under `Assumptions` in the report (§ Documented Answer First), an
+answered question, a spec amendment (see Living Spec below), or an explicit blocker stated to the
+user. An assumption the report does not name is not a valid end state at any severity — this holds
+even when the assumption turned out correct.
 </HARD-GATE>
 
 ## Test-First Derivation (mechanical, not requested)
@@ -139,7 +141,7 @@ When a command's test gate resolves to running tests (`TESTS_REQUIRED=yes` or th
 2. These tests are expected to fail (red) — that is the point. Commit them as-is; do not adjust assertions to make them pass against a stub.
 3. Only after the red tests exist does the developer agent implement, iterating until every derived test is green plus the rest of its own scope.
 4. On a spec that touches several layers, each track's test author derives only the scenarios whose `Then` is observable at its layer (the spec's `touches` and the contract say which) — a scenario is never tested twice at two layers for the same assertion.
-5. If a `Given/When/Then` block cannot be turned into a concrete assertion (the criterion is genuinely ambiguous about expected output, not just under-specified on an edge case), that is the `<HARD-GATE>` in Scope Lock firing early — stop and ask, do not write a vague or tautological test to move forward.
+5. If a `Given/When/Then` block cannot be turned into a concrete assertion (the criterion is genuinely ambiguous about expected output, not just under-specified on an edge case), that is the `<HARD-GATE>` in Scope Lock firing early — run § Documented Answer First and, when the criterion stays open, stop and ask, do not write a vague or tautological test to move forward.
 
 Every implementation command applies this per track: backend, frontend, and mobile alike. A track whose tests the developer agent writes itself (`mobile-developer` on Flutter/native) runs it as two spawns of that agent — tests only, then implementation.
 

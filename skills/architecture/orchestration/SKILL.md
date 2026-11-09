@@ -292,7 +292,9 @@ same stalled-looking pile as an un-followed-up subagent.
 A subagent's final message is the only thing that reaches the orchestrator's context (see check 3
 above) — every other line it produced along the way is invisible to you but still cost real tokens
 to generate. That final message must be a **report**, not a transcript: what was done, key
-decisions, files touched, and the run banner. Nothing else.
+decisions (with the `Assumptions` and `Answered from` lists of
+`skills/shared/interaction-patterns/SKILL.md` § Documented Answer First when any exist), files
+touched, and the run banner. Nothing else.
 
 Every spawn prompt MUST include this instruction **verbatim, as the literal closing line of the
 prompt text** — not a paraphrase, not a reference to a skill the subagent is trusted to recall:
@@ -371,7 +373,8 @@ than one or two parallel spawns.
    If the scope is unclear, ask the user which areas to delegate.
 
 2. **Spawn via the Task tool.** Each prompt must include: the task description from the closed
-   scope; `WORKTREE_PATH=<path>` and `BRANCH=<branch>`; references to `docs/development/`
+   scope; `PLAN_APPROVED: <where the user approved it>` when the user approved the plan
+   (`skills/shared/plan-mode/SKILL.md`); `WORKTREE_PATH=<path>` and `BRANCH=<branch>`; references to `docs/development/`
    (`architecture.md`, `tech-stack.md`, `code-standards.md`) and any relevant ADR; and the
    instruction: "Read the architecture documents before implementing, then load
    `skills/shared/model-identity/SKILL.md` and announce your model. All file operations MUST target

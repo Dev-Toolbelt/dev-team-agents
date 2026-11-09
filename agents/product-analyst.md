@@ -138,7 +138,7 @@ state explicitly that no spec was written and why.
 
 When the user asks to turn an approved scope into sprints (with several overviews, ask which one), generate them under **`docs/backlog/sprints/`**:
 
-- **`<scope-slug>-sprint-<n>.md`** — one file per sprint, named after the overview's `<scope-slug>`, following the sprint structure in `backlog-template`. Keep task descriptions business-level unless the user asked for technical detail; spec-linked tasks follow the `backlog-template` Covers rule.
+- **`<scope-slug>-sprint-<n>.md`** — one file per sprint, named after the overview's `<scope-slug>`, following the sprint structure in `backlog-template`. Keep task descriptions business-level unless the user asked for technical detail; spec-linked tasks follow the `backlog-template` Covers rule. Fill a task's `Refs` with the ADRs, wiki entries or doc sections that already decide its details.
 - **The `backlog-index` doc** (`docs/backlog/sprints/sprints.md`; `docs/backlog.md` in `gated`) — a summary line and **status** for every sprint. Keep it current: update a sprint's status as it is finalized.
 
 ### Design for Parallel Execution (mandatory)

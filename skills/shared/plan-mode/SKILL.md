@@ -27,6 +27,7 @@ A plan is required whenever a task involves:
 - Explaining or reading existing code
 - Showing a file's contents or grep results
 - Single-character / single-line typo fixes explicitly requested
+- A spawned agent's task when its spawn prompt carries a `PLAN_APPROVED: <where the user approved it>` line — the orchestrator holds that approval. The agent presents no plan and returns no plan approval as an Open Decision; work beyond the prompt's scope is reported back, never done
 
 When in doubt: **write the plan**.
 
