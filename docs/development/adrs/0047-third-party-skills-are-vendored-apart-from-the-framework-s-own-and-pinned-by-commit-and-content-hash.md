@@ -87,3 +87,5 @@ The design and writing agents should be able to use well-known community skills 
 > `devteam:routing v3` marker is unchanged, and nothing rewrites an existing v3 section (setup only
 > appends it; the health check migrates only the pre-v3 form), so a project bound before this change
 > gets the row only when its section is merged by hand.
+>
+> **Note (2026-11-10):** ADR-0065 bumps the marker to v4, and the health check now upgrades an unedited v3 section in place, which brings in this row.
