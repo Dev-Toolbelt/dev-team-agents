@@ -7,11 +7,11 @@ description: The devteam section in CLAUDE.md/AGENTS.md — routing triggers, op
 
 Append this block to every installed provider's instruction file — `CLAUDE.md` for Claude Code, `AGENTS.md` for Codex and opencode — with the values from the setup Q&A. The text is identical in both files: agents are named, never addressed by a provider path.
 
-The block is loaded on **every turn** of every session, so it carries only what the main conversation needs to route: config keys commands read (`TESTS_REQUIRED`, …), the opt-out, and one trigger line per agent. Each agent's own `description` carries its full scope. Keep it at 50 lines or fewer, fences included — `tests/test_planning_routing.py` enforces the budget.
+The block is loaded on **every turn** of every session, so it carries only what the main conversation needs to route, plus the few conventions every reply follows: config keys commands read (`TESTS_REQUIRED`, …), the opt-out, and one trigger line per agent. Each agent's own `description` carries its full scope. Keep it at 50 lines or fewer, fences included — `tests/test_planning_routing.py` enforces the budget.
 
 ```markdown
 ## dev-team-agents
-<!-- devteam:routing v3 -->
+<!-- devteam:routing v4 -->
 
 PROJECT_TYPE: [new|inherited|maintenance]
 TESTS_REQUIRED: [yes|no]
@@ -57,6 +57,7 @@ INACTIVE_AGENTS: [none|comma-separated agent names]
 | `seo-specialist` | a public, indexable page (site, landing, blog, store) was built or changed |
 
 All generated documents are in English unless a document says otherwise.
+The final reply reporting a deploy, release, publish, push, merge or environment update opens with `## ✅ <what was delivered>` (`## ⚠️` delivered with something pending, `## ❌` not done), in the user's language — `output-format` skill § Delivery Confirmation Heading.
 ```
 
 ## Gated Layout

@@ -20,6 +20,24 @@ Everything this skill governs is read directly by a human in the main chat windo
 
 This also cuts output tokens: a padded answer costs more to generate than a tight one saying the same thing. Does not apply to files written to disk (code, docs, ADRs) — those follow their own format's conventions.
 
+## Delivery Confirmation Heading
+
+A reply that reports the outcome of a delivery the user asked for (a deploy, release, publish, push, merge, or an update to an environment, store or registry) opens with a level-2 heading that starts with an emoji, so the outcome is visible at a glance in the chat:
+
+| Outcome | Heading |
+|---|---|
+| Delivered | `## ✅ <what was delivered>` |
+| Already current, nothing to change | `## ✅ <what is already current>` |
+| Delivered with something still pending | `## ⚠️ <what was delivered and what is pending>` |
+| Failed or not done | `## ❌ <what did not happen>` |
+
+- The heading names the target and the version, commit or tag when known: `## ✅ Production updated to 46d38f1`.
+- It is written in the user's language; the details (what went in, health checks, pending steps) follow below it.
+- Only the final report of the delivery gets it, never a plan, a progress update or an ordinary answer.
+- The heading is required even on a two-line confirmation; it overrides the Readability Rule's "headers only when the content needs navigation".
+- A fixed message a command says to output exactly or verbatim keeps its wording; the heading goes above it.
+- A sub-agent that performed the delivery opens its final summary with the same heading, so the main conversation relays it unchanged.
+
 ## Core Rules
 
 - **Pure markdown only** — no HTML, no raw ANSI, no escape sequences

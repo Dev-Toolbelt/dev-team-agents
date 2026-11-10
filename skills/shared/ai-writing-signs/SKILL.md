@@ -57,7 +57,7 @@ Requirements documents and PRDs are prose and are covered; only their template's
 | Title Case In Every Heading Word | Sentence case, unless the project's style guide says otherwise |
 | Bold on every key term, or bold mid-sentence for emphasis | Bold for a term being defined or a warning; nothing else |
 | Vertical lists where every item opens with a **Bold title:** and an explanation | Prose, or a table when items share attributes |
-| Emoji as heading or bullet decoration | No emoji unless the project's own voice uses them |
+| Emoji as heading or bullet decoration | No emoji unless the project's own voice uses them; a status heading per `output-format` § Delivery Confirmation Heading is not decoration |
 | Small tables holding what one sentence says | A sentence |
 | A section that holds only subsections; skipped heading levels; the document title repeated as a heading | One `#` title, levels in order, intro text under each section that has children |
 | A "Summary", "In conclusion", "Overall" paragraph restating the section above | Stop after the last new point |

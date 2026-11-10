@@ -98,6 +98,7 @@ def _template_block():
 class CompactRoutingTest(unittest.TestCase):
     """The section is loaded on every turn, by every provider: it stays small and neutral."""
 
+    V4_MARKER = "<!-- devteam:routing v4 -->"
     V3_MARKER = "<!-- devteam:routing v3 -->"
     VERBOSE_NEEDLE = "#### `backend-developer`"
 
@@ -124,7 +125,7 @@ class CompactRoutingTest(unittest.TestCase):
 
     def test_block_keeps_what_commands_and_checks_read(self):
         block = _template_block()
-        for needle in (self.V3_MARKER, V2_MARKER, "AUTO_ROUTING: disabled") + tuple(k + ":" for k in self.KEYS):
+        for needle in (self.V4_MARKER, V2_MARKER, "AUTO_ROUTING: disabled") + tuple(k + ":" for k in self.KEYS):
             self.assertIn(needle, block)
 
     def test_every_routed_agent_exists(self):
@@ -146,7 +147,34 @@ class CompactRoutingTest(unittest.TestCase):
     def test_health_check_migrates_the_verbose_section(self):
         self.assertIn(self.VERBOSE_NEEDLE, CHECKS.read_text(encoding="utf-8"))
         self.assertNotIn(self.VERBOSE_NEEDLE, _template_block())
-        self.assertIn("devteam:routing v3", FIXES.read_text(encoding="utf-8"))
+        self.assertIn("devteam:routing vN", FIXES.read_text(encoding="utf-8"))
+
+    def test_block_points_at_the_delivery_confirmation_heading(self):
+        block = _template_block()
+        skill_text = (REPO_ROOT / "skills/shared/output-format/SKILL.md").read_text(encoding="utf-8")
+        for mark in ("## ✅", "## ⚠️", "## ❌"):
+            with self.subTest(mark=mark):
+                self.assertIn(mark, block)
+                self.assertIn(mark, skill_text)
+        self.assertIn("§ Delivery Confirmation Heading", block)
+        skill = (REPO_ROOT / "skills/shared/output-format/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("## Delivery Confirmation Heading", skill)
+        devops = (REPO_ROOT / "agents/devops-specialist.md").read_text(encoding="utf-8")
+        self.assertIn("§ Delivery Confirmation Heading", devops)
+
+    def test_health_check_upgrades_a_v3_section(self):
+        self.assertNotIn(self.V3_MARKER, _template_block())
+        self.assertIn("STALE: routing v3 in", CHECKS.read_text(encoding="utf-8"))
+        fixes = FIXES.read_text(encoding="utf-8")
+        self.assertIn("## Auto-fix for a v3 routing section", fixes)
+        self.assertIn("legacy-routing-v3.md", fixes)
+        legacy = (FIXES.parent / "legacy-routing-v3.md").read_text(encoding="utf-8")
+        self.assertIn(self.V3_MARKER, legacy)
+        # Every line v4 kept from v3 must count as unedited, or no v3 section ever upgrades.
+        for line in _template_block().splitlines():
+            if line.strip() and "routing v4" not in line and "Delivery Confirmation" not in line:
+                with self.subTest(line=line[:40]):
+                    self.assertIn(line, legacy)
 
     def test_unedited_is_judged_against_the_shipped_legacy_block(self):
         legacy = FIXES.parent / "legacy-routing-v2.md"

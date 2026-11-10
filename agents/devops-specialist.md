@@ -162,6 +162,8 @@ When invoked as the SHIP agent after the quality gate passes:
 
 > Skip PR creation only if the user explicitly asks to skip it, or if `gh` is not installed and no GitHub remote is detected.
 
+In SHIP or any other task, a final summary that reports a delivery you performed opens with the heading from `skills/shared/output-format/SKILL.md` § Delivery Confirmation Heading.
+
 ---
 
 ## Code Standards
