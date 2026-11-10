@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Invisible-character filter widened.** `tasks._INVISIBLE` now also covers Unicode tag characters (U+E0000–E007F), variation selectors (U+FE00–FE0F) and U+2028/U+2029, so hidden text cannot ride along in board text, trace excerpts or the canvas. Side effect: emoji variation selectors are stripped from board titles and task text.
 
 ### Fixed
+- **Linking Google or GitHub to an account.** `devteam auth profile link` no longer fails against the hosted account service, which answers with the provider's own authorize URL; that URL is now accepted when it is `https` on the requested provider's exact host.
 - **Vendored skill hashes on Windows.** `helpers/third-party-skills.py` reads the executable bit from the git index there, so a vendored file with mode 755 no longer fails `verify`.
 - **The SEO skill said FAQ rich results still show for government and health sites.** Google retired the FAQ rich result for every site on 2026-05-07. `seo-optimization` and `references/schema-status.md` now say so, Practice Problem is listed as retired, Book Actions is no longer wrongly listed as retired, and `helpers/canonical-facts.json` (`faq-rich-result-gov-health-only`) fails the old wording.
 - **graphify was installed under the wrong package name.** `tool-installers` said `npm install -g graphify` / `pip install graphify`; the CLI is the PyPI distribution `graphifyy`, and `graphify` is an unrelated project.

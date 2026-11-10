@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from urllib.parse import urlsplit
 
 from .errors import EXIT_ENVIRONMENT, DevteamError, EnvError, UsageError
 from .integrations import http as http_policy
@@ -35,6 +36,10 @@ DISPLAY_NAME_MAX = 80
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _CODE_RE = re.compile(r"^[0-9]{%d}$" % CODE_LENGTH)
 _UUID_RE = re.compile(r"^[0-9A-Za-z-]{8,64}$")
+_UNSAFE_URL_RE = re.compile(r"[\x00-\x20\x7f\\]")
+
+#: Provider -> the one host its authorize URL may be on (keys match ``auth_oauth.PROVIDERS``).
+PROVIDER_AUTHORIZE_HOSTS = {"github": "github.com", "google": "accounts.google.com"}
 
 REASON_INVALID_CREDENTIALS = "invalid_credentials"
 REASON_INVALID_CODE = "invalid_code"
@@ -166,6 +171,24 @@ def _session_from(response):
     if not isinstance(expires_in, int) or isinstance(expires_in, bool) or expires_in <= 0:
         expires_in = 3600
     return {"access_token": access, "refresh_token": refresh, "expires_in": expires_in, "user": user}
+
+
+def _is_provider_authorize_url(url, provider):
+    # Hosted Supabase answers with the provider's own authorize URL, not one on the project.
+    host = PROVIDER_AUTHORIZE_HOSTS.get(provider)
+    if not host or _UNSAFE_URL_RE.search(url):
+        return False
+    try:
+        parts = urlsplit(url)
+        return (
+            parts.scheme == "https"
+            and parts.username is None
+            and parts.password is None
+            and parts.port is None
+            and parts.hostname == host
+        )
+    except ValueError:
+        return False
 
 
 class Client:
@@ -341,7 +364,9 @@ class Client:
             "GET", "/auth/v1/user/identities/authorize", REASON_REJECTED, query=query, token=access_token
         )
         url = data.get("url") if isinstance(data, dict) else None
-        if not isinstance(url, str) or not url.startswith(self.base + "/"):
+        if not isinstance(url, str) or not (
+            url.startswith(self.base + "/") or _is_provider_authorize_url(url, provider)
+        ):
             raise EnvError(
                 "the account server answered with something unexpected",
                 details={"reason": "bad_response"},
