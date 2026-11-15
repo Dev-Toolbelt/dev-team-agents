@@ -13,7 +13,7 @@ breakdown.
 
 ### References and Consistency (`ref-*`, `docs-*`) — 21
 
-- `ref-docs-agents-md-model-column-wrong-technical-writer-listed-haiku-actually-sonnet-and-setup-assistant-listed-sonnet-actually-opus` — **HIGH** — `docs/agents.md` Model column is wrong for 2 of 17 agents, mirrored into pt-BR, and unvalidated — [report](2026-07-30/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-07-31
+- `ref-docs-agents-md-model-column-wrong-technical-writer-listed-haiku-actually-sonnet-and-setup-assistant-listed-sonnet-actually-opus` — **HIGH** — `docs/agents.md` Model column is wrong for 2 of 17 agents, mirrored into pt-BR, and unvalidated — [report](2026-07-30/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-07-31 — 🟡 **Parcialmente feito na verificação de 2026-11-14:** as duas células nomeadas foram corrigidas (a coluna virou `Tier`), mas o sub-escopo "and unvalidated" nunca fechou e a tabela voltou a divergir — `backend-test-specialist` listado `repetitive` nos dois idiomas contra `tier: backend-exec` no frontmatter
 - `ref-claude-md-183-code-reviewer-roles-says-delegates-to-test-specialists-but-impl-routes-to-backend-frontend-reviewer` — **HIGH** — `CLAUDE.md` states `code-reviewer` delegates to the test specialists; it routes to the reviewers — [report](2026-07-30/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-07-31
 - `ref-two-helpers-dirs-naming-collision-root-stripped-vs-scripts-helpers-shipped-claude-md-file-structure-omits-scripts-helpers` — **HIGH** — Two directories named `helpers` with opposite packaging semantics; the shipped one is undocumented — [report](2026-07-30/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-07-31
 - `ref-claude-md-file-structure-omits-helpers-and-privacy-and-claude-md-folder` — **HIGH** — `CLAUDE.md` File Structure omits six real top-level entries — [report](2026-07-30/01-referencias-e-consistencia.md) — ✅ **Executed:** 2026-07-31 — 🟡 **Parcial na verificação de 2026-11-07:** 6 dos 7 itens do relatório-fonte estão na árvore de `CLAUDE-md/file-structure.md` (`:25,36,51,92,102,107`), mas `.claude/` segue sem entrada; e a árvore voltou a defasar — `TERMS.md`, `infra/` e `.dev-team-agents/` são rastreados e não aparecem
@@ -173,7 +173,7 @@ método, placar e candidatos descartados por duplicação.
 
 ### Referências e Consistência (`docs-sync-*`) — 3
 
-- `docs-sync-claude-md-102-states-skill-desc-strict-false-non-blocking-while-agent-lint-31-sets-true-and-ci-promoted-it-same-day` — **HIGH** — alvo: `CLAUDE.md` — Documenta como verdade corrente o valor oposto ao do código, com a variável nomeada — [report](2026-07-31/02-referencias-e-consistencia.md) — 📍 **Mudou de forma em 2026-10-10 e piorou:** `grep -rn SKILL_DESC_STRICT helpers/agent-lint.sh` devolve **vazio** — a variável não existe mais. Sobraram três referências a um knob removido: `CLAUDE.md:139` ("non-blocking warning today (`SKILL_DESC_STRICT=false`)"), `helpers/agent-lint.sh:327` ("warning — see SKILL_DESC_STRICT") e `.github/scripts/ci/01-lint.sh:66` ("`SKILL_DESC_STRICT=true` in helpers/agent-lint.sh"), as duas últimas em desacordo sobre o valor
+- `docs-sync-claude-md-102-states-skill-desc-strict-false-non-blocking-while-agent-lint-31-sets-true-and-ci-promoted-it-same-day` — **HIGH** — alvo: `CLAUDE.md` — Documenta como verdade corrente o valor oposto ao do código, com a variável nomeada — [report](2026-07-31/02-referencias-e-consistencia.md) — 📍 **Mudou de forma em 2026-10-10 e piorou:** `grep -rn SKILL_DESC_STRICT helpers/agent-lint.sh` devolve **vazio** — a variável não existe mais. Sobraram três referências a um knob removido: `CLAUDE.md:139` ("non-blocking warning today (`SKILL_DESC_STRICT=false`)"), `helpers/agent-lint.sh:327` ("warning — see SKILL_DESC_STRICT") e `.github/scripts/ci/01-lint.sh:66` ("`SKILL_DESC_STRICT=true` in helpers/agent-lint.sh"), as duas últimas em desacordo sobre o valor — 📍 **Re-ancorado em 2026-11-14: voltou à forma original.** `SKILL_DESC_STRICT` foi reintroduzida por `7736e20d` como `SKILL_DESC_STRICT=true` em `helpers/agent-lint.sh:98` (usada em `:341`, com `.github/scripts/ci/01-lint.sh:66` concordando), enquanto `CLAUDE.md:160` ainda documenta `false` — o defeito original, com a variável nomeada
 - `docs-sync-claude-md-173-says-all-devteam-commands-load-current-context-while-213-lists-four-exceptions-as-the-complete-list` — **MEDIUM** — alvo: `CLAUDE.md` — Duas afirmações incompatíveis no mesmo arquivo, 40 linhas de distância — [report](2026-07-31/02-referencias-e-consistencia.md) — 📍 **Re-ancorado em 2026-10-10:** a afirmação está em `CLAUDE.md:216` ("All `/devteam:*` commands") e a lista de exceções migrou para `CLAUDE-md/commands.md:51`, agora com **seis** declaradas "the complete list" mais cinco que só a nomeiam em prosa
 - `docs-sync-reports-index-md-99-legend-comment-claims-all-131-entries-unmarked-while-121-carry-executed-or-partial-marks` — **LOW-MEDIUM** — alvo: `docs/reports/_index.md` — O comentário de legenda do próprio banco contradiz a contagem de marcadores — [report](2026-07-31/02-referencias-e-consistencia.md)
 
@@ -192,5 +192,129 @@ método, placar e candidatos descartados por duplicação.
 
 ---
 
+
+
+## 2026-08-12 — Auditoria guardiã (verificação + 5 eixos)
+
+Segundo pass guardião sobre o banco v2, contra um delta grande (187 arquivos desde `f54569a`).
+Verificou 30 das 124 marcações ✅/⚠️ (100% dos HIGH/MEDIUM-HIGH e de todos os itens antes
+sinalizados) com **0% de reabertura**, revalidou os 11 achados abertos (**9% de mortalidade** — 1 🟢),
+detectou 2 marcações reabertas/abertas **fechadas de passagem** pelo delta, e produziu 1 achado
+original. Ver [o relatório do pass](2026-08-12/index.md) para método, placar e descartados por
+duplicação.
+
+### Agnosticismo de Stack (`flow-*`) — 1
+
+- `flow-relayout-design-discovery-names-storybook-tailwind` — **LOW-MEDIUM** — alvo: `commands/relayout.md` — A descoberta de contexto de design (seção obrigatória) nomeia Storybook e Tailwind como locais de tokens, acoplando o comando ao ecossistema JS/React — [report](2026-08-12/01-agnosticismo-de-stack.md)
+
+### Descartados por duplicação
+
+- `frontend-developer.md:96` nomeia TanStack/SWR/React/Vue — Porta 3 (semântica): alvo + causa-raiz coincidem com `agent-frontend-developer-body-92-102-data-fetching-section-hardcodes-usestate-useeffect-tanstack-query-swr…` (✅)
+- `CLAUDE.md` 586 linhas / `install.sh` 1085 / `CHANGELOG` 959 / `session-start.sh` 306 — Porta 5 (estado): itens já registrados e abertos
+- Sub-scripts `03c/03d/03e` "re-forkam git" — Porta 3: hipótese refutada por evidência (reusam `DEVTEAM_TOUCHED_PATHS`)
+- `_disabled-*` "auto-executam" — hipótese refutada (ambos dispatchers têm `SUBSCRIPT_RE` allowlist)
+
+---
+
+## 2026-08-12 — Auditoria guardiã, 2ª execução (delta pós-`07e0725`)
+
+Segunda execução do pass guardião no mesmo dia, contra os 11 commits que entraram depois do
+baseline da manhã (`07e0725` → `3fbe371`, 23 arquivos, +1.603/−12). Sem nova amostragem da Fase 1
+— a de manhã vale para o dia; verificou a sobrevivência das 2 marcações 🟢 aplicadas de manhã e
+os 4 fingerprints cujo alvo o delta tocou (**3 ✅ · 0 🟡 · 0 🔴 novos**), e revalidou os 2 abertos
+com alvo no delta (**0% de mortalidade**). O delta trouxe 3 mudanças de comportamento e as 3 têm
+defeito verificado — todos os gates automáticos seguem verdes e nenhum cobre esta classe.
+Ver [o relatório do pass](2026-08-12/index.md).
+
+### Fluxos e Comandos (`auto-*`, `flow-*`, `docs-sync-*`) — 4
+
+- `auto-full-suite-guard-sed-absorbs-sibling-json-keys` — **MEDIUM-HIGH** — alvo: `scripts/hooks/pre-tool-use/02c-full-suite-guard.sh` — Captura gulosa do `sed` (linha 22) absorve `description` e demais chaves irmãs do payload; prosa contendo `.test.`/`.spec.`/`--filter` desliga o nudge silenciosamente — reproduzido com dois payloads de comando idêntico — [report](2026-08-12/03-fluxos-e-comandos.md) — ✅ **Executed:** 2026-10-02
+- `flow-learn-run-marker-records-commit-time-not-run-time` — **MEDIUM-HIGH** — alvo: `commands/learn.md` — O marcador `.learn-last-run` grava `git log -1 --format=%ct` (commit timestamp do HEAD) e é escrito antes do auto-commit do Step 5; a condição de skip de `commands/commit.md:17` é inalcançável e a economia de contexto que justifica `4734882` não se materializa — [report](2026-08-12/03-fluxos-e-comandos.md) — ✅ **Executed:** 2026-10-02
+- `auto-install-heredoc-omits-auto-learn-before-commit` — **MEDIUM-HIGH** — alvo: `scripts/install.sh` — O heredoc de fallback sem `python3` (linhas 1022-1025) não recebeu a chave que `4734882` adicionou ao canônico, apesar de o commit ter tocado o arquivo e de o aviso "the two drifted once already" estar na linha 1003; segunda ocorrência da mesma drift, sem gate — [report](2026-08-12/03-fluxos-e-comandos.md) — ✅ **Executed:** 2026-10-02
+- `docs-sync-02c-comment-cites-graphify-hint-as-sed-precedent` — **LOW-MEDIUM** — alvo: `scripts/hooks/pre-tool-use/02c-full-suite-guard.sh` — O comentário da linha 18 invoca `02-graphify-hint.sh` como precedente de "pure-bash approach on the hot path", enquanto aquele arquivo (linha 11) documenta ter evitado `grep|sed` justamente para poupar 2 forks — [report](2026-08-12/03-fluxos-e-comandos.md)
+
+### Referências e Consistência (`gov-*`) — 1
+
+- `gov-repo-gitignore-omits-three-installer-written-entries` — **MEDIUM** — alvo: `.gitignore` — O repo dogfooda a instalação mas seu `.gitignore` tem 1 das 4 entradas que `install.sh:774-779` escreve e que `agents/setup-assistant.md:153` declara obrigatórias; `.learn-last-run` e `.worktree-session` ficam untracked e não ignorados — [report](2026-08-12/02-referencias-e-consistencia.md) — 🟢 **Resolved:** 2026-10-02 — resolvido de passagem por `5174b6d`
+
+### Descartados por duplicação
+
+- `CLAUDE.md` File Structure não lista `docs/prompts/` (criado hoje por `d10d541`) — Porta 3 (semântica): alvo, causa raiz e remediação coincidem com 3 fingerprints ✅ Executed da família `ref-claude-md-file-structure-*`
+- Economia de tokens da guarda de sessão que não dispara — Porta 3: mesmo alvo, causa e remediação de `flow-learn-run-marker-records-commit-time-not-run-time`
+- `install.sh` com 1086 linhas · sem registro de `commit-msg` hook — Porta 5 (estado): pertencem ao conjunto aberto
+- Hits de stack em `commands/commit.md:135-138` (npm/phpcs) e `agents/setup-assistant.md:146-147` (jest/pytest/phpunit) — Eixo A, regra de descarte: tabelas de detecção e listas de sinais
+
+---
+
+
+## 2026-08-14 — Auditoria guardiã (verificação + 5 eixos)
+
+Pass guardião contra um delta pequeno (16 arquivos, 4 commits de código desde `3fbe371`). Verificou
+**49 das 124** marcações ✅/⚠️ — todos os HIGH e MEDIUM-HIGH mais amostra sistemática de 30% do resto
+— com **6,1% de reabertura** (3 🔴 · 4 🟡), abaixo do limiar de escalonamento; revalidou os 25 achados
+abertos com **0% de mortalidade** e quatro degradações materiais de medição. A hipótese do pass
+anterior se confirmou pela segunda vez: **3 dos 4 commits do delta carregam defeito reproduzido** e
+nenhum gate automático cobre essa classe. Produziu **26 achados originais** (5 HIGH). Ver
+[o relatório do pass](2026-08-14/index.md) para método, placar e descartados por duplicação.
+
+### Agnosticismo de Stack (`flow-*`, `agent-*`) — 3
+
+- `flow-audit-step2-unconditional-docker-stack-ignores-isolate-pref-compose-gate` — **MEDIUM-HIGH** — alvo: `commands/audit.md` — O Step 2 manda subir stack Docker isolado incondicionalmente (`:54`), contrariando os dois gates do skill (`worktree_docker_isolate` + compose presente) e sobrepondo preferência do usuário — [report](2026-08-14/01-agnosticismo-de-stack.md)
+- `flow-mobile-command-spawn-line-enumerates-stacks-dropped-from-agent-description` — **MEDIUM** — alvo: `commands/mobile.md` — A linha de spawn da Fase 1 (`:19`) ainda enumera "React Native, Expo, Flutter, native iOS/Android", as cinco stacks já removidas do frontmatter do `mobile-developer` — [report](2026-08-14/01-agnosticismo-de-stack.md)
+- `agent-database-specialist-access-inlines-supabase-cli-while-delegating-others` — **LOW-MEDIUM** — alvo: `agents/database-specialist.md` — `## Database Access` diz "CLI patterns are in each engine's per-engine skill" e na sentença seguinte inlina `psql "$SUPABASE_DB_URL"` (`:133`) — [report](2026-08-14/01-agnosticismo-de-stack.md)
+
+### Referências e Consistência (`ref-*`, `docs-sync-*`) — 6
+
+- `ref-docs-agents-md-tier-column-stale-backend-test-specialist-listed-repetitive` — **HIGH** — alvo: `docs/agents.md` — A coluna `Tier` diz `repetitive` para `backend-test-specialist` (real: `backend-exec`, mudado em `1f1c837`) — exatamente a alocação que `CLAUDE.md:87` proíbe por escrito; espelhado no pt-BR — [report](2026-08-14/02-referencias-e-consistencia.md)
+- `ref-tool-map-tool-rewrites-loaded-but-never-emitted-by-render-provider` — **HIGH** — alvo: `scripts/lib/render_provider.py` — `renames` é lido em `:742` e usado só como booleano, nunca emitido, enquanto `CLAUDE.md:67` e `docs/providers.md:127` documentam o rewrite como ativo; reproduzido com `AskUserQuestion` saindo 3× intacto no `.opencode/agents/setup-assistant.md` — [report](2026-08-14/02-referencias-e-consistencia.md) — ✅ **Executed:** 2026-10-02
+- `ref-02c-guard-make-composer-shapes-have-no-row-in-scoped-test-runner-table` — **MEDIUM-HIGH** — alvo: `scripts/hooks/pre-tool-use/02c-full-suite-guard.sh` — Os 3 `case` novos de `c03f898` não têm linha na tabela de runners da skill, `TESTPATH=`/`FILTER=` não existem nela, e `SKILL.md:59` declara legítimo o `Makefile` scoped que o guard sinaliza — [report](2026-08-14/02-referencias-e-consistencia.md) — ✅ **Executed:** 2026-10-02 — 🟡 **Parcialmente feito na verificação de 2026-11-14:** `TESTPATH=`/`FILTER=` entraram na skill, mas a tabela *Runner Filters* segue sem linha para npm/composer/make e `SKILL.md:59` continua declarando legítimo o script scoped que o guard bloqueia — `make test-unit` e `npm run test:unit` saem exit 2 no HEAD
+- `docs-sync-changelog-unreleased-omits-full-suite-guard-and-orchestration-deltas` — **MEDIUM** — alvo: `CHANGELOG.md` — `[Unreleased]` registra 1 dos 3 commits de comportamento do delta; `c03f898` e `21fceb4` ficaram fora, contra `.github/pull_request_template.md:21`, sem gate automatizado — [report](2026-08-14/02-referencias-e-consistencia.md) — 🟢 **Resolved:** 2026-10-02 — resolvido de passagem por `68cd420`
+- `ref-scoped-test-execution-bash-parallelism-section-outside-declared-canonical-scope` — **MEDIUM** — alvo: `skills/shared/scoped-test-execution/SKILL.md` — A seção nova (`:63-65`) trata de paralelismo de chamadas Bash, fora do escopo canônico declarado em `CLAUDE.md:166` e ausente da `description:` que alimenta o índice sempre carregado — [report](2026-08-14/02-referencias-e-consistencia.md)
+- `docs-sync-hooks-md-64-full-suite-guard-examples-predate-wrapper-detection` — **LOW-MEDIUM** — alvo: `CLAUDE-md/hooks.md` — A única prosa do guard na árvore de docs exemplifica só runners nomeados; a classe nova (wrappers opacos, maior superfície de falso positivo) não aparece — [report](2026-08-14/02-referencias-e-consistencia.md)
+
+### Fluxos e Comandos (`flow-*`) — 7
+
+- `flow-update-sh-codex-slim-guard-dead-branch-false-strip-claim` — **HIGH** — alvo: `scripts/update.sh` — O guard Codex nunca avalia como falso (`agents/product-analyst.md` e `scripts/` sempre presentes), e o comentário do commit mais a entrada de CHANGELOG afirmam que `strip-tarball.sh` remove o cross-CLI plumbing, enquanto o script documenta o oposto — [report](2026-08-14/03-fluxos-e-comandos.md) — 🟢 **Resolved:** 2026-11-07 — resolvido por `f0fb093` + `60a1798`: `scripts/update.sh` não tem mais guard (delega `po_rerender_providers` em `:123`) e o guard reescrito testa plumbing real (`provider-ownership.sh:184`). A premissa da false strip claim também caiu — `strip-tarball.sh:35-37` declara o plumbing incluído no slim install
+- `flow-02c-composer-fallback-case-ignores-every-scope-qualifier` — **MEDIUM-HIGH** — alvo: `scripts/hooks/pre-tool-use/02c-full-suite-guard.sh` — Único `case` da função sem qualificador de escopo na exclusão; `composer test tests/Unit/FooTest.php` e `composer test-unit --filter FooTest` disparam o nudge (reproduzido) — [report](2026-08-14/03-fluxos-e-comandos.md) — ✅ **Executed:** 2026-10-02
+- `flow-update-sh-provider-reinstall-aborts-on-non-exit-3-failures` — **MEDIUM-HIGH** — alvo: `scripts/update.sh` — O fix espelha só a pré-condição do `exit 3`; `exit 1` por `jq`/`python3`/snippet vazio ainda mata o update sob `set -e` depois do core ter sucedido (reproduzido) — [report](2026-08-14/03-fluxos-e-comandos.md) — 🟢 **Resolved:** 2026-10-02 — resolvido de passagem por `60a1798`
+- `flow-architect-claude-only-async-tool-names-rendered-verbatim` — **MEDIUM-HIGH** — alvo: `agents/software-architect.md` — `ScheduleWakeup`/`TaskList`/`SendMessage` aparecem como invariante não-negociável, sem hedge e sem entrada em `tool-map.json`; chegam literais ao `.opencode/agents/software-architect.md` renderizado — [report](2026-08-14/03-fluxos-e-comandos.md) — ✅ **Executed:** 2026-10-02
+- `flow-02c-make-pattern-substring-matches-cmake-and-chained-cmds` — **MEDIUM** — alvo: `scripts/hooks/pre-tool-use/02c-full-suite-guard.sh` — `*make\ *test*` casa com `cmake ` e atravessa `&&`; `cmake --build . && ./run_tests` e `make migrate-test-db && phpunit --filter X` disparam (reproduzido) — [report](2026-08-14/03-fluxos-e-comandos.md) — ✅ **Executed:** 2026-10-02
+- `flow-prompt-auditoria-commit-step-contradicts-branch-rule` — **MEDIUM** — alvo: `docs/reports/_prompt-auditoria.md` — Bloco copiado do prompt de métricas: diz "two report files" (são 8), manda `push … main` contra a regra inviolável 8 do próprio arquivo, e carrega a mensagem de commit de métricas — [report](2026-08-14/03-fluxos-e-comandos.md)
+- `flow-background-process-discipline-monitor-no-availability-fallback` — **LOW-MEDIUM** — alvo: `skills/architecture/orchestration/SKILL.md` — `Monitor` é declarado "única forma legítima" sem a cláusula de indisponibilidade que a check 5, seis linhas acima, carrega — [report](2026-08-14/03-fluxos-e-comandos.md)
+
+### Agentes e Skills (`skill-*`, `agent-*`) — 5
+
+- `skill-token-efficiency-background-mgmt-contradicts-orchestration-discipline` — **HIGH** — alvo: `skills/shared/token-efficiency/strategies.md` — § Background Process Management ensina fire-and-forget e lê shell de background com `TaskOutput(task_id=…)`, contradizendo a § Background Process Discipline criada em `21fceb4`; a versão errada alcança 18/18 agentes, a certa alcança 1 — [report](2026-08-14/04-agentes-e-skills.md)
+- `agent-line-cap-205-documented-in-claude-md-vs-211-enforced-by-size-limits` — **HIGH** — alvo: `CLAUDE.md` — `:92` e `:311` dizem "enforces 205 (200+5)"; `helpers/size-limits.sh:44` tem `AGENT_LIMIT=211` desde `705acd1`, que não tocou o `CLAUDE.md` — 3 agentes estão exatamente em 211 — [report](2026-08-14/04-agentes-e-skills.md) — 🟢 **Resolved:** 2026-10-02 — resolvido de passagem por `c19f060`
+- `agent-software-architect-inlines-spawn-integrity-4-5-no-availability-guard` — **MEDIUM-HIGH** — alvo: `agents/software-architect.md` — A linha 89 (nova em `21fceb4`) reescreve o check 5 inteiro em vez de delegar, e já diverge: manda chamar `ScheduleWakeup` sem o guard de disponibilidade nem o fallback de `orchestration:234-236` — [report](2026-08-14/04-agentes-e-skills.md)
+- `skill-orchestration-spawn-integrity-unreachable-from-devteam-commands` — **MEDIUM** — alvo: `commands/*.md` — Zero dos 34 comandos carrega a skill de orquestração (única ocorrência é prosa em `architect.md:22`); os checks 1–5 alcançam 1 das ~16 superfícies que dão spawn — [report](2026-08-14/04-agentes-e-skills.md)
+- `skill-orchestration-restates-scoped-test-execution-exception` — **MEDIUM** — alvo: `skills/architecture/orchestration/SKILL.md` — O passo 4 do Autonomous Sprint (`:68-70`) reescreve a exceção que `CLAUDE.md:166` manda nunca reescrever, duplicando o § Orchestrator Rule que já existe em `scoped-test-execution:18-20` — [report](2026-08-14/04-agentes-e-skills.md)
+
+### Economia de Tokens (`token-*`) — 5
+
+- `token-02c-full-suite-guard-substring-match-injects-nudge-on-non-test-commands` — **MEDIUM-HIGH** — alvo: `scripts/hooks/pre-tool-use/02c-full-suite-guard.sh` — `is_full_suite()` casa substring solta (`*jest*`, `*pytest*`, `*rspec*`) sem âncora de invocação; 6 de 6 payloads de leitura testados no HEAD disparam 405 bytes de `additionalContext` em comandos que não rodam teste — [report](2026-08-14/05-economia-tokens.md) — ✅ **Executed:** 2026-10-02
+- `token-pr-md-unbounded-full-diff-to-repetitive-tier-while-same-file-caps-git-log` — **MEDIUM-HIGH** — alvo: `commands/pr.md` — A linha 99 manda derivar o corpo do PR de `git diff base...HEAD` sem filtro, entregue ao `technical-writer` (`repetitive`/Haiku, janela 200K), enquanto a linha 80 do mesmo arquivo limita o `git log` a `head -20` — [report](2026-08-14/05-economia-tokens.md) — 🟢 **Resolved:** 2026-08-21 — resolvido por `8267da1` (`commands/pr.md:99` agora manda usar `git diff ${DEFAULT_BRANCH}...HEAD -- <path>` escopado)
+- `token-orchestration-skill-377-lines-138-conditional-path-only-no-references-dir` — **MEDIUM** — alvo: `skills/architecture/orchestration/SKILL.md` — 138 de 377 linhas (42%) só valem em 3 gatilhos raros e são carregadas de saída; 2ª maior skill do repo sem `references/`, e o +20 de `21fceb4` caiu inteiro nesse bloco — [report](2026-08-14/05-economia-tokens.md)
+- `token-model-identity-32-of-58-lines-are-format-spec-and-examples-held-inline` — **MEDIUM** — alvo: `skills/shared/model-identity/SKILL.md` — 32 de 58 linhas são spec de colunas e 3 exemplos de outros agentes, numa skill carregada "antes de qualquer outra ação" por 18 agentes, só para copiar verbatim um bloco que o agente já tem inline — [report](2026-08-14/05-economia-tokens.md)
+- `token-project-context-restates-scoped-test-exception-table-read-by-18-agents` — **MEDIUM** — alvo: `skills/shared/project-context/SKILL.md` — Tabela de 6 linhas reafirma "The Only Exception" da skill, e a linha 216 admite "Do not work from this table alone"; 17 linhas lidas por 18 de 18 agentes, 11 dos quais sem carga própria da skill — [report](2026-08-14/05-economia-tokens.md)
+
+### Descartados por duplicação
+
+**Cross-axis, consolidados na etapa de banco (porta 3 — 3 de 3 atributos coincidem):**
+
+- (Eixo C) `flow-02c-wrappers-have-no-scoped-row-in-runner-filters-table` → absorvido por `ref-02c-guard-make-composer-shapes-have-no-row-in-scoped-test-runner-table`
+- (Eixo C) `flow-parallel-bash-rule-homed-in-scoped-test-execution-skill` → absorvido por `ref-scoped-test-execution-bash-parallelism-section-outside-declared-canonical-scope`
+- (Eixo D) `skill-scoped-test-execution-hosts-general-parallel-bash-rule-off-topic` → idem
+
+**Por porta:**
+
+- Porta 5 (estado — conjunto aberto): `sed` guloso do `02c`, comentário graphify-precedent, `session-start.sh` monolítico, `install.sh` não fragmentado, `CLAUDE.md` monolito, `interaction-patterns`, `migration-v1-to-v2`, `relayout.md:32` Storybook/Tailwind, `frontend-test-specialist.md:139-151`, `frontend-developer.md:3`, `devops-specialist.md:46-56`, `audit.md:126-128`, `commit.md:135-138`, `setup-assistant.md:146-147`, `skill-adr-coverage-only-architect`
+- Porta 3 (semântica): rotação do CHANGELOG, "agent-lint não valida coluna Tier", `update.sh` sem integrity check, `orchestration/SKILL.md` sem `references/`, `software-architect.md` no teto de 211, `token-efficiency` 160×18, `devops.md:2,14`, `frontend-reviewer.md:112,114`, `database-specialist.md:66-73`
+- Porta 4 (escopo menor, sem sub-escopo novo): `devops-specialist.md:137-148`, `output-format` 190×9
+- Porta 1 (literal): `backlog-template` 238 linhas, bloco Docker eager de `project-context`
+- **Hipóteses refutadas por evidência:** JSON concatenado de dois sub-scripts PreToolUse (Glob/Grep e Bash são exclusivos); dispatcher sem allowlist (`SUBSCRIPT_RE` existe nos dois); divergência de redação do `## Before You Finish` (as 18 seções são byte-idênticas); divergência de run-banner vs. `tiers.json`/`agent_effort` (18/18 batem, incluindo os cinco `low`)
+- **Falsos positivos por substring no Eixo A** (~24 de 122 candidatos): `flaws`→aws, `expression`→express, `honest`→nest, `perspective`→rspec, `pipeline`→pip, `Auto-reactivation`→react, `explicit bootstrap`→bootstrap
+
+---
 
 
