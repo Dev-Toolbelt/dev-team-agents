@@ -3,7 +3,7 @@
 **Date:** 2026-10-25  
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
-**Applies to:** `skills/third-party/**`, `helpers/third-party-skills.py`, `skills/design/third-party-design-skills/SKILL.md`, `skills/shared/third-party-writing-skills/SKILL.md`, `skills/security/third-party-security-skills/SKILL.md`, `tests/test_third_party_skills.py`  
+**Applies to:** `skills/third-party/**`, `helpers/third-party-skills.py`, `skills/design/third-party-design-skills/SKILL.md`, `skills/shared/third-party-writing-skills/SKILL.md`, `skills/security/third-party-security-skills/SKILL.md`, `skills/architecture/third-party-web-skills/SKILL.md`, `scripts/hooks/pre-tool-use/03c-modern-web-guidance-guard.sh`, `tests/test_third_party_skills.py`  
 **Relates to:** [ADR-0020](0020-the-cli-manages-the-providers-global-skill-directories.md) (user-level skills), [ADR-0040](0040-provenance-and-content-hash-for-skills-installed-into-the-providers-global-skill-directories.md) (content hash)
 
 ## Context
@@ -89,3 +89,34 @@ The design and writing agents should be able to use well-known community skills 
 > gets the row only when its section is merged by hand.
 >
 > **Note (2026-11-10):** ADR-0065 bumps the marker to v4, and the health check now upgrades an unedited v3 section in place, which brings in this row.
+>
+> **Amendment (2026-11-15) — a web platform category, and a guard hook for a skill whose own text starts a download.**
+> `modern-web-guidance` (GoogleChrome/modern-web-guidance, Apache-2.0) is the first vendored web
+> platform skill; its routing skill is `skills/architecture/third-party-web-skills/SKILL.md`, loaded
+> by `frontend-developer`, `frontend-reviewer` and `security-specialist`. Upstream is a library of
+> guides driven by a command-line tool (`npx -y modern-web-guidance@latest search|retrieve`) that is
+> published on npm only, is fetched unpinned on every run, and reports the agent name, guide ids and
+> search queries to its publisher unless `DISABLE_TELEMETRY=1` is set. Decision 6 keeps it out: only
+> `SKILL.md`, `guides/` and the license are vendored, and the routing skill replaces `search` and
+> `retrieve` with a directory listing and a file read (a guide id is its file name; a test keeps ids
+> unique). The upstream `SKILL.md` must stay unedited and its description, indexed by every
+> provider, calls the tool mandatory for all web work, so a rule in the routing skill does not reach
+> an agent that never loads it. The refusal is therefore a hook,
+> `scripts/hooks/pre-tool-use/03c-modern-web-guidance-guard.sh`, shared by the three providers: it
+> refuses a package runner executing the tool, a package manager installing it, and the installed
+> binary, with no bypass variable. This is the first vendored skill with a guard of its own; add one
+> only when a skill's unedited text would start a download or a run on its own. The instruction-file
+> routing section and its marker are unchanged. Upstream also gates Origin Trial and single-engine
+> guides behind the tool; here the routing skill's § Browser Support asks the user instead. Baseline
+> statuses in the guides are those of the pinned commit and age with it: bumping the pin is the
+> update path. The `chrome-extensions` skill of the same repository is not vendored.
+>
+> This amends the third Negative consequence: for a skill that has a guard hook, the hook, not the
+> provider's permission prompt, is the remaining guard when the routing skill is not loaded. The
+> guard is a hygiene gate that matches at command position and fails open (see the hook's header),
+> not a sandbox. It outranks project rules by design, like ADR-0059: a bound project that wants the
+> tool has its user run it in their own terminal. The telemetry description comes from the upstream
+> README at the pinned commit (§ Telemetry & Privacy), not from the vendored files, and the package
+> is fetched as `@latest`, so what it sends can change between versions. Guides also show remote
+> scripts loaded unpinned from a CDN; the routing skill treats each as a new dependency that needs
+> the user's approval, an exact version and an integrity hash.
