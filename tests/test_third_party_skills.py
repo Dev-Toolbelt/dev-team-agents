@@ -42,6 +42,7 @@ ROUTING_SKILLS = (
     REPO_ROOT / "skills" / "design" / "third-party-design-skills" / "SKILL.md",
     REPO_ROOT / "skills" / "shared" / "third-party-writing-skills" / "SKILL.md",
     REPO_ROOT / "skills" / "security" / "third-party-security-skills" / "SKILL.md",
+    REPO_ROOT / "skills" / "architecture" / "third-party-web-skills" / "SKILL.md",
 )
 
 
@@ -86,6 +87,23 @@ class ThirdPartyManifestTest(unittest.TestCase):
                     # Windows has no POSIX executable bit: os.access(X_OK) is true for every file.
                     if os.name != "nt":
                         self.assertFalse(os.access(path, os.X_OK))
+
+    def test_modern_web_guidance_ships_markdown_only(self):
+        # ADR-0047: its command-line tool is an unpinned package fetched at run time, so only
+        # the guides are vendored. A pin bump that brings a script in fails here.
+        root = THIRD_PARTY / "modern-web-guidance"
+        self.assertTrue((root / "guides").is_dir())
+        for path in root.rglob("*"):
+            if path.is_file():
+                with self.subTest(file=str(path.relative_to(root))):
+                    self.assertTrue(path.suffix == ".md" or path.name == "LICENSE")
+                    if os.name != "nt":
+                        self.assertFalse(os.access(path, os.X_OK))
+
+    def test_modern_web_guidance_guide_ids_are_unique(self):
+        # The routing skill resolves `retrieve "<id>"` cross-references as `guides/*/<id>.md`.
+        names = [path.name for path in (THIRD_PARTY / "modern-web-guidance" / "guides").rglob("*.md")]
+        self.assertEqual(len(names), len(set(names)))
 
     def test_vendored_trees_match_their_recorded_hash(self):
         result = subprocess.run(

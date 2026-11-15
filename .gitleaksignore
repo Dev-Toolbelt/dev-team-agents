@@ -37,3 +37,7 @@ e987c056b748a03a707c3b83c489060b6c53b104:.dev-team-agents/scripts/lib/auth-confi
 95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/website-configuration.md:generic-api-key:374
 95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/website-configuration.md:generic-api-key:530
 95c7e45144c3730cd16793cc433d141e8a15e080:.dev-team-agents/skills/integrations/cpanel/references/modules/website-configuration.md:generic-api-key:629
+
+# modern-web-guidance (vendored, cannot carry an inline comment): the WebCrypto algorithm name 'MLKEM768-X25519', reviewed 2026-11-15
+skills/third-party/modern-web-guidance/guides/security/client-side-encryption.md:generic-api-key:187
+skills/third-party/modern-web-guidance/guides/security/client-side-encryption.md:generic-api-key:201
