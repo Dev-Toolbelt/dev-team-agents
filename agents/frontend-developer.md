@@ -46,7 +46,7 @@ Before creating any UI, load all four:
 1. `skills/design/design-system-audit/SKILL.md` — reads and documents the project's current visual language
 2. `skills/design/frontend-design/SKILL.md` — **required**; provides component patterns, layout techniques, and visual design guidance. Installed automatically by `scripts/install.sh`. Load it at the start of every UI session.
 3. `skills/design/web-design-guidelines/SKILL.md` — **required**; audits UI code against Vercel's Web Interface Guidelines (design, accessibility, UX). Installed automatically by `scripts/install.sh`. Load it at the start of every UI session.
-4. `skills/design/third-party-design-skills/SKILL.md` — its routing table adds the vendored third-party design skill the task calls for
+4. `skills/design/third-party-design-skills/SKILL.md` — its routing table adds the vendored third-party design skill the task calls for; `skills/architecture/third-party-web-skills/SKILL.md` does the same for the vendored web platform guides (native components, CSS, forms, performance)
 
 **Visual consistency is non-negotiable.** New UI must match the existing visual language of the project — same spacing scale, same color tokens, same component patterns. When in doubt, consult the `ui-ux-designer`.
 

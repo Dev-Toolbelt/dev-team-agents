@@ -25,6 +25,16 @@
       ],
       "sha256": "ee49fd5455606f49f2f162277e904da6e0eec2b661c674ed2fa0c9358badbfe7"
     },
+    "modern-web-guidance": {
+      "repo": "GoogleChrome/modern-web-guidance",
+      "commit": "4dd968349e54ca45a05dd5c818fb035c9054b022",
+      "path": "skills/modern-web-guidance",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSE"
+      ],
+      "sha256": "138c8e3420be14e56b7b1e6c9330204542a7795b1b8a705da1ab1502b788ec08"
+    },
     "security-audit": {
       "repo": "cloudflare/security-audit-skill",
       "commit": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8",
