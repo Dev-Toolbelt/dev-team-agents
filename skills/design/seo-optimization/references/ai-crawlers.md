@@ -1,6 +1,6 @@
 # AI Crawlers and robots.txt
 
-Load when `robots.txt` is edited or the user states a policy on AI crawling or training. Sources: RFC 9309 (Robots Exclusion Protocol), [Google's robots.txt spec](https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt), [Google's user-triggered fetchers](https://developers.google.com/crawling/docs/crawlers-fetchers/google-user-triggered-fetchers), and the crawler pages of [OpenAI](https://developers.openai.com/api/docs/bots), [Anthropic](https://support.claude.com/en/articles/8896518), [Apple](https://support.apple.com/en-us/119829) and [Perplexity](https://docs.perplexity.ai/guides/bots) (as last verified 2026-11-04). Operators add tokens often — check their docs before claiming a token's purpose.
+Load when `robots.txt` is edited or the user states a policy on AI crawling or training. Sources: RFC 9309 (Robots Exclusion Protocol), [Google's robots.txt spec](https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt), [Google's common crawlers](https://developers.google.com/crawling/docs/crawlers-fetchers/google-common-crawlers), [Google's user-triggered fetchers](https://developers.google.com/crawling/docs/crawlers-fetchers/google-user-triggered-fetchers), and the crawler pages of [OpenAI](https://developers.openai.com/api/docs/bots), [Anthropic](https://support.claude.com/en/articles/8896518), [Apple](https://support.apple.com/en-us/119829), [Perplexity](https://docs.perplexity.ai/docs/resources/perplexity-crawlers) and [Common Crawl](https://commoncrawl.org/ccbot) (as last verified 2026-11-16). Operators add tokens often — check their docs before claiming a token's purpose.
 
 ## Tokens by purpose
 
@@ -14,9 +14,10 @@ Report every claim against the bot it actually concerns. Blocking a training cra
 | Apple | `Applebot-Extended` (control token) | `Applebot` | — |
 | Perplexity | — | `PerplexityBot` | `Perplexity-User` |
 | Common Crawl | `CCBot` (dataset used by many trainers) | — | — |
-| ByteDance | `Bytespider` | — | — |
 
 - `Google-Extended` governs use of content for Gemini training and grounding only. It has **no effect** on Google Search ranking or on AI Overviews, which follow `Googlebot` and snippet controls
+- To be cited, allow the search crawler: OpenAI recommends allowing `OAI-SearchBot` and requests from its published IP ranges (a site that opts out is not shown in ChatGPT search answers, though it can still appear as a navigational link); Perplexity recommends the same for `PerplexityBot`, which it says is not used to train foundation models. Both say a `robots.txt` change can take about 24 hours to apply
+- A token with no operator documentation (for example `Bytespider`, whose operator page could not be confirmed) gets no stated purpose — say it is unverified, and decide its rule with the user
 - User-triggered fetchers act on a person's request. Google (`Google-Agent`) and Perplexity (`Perplexity-User`) say theirs generally ignore `robots.txt`; OpenAI says `ChatGPT-User` rules may not apply; Anthropic says its bots, `Claude-User` included, honour it. Document the limit per operator instead of promising control, and put private paths behind authentication
 - `OAI-AdsBot` checks landing pages submitted as ChatGPT ads; OpenAI's page does not say how it treats `robots.txt` — blocking it is an ads decision, not a search or training one
 
@@ -41,7 +42,8 @@ A User-Agent string is trivially spoofed. Before allowlisting a bot or reporting
 | Google | `common-crawlers.json`, `special-crawlers.json`, `user-triggered-fetchers.json`, `user-triggered-fetchers-google.json`, `user-triggered-agents.json` (`Google-Agent`) — listed on [verifying Google requests](https://developers.google.com/crawling/docs/crawlers-fetchers/verify-google-requests) |
 | OpenAI | `openai.com/gptbot.json`, `/searchbot.json`, `/chatgpt-user.json`, `/adsbot.json` |
 | Anthropic | `claude.com/crawling/bots.json` |
-| Perplexity | `perplexity.ai/perplexitybot.json`, `/perplexity-user.json` |
+| Perplexity | `www.perplexity.ai/perplexitybot.json`, `/perplexity-user.json` |
+| Common Crawl | `index.commoncrawl.org/ccbot.json` |
 
 Read the files live — ranges change, and operators name them the current source of truth for WAF rules.
 
@@ -49,11 +51,11 @@ Read the files live — ranges change, and operators name them the current sourc
 
 None is a standard — track them, never raise their absence as a finding, and add one only when the user asks.
 
-| Signal | Status (as last verified 2026-11-04) |
+| Signal | Status (as last verified 2026-11-16) |
 |---|---|
 | `Content-Signal: search=yes, ai-input=yes, ai-train=no` | Cloudflare convention. Its IETF individual draft (`draft-romm-aipref-contentsignals`) has expired; no crawler operator's docs were found saying it is honoured. If used, repeat it inside each named group and describe it as a stated preference, not a control |
-| IETF AIPREF working group (`draft-ietf-aipref-vocab`, `draft-ietf-aipref-attach`) | Working-group Internet-Drafts, no RFC yet |
-| `User-Agent: __usage_ai-training` group (`draft-kelley-aipref-training-preference-signal`) | Individual draft; Anthropic states it honours this "no AI training" signal from 2026-10-30, and a `ClaudeBot` group takes priority over it. Not a crawl control — crawlers still follow their own token's group |
+| IETF AIPREF working group (`draft-ietf-aipref-vocab`, `draft-ietf-aipref-attach`) | Working-group Internet-Drafts aimed at Proposed Standard, no RFC yet |
+| `User-Agent: __usage_ai-training` group (`draft-kelley-aipref-training-preference-signal`) | Individual draft; Anthropic states it honours this "no AI training" signal from 2026-10-30, and a `ClaudeBot` group takes priority over it. Google states it intends to support this signal in early 2027 ([common crawlers](https://developers.google.com/crawling/docs/crawlers-fetchers/google-common-crawlers)). Not a crawl control — crawlers still follow their own token's group |
 
 Sources: [IETF AIPREF documents](https://datatracker.ietf.org/wg/aipref/documents/), [Content-Signal draft](https://datatracker.ietf.org/doc/draft-romm-aipref-contentsignals/), [training-preference draft](https://datatracker.ietf.org/doc/draft-kelley-aipref-training-preference-signal/), Anthropic's crawler page above.
 

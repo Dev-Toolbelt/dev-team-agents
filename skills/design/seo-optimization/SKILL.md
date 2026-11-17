@@ -29,6 +29,9 @@ Load a reference only when its signal is present in the pages under review.
 | Affiliate/sponsored links, UGC (comments, forums, reviews), bot- or user-agent-specific serving, a hacked-site or Security issues report, an expired/acquired domain | `references/spam-security.md` |
 | Title, meta description, snippet controls (`nosnippet`, `max-*`, `data-nosnippet`), favicon or `<head>`/layout templates edited; a title or snippet finding; Discover traffic | `references/search-appearance.md` |
 | Images central to the page (galleries, product images), `<video>`, embedded players, `VideoObject`, image or video sitemaps | `references/media.md` |
+| A non-Google AI engine named (ChatGPT search, Claude, Perplexity, Bing/Copilot), or IndexNow | `references/answer-engines.md` |
+| A product feed, catalog export, or AI shopping surface (Google AI Mode/Gemini checkout, ChatGPT, Perplexity) | `references/ai-commerce-feeds.md` |
+| A page template reviewed or built (home, category, product, blog, FAQ), or page-type guidance asked for | `references/page-type-playbook.md` |
 
 ## Detection Signals — When SEO Is Required
 
@@ -57,7 +60,7 @@ Run the steps in order; each feeds § Quality Gate Output Format. Never require 
 | 5 | **Structured data** | Every JSON-LD block (rendered DOM), its type, lint result | Structured Data |
 | 6 | **Core Web Vitals** | Field data (CrUX/RUM/Search Console) if the user supplies it; else lab numbers marked `lab` | Core Web Vitals |
 | 7 | **Content** | Authorship, intent match, duplicate/scaled pages, spam signals | Content |
-| 8 | **AI search** | Snippet eligibility, AI-crawler rules, raw-HTML content | AI Search |
+| 8 | **AI search** | Snippet eligibility, AI-crawler rules (bot policy by purpose), raw-HTML content; feed ↔ JSON-LD ↔ page parity on e-commerce | AI Search |
 | 9 | **Share preview** | Tags and status served to `facebookexternalhit` | On-Page SEO |
 
 Which reference each step loads is decided by § Conditional References alone.
@@ -107,6 +110,7 @@ Which reference each step loads is decided by § Conditional References alone.
 - Structured internal linking supports topic authority — flag orphaned pages with no inbound internal links, and two pages targeting the same primary query (cannibalization — see `references/content-quality.md`)
 - Flag broken outbound links found during review
 - Backlink strategy, PR, and external outreach are outside this agent's scope — note when the user should involve marketing/growth, don't attempt to execute them
+- Third-party mentions and reviews correlate most with AI visibility — brand web mentions with AI Overviews ([Ahrefs, 2025](https://ahrefs.com/blog/ai-overview-brand-correlation/)), third-party sources over brand-owned ones in AI search ([Chen et al., 2025](https://arxiv.org/abs/2509.08919)) (as last verified 2026-11-16). Route to marketing as a recommendation; never execute it
 
 ---
 
@@ -170,7 +174,8 @@ The same practices that serve readers serve AI features — report them as SEO, 
 - **Images and video** that follow image and video SEO guidance
 - **Page experience** — renders on every device, low latency, main content easy to tell apart from the rest; duplicate content kept low
 - **JavaScript** that follows § JavaScript rendering — Google renders unblocked JS; the raw-HTML check for crawlers that do not run it is in `references/agent-readiness.md`
-- **Merchant and local data** through Merchant Center feeds and a Google Business Profile — `references/schema-ecommerce-local.md`
+- **Merchant and local data** through Merchant Center feeds and a Google Business Profile — `references/schema-ecommerce-local.md`; feeds for other AI shopping surfaces and feed parity: `references/ai-commerce-feeds.md`
+- **Non-Google answer engines** (ChatGPT search, Claude, Perplexity, Copilot) read their own indexes — which bot each needs, IndexNow and the evidence behind common GEO advice: `references/answer-engines.md`
 - **`robots.txt` AI-crawler directives** for non-Google operators — training, search and user-triggered bots are separate tokens; never block by default. `references/ai-crawlers.md`
 - **Agent readiness** — `references/agent-readiness.md`
 
@@ -200,7 +205,7 @@ Google's guide names these as unnecessary for its AI features. Never recommend o
 
 ### Measuring
 
-- Use the **generative AI performance report** in Search Console ([help](https://support.google.com/webmasters/answer/16984139)) for AI features in Search and Discover — it is the only source of Google AI visibility data
+- Use the **generative AI performance report** in Search Console ([help](https://support.google.com/webmasters/answer/16984139), as last verified 2026-11-16) for AI Overviews and AI Mode in Search; Discover has its own generative AI performance report. These are the only sources of Google AI visibility data
 - No third-party tool has access to Google's internal ranking or AI systems ([third-party SEO tools](https://developers.google.com/search/docs/fundamentals/third-party-seo)). Treat a tool that claims it, or promises AI placement, as unverified, and never cite its numbers as a finding
 - Before attributing a drop in Search or AI visibility, follow `references/monitoring.md` § Diagnosing drops — data anomalies, the post-update wait, a search-type split and the export row limits
 
@@ -261,7 +266,7 @@ Each finding is one line:
 | `inferred` | Read from code or config, not observed in a response |
 | `unverified` | Needs a check the agent could not run (Search Console, a validator, a verified-bot log) — list the step for the user |
 
-**Severity.** `BLOCKER` = `robots.txt` blocking indexable pages or answering a persistent `5xx`/`429`, a sitewide or template-level `noindex` on pages meant to be indexed (see `references/crawl-index-control.md` § noindex), missing canonical on a duplicated route, broken structured data, LCP/INP/CLS in the "Poor" band **on field data** (a lab-only Poor reading is an `ISSUE` tagged `lab`), a soft-404, an indexable page whose title, canonical, robots meta or main content exists only after JavaScript runs **and** is also missing from the rendered output (confirmed in a rendering test), a generator about to publish near-identical pages that fail the swap test in `references/content-quality.md`, a shareable page answering `403`/`429` to the `facebookexternalhit` crawler while a regular browser User-Agent gets `200` (see `references/share-preview-check.md`), or a **verified** Googlebot receiving `403`/`429` or a challenge page on indexable pages — observed in Search Console or logs filtered to verified IPs, never a User-Agent-only test (see `references/crawl-index-control.md` § CDN, WAF and bot protection).
+**Severity.** `BLOCKER` = `robots.txt` blocking indexable pages or answering a persistent `5xx`/`429`, a sitewide or template-level `noindex` on pages meant to be indexed (see `references/crawl-index-control.md` § noindex), missing canonical on a duplicated route, broken structured data, LCP/INP/CLS in the "Poor" band **on field data** (a lab-only Poor reading is an `ISSUE` tagged `lab`), a soft-404, a product page whose JSON-LD price or availability differs from the visible page or from a feed built in the same codebase, with the cause in that code (markup frozen at build while the price updates in JS, two code paths reading stock) — see `references/ai-commerce-feeds.md` § Parity check, an indexable page whose title, canonical, robots meta or main content exists only after JavaScript runs **and** is also missing from the rendered output (confirmed in a rendering test), a generator about to publish near-identical pages that fail the swap test in `references/content-quality.md`, a shareable page answering `403`/`429` to the `facebookexternalhit` crawler while a regular browser User-Agent gets `200` (see `references/share-preview-check.md`), or a **verified** Googlebot receiving `403`/`429` or a challenge page on indexable pages — observed in Search Console or logs filtered to verified IPs, never a User-Agent-only test (see `references/crawl-index-control.md` § CDN, WAF and bot protection).
 
 A missing sitemap is a `BLOCKER` only on a large site (more than about 500 pages, Google's threshold — [sitemaps overview](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview), as last verified 2026-11-04) or a site whose pages are not reachable through internal links; otherwise it is an `ISSUE`.
 

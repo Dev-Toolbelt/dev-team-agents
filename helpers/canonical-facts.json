@@ -83,6 +83,34 @@
       "source": "https://developers.google.com/search/docs/fundamentals/ai-optimization-guide"
     },
     {
+      "id": "google-ai-uses-llms-txt",
+      "pattern": "\\b(Google|AI Overviews?|AI Mode)\\b.{0,80}\\b(uses?|reads?|rewards?|needs?|requires?|prefers?)\\b.{0,40}llms\\.txt|llms\\.txt.{0,80}\\b(get|be|being) (cited|featured|shown)\\b.{0,40}\\b(Google|AI Overviews?|AI Mode)\\b",
+      "allow": [
+        "\\b(no|not|neither|nor|never|none|doesn't|does not|don't|isn't|ignores?|unnecessary|without)\\b"
+      ],
+      "why": "Google Search does not use llms.txt or other AI text files; neither AI Overviews nor AI Mode read, reward or require them",
+      "source": "https://developers.google.com/search/docs/fundamentals/ai-optimization-guide"
+    },
+    {
+      "id": "google-extended-ai-overviews-opt-out",
+      "pattern": "\\b(AI Overviews?|AI Mode|Google Search)\\b.{0,80}Google-Extended|Google-Extended.{0,80}\\b(AI Overviews?|AI Mode|Google Search)\\b",
+      "allow": [
+        "\\b(no effect|does not|doesn't|not affect|never|not)\\b",
+        "\\b(separate from|only governs|governs .{0,30}only|follow `?Googlebot)\\b"
+      ],
+      "why": "Google-Extended does not affect inclusion in Google Search and is not a ranking signal; blocking it does not remove a site from AI Overviews or AI Mode, which need an indexed page eligible for a snippet",
+      "source": "https://developers.google.com/crawling/docs/crawlers-fetchers/google-common-crawlers"
+    },
+    {
+      "id": "gptbot-controls-chatgpt-search",
+      "pattern": "\\bGPTBot\\b.{0,80}\\b(ChatGPT search|ChatGPT answers|search results|search answers|cite[sd]?|citations?|appear)\\b",
+      "allow": [
+        "\\b(no effect|not affect|does not|doesn't|never|independent|training only|OAI-SearchBot)\\b"
+      ],
+      "why": "GPTBot governs training only; appearing in ChatGPT search is controlled by OAI-SearchBot, and OpenAI states each setting is independent",
+      "source": "https://developers.openai.com/api/docs/bots"
+    },
+    {
       "id": "chunking-for-google-ai",
       "pattern": "\\bchunk(s|ing|ed)?\\b.{0,80}\\b(AI Overviews?|AI Mode|Google)\\b|\\b(AI Overviews?|AI Mode|Google)\\b.{0,80}\\bchunk(s|ing|ed)?\\b",
       "allow": [

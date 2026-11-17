@@ -18,7 +18,7 @@ Which tool answers what, and who can run it (as last verified 2026-11-04). The e
 | Lighthouse / [PageSpeed Insights](https://pagespeed.web.dev/) | Lab diagnostics (LCP subparts, long tasks, layout shifts); PSI also shows CrUX field data for the URL or origin when there is enough traffic | Lighthouse: local Chrome, runs against a dev server. PSI: network, public URL; the PSI API takes an API key | Agent (Lighthouse CLI); PSI agent or user |
 | CrUX — [CrUX Vis](https://cruxvis.withgoogle.com/), [CrUX API](https://developer.chrome.com/docs/crux/api), BigQuery | Field Core Web Vitals at p75 for a URL or origin, and trends | CrUX Vis: network, no login. CrUX API: a Google Cloud API key. BigQuery: a Google Cloud project | Agent with network (API only with a key the user supplies); otherwise user |
 | [Search Console](https://search.google.com/search-console) reports | Page indexing, Crawl Stats, Core Web Vitals, rich-result reports, Manual actions, Security issues, Performance (§ Search Console) | Network, login, verified property | User; exports shared with the agent |
-| [Bing Webmaster Tools](https://www.bing.com/webmasters/) | Bing's indexing, crawl and URL-inspection data | Network, login, verified site | User |
+| [Bing Webmaster Tools](https://www.bing.com/webmasters/) | Bing's indexing, crawl and URL-inspection data; the AI Performance report (§ Analytics) | Network, login, verified site | User |
 
 - Never sign in, or ask for credentials, on the user's behalf; ask the user to run login-only tools and share the output
 - When no tool could run (offline, no access), tag the finding `unverified` and name the tool the user should run
@@ -33,7 +33,7 @@ Which tool answers what, and who can run it (as last verified 2026-11-04). The e
 | Sitemaps | Submitted URLs and fetch errors; indexed status via Page indexing filtered by sitemap |
 | Core Web Vitals | Field data grouped by URL pattern (see SKILL.md § Core Web Vitals) |
 | Rich results / enhancements | Structured-data errors per type |
-| Generative AI performance | AI features in Search and Discover (SKILL.md § AI Search › Measuring) |
+| Generative AI performance | Impressions in AI Overviews and AI Mode by page, country, date and device; Discover has its own report (§ Analytics) |
 | Manual actions, Security issues | Must be empty; report anything here ahead of every other finding |
 
 - A Google-selected canonical that differs from the declared one means conflicting signals — check internal links, sitemap and redirects (`crawl-index-control.md` § Canonical rules)
@@ -95,4 +95,16 @@ Recommend, after launch: Search Console and Bing Webmaster Tools verified for th
 
 ## Analytics (advisory)
 
-In GA4, the [Landing page report](https://support.google.com/analytics/answer/12931766) (Reports › Engagement › Landing page) compared or filtered by the [Session default channel group](https://support.google.com/analytics/answer/9756891) `Organic Search` shows how organic visitors engage and convert per landing page; Google's definition of that channel includes clicks from AI Overviews and AI Mode (as last verified 2026-11-04). Use it to pick pages to review after a drop or a launch. It is advisory: analytics numbers are never a gate finding on their own, and clicks and impressions come from Search Console.
+Analytics and AI-visibility numbers are never a gate finding on their own: use them to pick pages to review after a drop or a launch. Clicks and impressions for Google come from Search Console.
+
+| Source | What it shows (as last verified 2026-11-16) |
+|---|---|
+| GA4 [Landing page report](https://support.google.com/analytics/answer/12931766) filtered by the [Session default channel group](https://support.google.com/analytics/answer/9756891) `Organic Search` | How organic visitors engage and convert per landing page. Google's definition of `Organic Search` includes clicks from AI Overviews and AI Mode |
+| GA4 default channel `AI Assistant` ([channel definitions](https://support.google.com/analytics/answer/9756891)) | Sessions whose medium is exactly `ai-assistant`; GA4 sets that medium when the referrer matches its list of AI assistants (for example ChatGPT, Gemini, Deepseek, Copilot, Grok). It excludes AI Overviews and AI Mode, which stay in `Organic Search` |
+| GA4 custom channel group | For an assistant the default list misses, add a channel matched on its referrer or source and place it **above** `Referral`, or its sessions land in `Referral` |
+| `utm_source=chatgpt.com` | ChatGPT adds it to the links it sends to sites ([OpenAI publishers FAQ](https://help.openai.com/en/articles/12627856-publishers-and-developers-faq)); filter on it to count ChatGPT referrals |
+| Search Console [generative AI performance report](https://support.google.com/webmasters/answer/16984139) | Impressions in AI Overviews and AI Mode, by page, country, date and device; rolled out to all sites worldwide as of 2026-08-31. The only source of Google AI visibility data |
+| Bing Webmaster Tools AI Performance ([announcement](https://blogs.bing.com/webmaster/February-2026/Introducing-AI-Performance-in-Bing-Webmaster-Tools-Public-Preview)) | Public preview: citations of the site in Microsoft Copilot, Bing AI summaries and select partners — total citations, cited pages, sampled grounding queries and per-page counts. Citations, not clicks |
+| Server or CDN logs | Requests per AI crawler token, counted only after the source IP matches the operator's published ranges (`ai-crawlers.md` § Verifying a bot) |
+
+- Third-party prompt-panel tools (tracked prompts run against assistants) are directional only: never a KPI, never a finding, and label their numbers as estimates (SKILL.md § AI Search › Measuring)

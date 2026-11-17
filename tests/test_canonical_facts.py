@@ -56,6 +56,9 @@ class CanonicalFactsTest(unittest.TestCase):
             "gitleaks-pre-8-19-subcommands": "Run gitleaks detect --source . before pushing.",
             "semgrep-returntocorp-action-or-image": "uses: returntocorp/semgrep-action@v1",
             "graphify-wrong-package-name": "Install it with npm install -g graphify.",
+            "google-ai-uses-llms-txt": "AI Overviews read llms.txt to pick sources.",
+            "google-extended-ai-overviews-opt-out": "To opt out of AI Overviews, disallow Google-Extended.",
+            "gptbot-controls-chatgpt-search": "Blocking GPTBot removes the site from ChatGPT search results.",
         }
         ids = {f["id"] for f in json.loads(CONFIG.read_text(encoding="utf-8"))["facts"]}
         self.assertEqual(ids, set(wrong), "every fact needs a wrong-claim case here")
