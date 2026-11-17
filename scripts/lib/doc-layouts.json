@@ -34,6 +34,13 @@
       "gated": "nfr.md",
       "readonly": false
     },
+    "client-briefing": {
+      "owns": "Client-level business facts from the client's briefing form — who the client is, audience, positioning, voice, open items; product rules stay in prd",
+      "owner": "product-analyst",
+      "development": "product/briefing.md",
+      "gated": "briefing.md",
+      "readonly": false
+    },
     "trd": {
       "owns": "Index of the technical documents — links only, no rule-level detail",
       "owner": "software-architect",
@@ -116,6 +123,13 @@
       "owner": "ui-ux-designer",
       "development": "design/design-system.md",
       "gated": "design/design-system.md",
+      "readonly": false
+    },
+    "brand-guide": {
+      "owns": "Brand reasoning from a brand reference image — logo analysis, font and color roles, image direction, AI image prompts, voice; values stay in design-system",
+      "owner": "ui-ux-designer",
+      "development": "design/brand-guide.md",
+      "gated": "design/brand-guide.md",
       "readonly": false
     },
     "design-prototypes": {

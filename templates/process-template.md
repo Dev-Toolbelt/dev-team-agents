@@ -53,6 +53,7 @@ Paths are relative to the docs root (`context_paths[0]`, `docs` by default).
 | `prd` | `prd.md` | `product-analyst` | no |
 | `glossary` | `glossary.md` | `product-analyst` | no |
 | `nfr` | `nfr.md` | `product-analyst` | no |
+| `client-briefing` | `briefing.md` | `product-analyst` | no |
 | `trd` | `trd.md` | `software-architect` | no |
 | `architecture` | `architecture.md` | `software-architect` | no |
 | `tech-stack` | `tech-stack.md` | `software-architect` | no |
@@ -65,6 +66,7 @@ Paths are relative to the docs root (`context_paths[0]`, `docs` by default).
 | `conformance-report` | `conformance-report.md` | `software-architect` | no |
 | `design-tokens` | `design/tokens.json` | `ui-ux-designer` | no |
 | `design-system` | `design/design-system.md` | `ui-ux-designer` | no |
+| `brand-guide` | `design/brand-guide.md` | `ui-ux-designer` | no |
 | `design-prototypes` | `design/prototypes/` | `ui-ux-designer` | yes |
 | `design-screens` | `design/screens/` | `ui-ux-designer` | no |
 | `design-flows` | `design/flows/` | `ui-ux-designer` | no |

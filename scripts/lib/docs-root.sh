@@ -39,7 +39,9 @@ _devteam_doc_rel() {
         api-contracts) printf '%s' "development/api-contracts.md" ;;
         adr) printf '%s' "development/adrs/" ;;
         conformance-report) printf '%s' "development/conformance-report.md" ;;
+        client-briefing) printf '%s' "product/briefing.md" ;;
         design-system) printf '%s' "design/design-system.md" ;;
+        brand-guide) printf '%s' "design/brand-guide.md" ;;
         specs) printf '%s' "specs/" ;;
         testing) printf '%s' "tests/testing-strategy.md" ;;
         backlog-index) printf '%s' "backlog/sprints/sprints.md" ;;
