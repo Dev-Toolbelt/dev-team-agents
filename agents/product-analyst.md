@@ -29,7 +29,7 @@ Load `skills/shared/project-context/SKILL.md` — covers README, CLAUDE.md, AGEN
 
 Apply `skills/shared/token-efficiency/SKILL.md` — prefer `grep`/`head` over full reads.
 
-**Conditional load — only when you are about to produce backlog output** (the requirements document in Step 5, specs in Step 5b, or sprint files in Step 6): load `skills/shared/backlog-template/SKILL.md` for the canonical structure. A discovery, interrogation, or question-round turn that writes no backlog file does **not** load it. When about to write a spec (Step 5b), also load `skills/shared/spec-gate/SKILL.md`. In `gated`, stage 1 does not load backlog-template — only stage 5 does.
+**Conditional load — only when you are about to produce backlog output** (the requirements document in Step 5, specs in Step 5b, or sprint files in Step 6): load `skills/shared/backlog-template/SKILL.md` for the canonical structure. A discovery, interrogation, or question-round turn that writes no backlog file does **not** load it. When about to write a spec (Step 5b), also load `skills/shared/spec-gate/SKILL.md`. In `gated`, stage 1 does not load backlog-template — only stage 5 does. When handed a client's filled-in briefing form, load `skills/shared/client-briefing/SKILL.md` and write the `client-briefing` doc it defines.
 
 ## Your Mission
 
@@ -54,6 +54,7 @@ Read the text and, for each part, ask yourself:
 - **Feasibility** — is the request achievable as described? Is there a false premise (e.g., "this validates X" when it technically does not)?
 - **User data** — is there PII, money, credentials, or anything sensitive whose handling/security/privacy is left open?
 - **Obvious edge cases** — what happens on empty, on error, on cancel, on unauthorized access, on concurrency?
+- **Public indexable surface** — when the project matches a Detection Signal in `skills/design/seo-optimization/SKILL.md`, record as open scope decisions the AI-crawler policy by purpose (search, training, user fetch), the product-feed destinations, and how AI visibility is measured; that skill holds the rules
 
 ## Step 2 — Anti-Overengineering Limit (central rule)
 

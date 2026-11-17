@@ -156,6 +156,8 @@ Suggest improvements when any of these are violated — but always check `projec
 
 When building a design system from scratch, produce `docs/design/design-system.md` — same 80-line schema as Step 4 above (gated layout: values to `docs/design/tokens.json`, usage rules in `design-system.md`). Use the detail below to derive the values, but write only the condensed tables into the doc:
 
+When the starting point is a brand reference image, load `skills/design/brand-design-system/SKILL.md` — it derives these values from the image and writes the `brand-guide` doc alongside, under the split owned by `skills/shared/docs-sync/SKILL.md` § `design-system`.
+
 ### Color System
 ```
 Primary: [value] — CTAs, interactive elements, brand color

@@ -132,6 +132,12 @@ component inventory: values live only in the `design-tokens` doc (`docs/design/t
 user flows in the `design-flows` doc (`docs/design/flows/<feature>.md`). In the development layout
 values stay in `design-system.md` as above.
 
+**`design-system` and `brand-guide`.** When the project has a `brand-guide` doc (written from a brand reference image by
+`skills/design/brand-design-system/SKILL.md`), the split is fixed: `design-system` (with `design-tokens` in gated) owns
+every implementable value — palette, CSS tokens, type and spacing scales; a color family's tints fit one row — and
+`brand-guide` owns the reasoning (logo analysis, roles, image direction, AI image layer, voice), naming tokens and linking
+here for their values. A value changes in `design-system` first; the guide never holds a copy.
+
 ---
 
 ## Task Closure Rule
