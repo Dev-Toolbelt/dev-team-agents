@@ -13,10 +13,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../src/renderer/App.js';
 import {
   authState,
+  blockedState,
   cliResolutionFound,
   cliResolutionNotFound,
   detectReport,
   doctorReport,
+  fail,
   fakeBridge,
   installBridge,
   ok,
@@ -236,20 +238,78 @@ describe('the first-run wizard', () => {
 });
 
 describe('who skips the wizard', () => {
-  it('a returning user with a project goes straight to the app', async () => {
-    installBridge(
-      freshBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))) }),
-    );
+  it('a returning user with a project goes straight to the app, and the flag is recorded', async () => {
+    const bridge = freshBridge({ listProjects: vi.fn(() => Promise.resolve(ok({ current: '2.48.0', projects: [project()] }))) });
+    installBridge(bridge);
     render(<App />);
     expect(await screen.findByRole('tab', { name: 'Projects' })).toBeInTheDocument();
     expect(screen.queryByText('Get started')).not.toBeInTheDocument();
+    await waitFor(() => expect(bridge.completeOnboarding).toHaveBeenCalled());
+  });
+
+  it('a returning user whose list was refused before sign-in reaches the app once signed in', async () => {
+    const user = userEvent.setup();
+    const listProjects = vi
+      .fn()
+      .mockResolvedValueOnce(fail('sign in first', { reason: 'account' }))
+      .mockResolvedValue(ok({ current: '2.48.0', projects: [project()] }));
+    const authCheck = vi
+      .fn()
+      .mockResolvedValueOnce(ok(blockedState('needs_online_check', { gate_mode: 'enforce' }), { outcome: 'findings' }))
+      .mockResolvedValue(ok(authState({ gate_mode: 'enforce' })));
+    const bridge = freshBridge({ listProjects, authCheck });
+    installBridge(bridge);
+    render(<App />);
+
+    expect(await wizard().findByText('Get started')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: /check again/i }));
+
+    expect(await screen.findByRole('tab', { name: 'Projects' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Choose a folder' })).not.toBeInTheDocument();
+    expect(bridge.completeOnboarding).toHaveBeenCalled();
+  });
+
+  it('a new user with no project still gets the wizard after signing in', async () => {
+    const user = userEvent.setup();
+    const authCheck = vi
+      .fn()
+      .mockResolvedValueOnce(ok(blockedState('needs_online_check', { gate_mode: 'enforce' }), { outcome: 'findings' }))
+      .mockResolvedValue(ok(authState({ gate_mode: 'enforce' })));
+    const bridge = freshBridge({ authCheck });
+    installBridge(bridge);
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: /check again/i }));
+    await waitFor(() => expect(bridge.listProjects).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('heading', { name: 'Choose your project folder' })).toBeInTheDocument();
+    expect(bridge.completeOnboarding).not.toHaveBeenCalled();
+  });
+
+  it('stays in the wizard, recording nothing, when the list still fails after sign-in', async () => {
+    const user = userEvent.setup();
+    const listProjects = vi.fn().mockResolvedValue(fail('the store is ahead'));
+    const authCheck = vi
+      .fn()
+      .mockResolvedValueOnce(ok(blockedState('needs_online_check', { gate_mode: 'enforce' }), { outcome: 'findings' }))
+      .mockResolvedValue(ok(authState({ gate_mode: 'enforce' })));
+    const bridge = freshBridge({ listProjects, authCheck });
+    installBridge(bridge);
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: /check again/i }));
+    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('heading', { name: 'Choose your project folder' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Projects' })).not.toBeInTheDocument();
+    expect(bridge.completeOnboarding).not.toHaveBeenCalled();
   });
 
   it('a user who finished it goes straight to the app, even with no project', async () => {
-    installBridge(fakeBridge());
+    const bridge = fakeBridge();
+    installBridge(bridge);
     render(<App />);
     expect(await screen.findByRole('tab', { name: 'Projects' })).toBeInTheDocument();
     expect(screen.queryByText('Get started')).not.toBeInTheDocument();
+    expect(bridge.completeOnboarding).not.toHaveBeenCalled();
   });
 
   it('a failed read of the flag never blocks the app behind a wizard', async () => {
