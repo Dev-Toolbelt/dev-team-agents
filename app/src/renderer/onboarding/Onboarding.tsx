@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -29,11 +29,16 @@ export function Onboarding({
   onRetry,
   onFinished,
   onOpenAccount,
+  onSignedIn,
 }: {
   cliFound: boolean;
   onRetry: () => void;
   onFinished: () => void;
   onOpenAccount: () => void;
+  /** Called when the account turns usable while the wizard is showing and no project was chosen
+   *  yet: the project list the app read before sign-in may have been refused by the CLI's
+   *  account gate, so it is asked again. A mount that is already signed in does not call it. */
+  onSignedIn?: () => void;
 }) {
   const account = useAccount();
   const [machineReady, setMachineReady] = useState(false);
@@ -54,6 +59,15 @@ export function Onboarding({
     started: started !== null,
   };
   const step = currentStep(facts);
+
+  // Fires on a false → true change only, and never once the person has chosen a folder: a
+  // project registered by the wizard itself must not tear it down before the first task.
+  const wasSignedIn = useRef(signedIn);
+  useEffect(() => {
+    const turnedOn = signedIn && !wasSignedIn.current;
+    wasSignedIn.current = signedIn;
+    if (turnedOn && project === null) onSignedIn?.();
+  }, [signedIn, project, onSignedIn]);
 
   const onReady = useCallback(() => setMachineReady(true), []);
   const onChoices = (choices: Choices) => setProject((previous) => (previous === null ? previous : { ...previous, choices }));

@@ -15,7 +15,8 @@ export const STEP_ORDER: readonly StepId[] = Object.freeze(['cli', 'signin', 'ma
 export const CLICK_STEPS: readonly StepId[] = Object.freeze(['folder', 'confirm', 'start']);
 
 export interface Facts {
-  /** The wizard was finished before (the app's own flag). */
+  /** The person is past the wizard (the app's own flag): they finished it, or a listing found a
+   *  project. Not proof that the first task ran. */
   readonly completed: boolean;
   /** The registry already holds a project: a returning user. */
   readonly hasProjects: boolean;

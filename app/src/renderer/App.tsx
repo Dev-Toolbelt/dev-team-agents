@@ -82,6 +82,20 @@ export function App() {
     setTab('projects');
   }
 
+  // Bumped by `load()` and `recheckProjects`: an older answer never overwrites a newer one.
+  const projectsGeneration = useRef(0);
+
+  // `list` is behind the CLI's account gate: before sign-in it fails, and that failure was read
+  // as "no projects" and kept a returning user in the wizard. Ask again once the account is usable.
+  const recheckProjects = useCallback(async () => {
+    const mine = ++projectsGeneration.current;
+    const listing = await window.devteam.listProjects().catch(() => null);
+    if (mine !== projectsGeneration.current) return;
+    if (listing === null || !listing.ok || listing.data.projects.length === 0) return;
+    setHasProjects(true);
+    void window.devteam.completeOnboarding().catch(() => undefined);
+  }, []);
+
   function openProject(projectId: string) {
     setTab('projects');
     setOpenRequest((previous) => ({ projectId, nonce: (previous?.nonce ?? 0) + 1 }));
@@ -109,6 +123,7 @@ export function App() {
   async function load() {
     setBusy(true);
     setLoadError(null);
+    const mine = ++projectsGeneration.current;
     try {
       const [info, resolved] = await Promise.all([window.devteam.buildInfo(), window.devteam.resolveCli()]);
       setBuild(info);
@@ -117,8 +132,14 @@ export function App() {
         window.devteam.onboardingState().catch(() => ({ completed: true })),
         resolved.found ? window.devteam.listProjects().catch(() => null) : Promise.resolve(null),
       ]);
-      setOnboardingDone(state.completed);
-      setHasProjects(projects !== null && projects.ok && projects.data.projects.length > 0);
+      const found = projects !== null && projects.ok && projects.data.projects.length > 0;
+      if (mine === projectsGeneration.current) {
+        setOnboardingDone(state.completed);
+        setHasProjects(found);
+      }
+      // A returning user who predates the wizard has no flag; record it while the list answers,
+      // so a later refused `list` (an expired session) cannot put them back in the wizard.
+      if (found && !state.completed) void window.devteam.completeOnboarding().catch(() => undefined);
       // After `resolveCli`, which re-reads the settings file and re-attempts the declaration.
       setEnvironment(await window.devteam.environment());
       // The handshake is only meaningful once a CLI exists to ask.
@@ -220,6 +241,7 @@ export function App() {
               onRetry={() => void load()}
               onFinished={() => void finishOnboarding()}
               onOpenAccount={() => setTab('account')}
+              onSignedIn={() => void recheckProjects()}
             />
           ) : screen === 'no-cli' ? (
             <NoCli resolution={resolution} onRetry={() => void load()} />
