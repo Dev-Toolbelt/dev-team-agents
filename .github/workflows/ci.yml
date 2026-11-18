@@ -140,8 +140,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `os: [ubuntu-latest]` cross-joined with both python versions keeps the floor check
-        # (see below) cheap, then `include` adds one representative run per extra OS at the
+        # `os: [ubuntu-latest]` at the newest interpreter, plus the floor check on Linux (see
+        # below), keeps it cheap; `include` adds one representative run per extra OS at the
         # newest interpreter only — a full 3-OS × 2-python cross product would burn CI minutes
         # proving the same interpreter floor a second and third time, which the version matrix
         # below already covers on Linux.
@@ -150,8 +150,12 @@ jobs:
         # a real defect once already: tarfile's extraction filter defaults to
         # `data` from 3.14 on, which masked an unsafe-member bug on every version
         # a user is actually likely to run.
-        python: ["3.9", "3.x"]
+        python: ["3.x"]
         include:
+          # The floor runs on a pinned image: setup-python has no 3.9 build for the Ubuntu
+          # release `ubuntu-latest` moved to (26.04), so the floor check could not start there.
+          - os: ubuntu-24.04
+            python: "3.9"
           - os: windows-latest
             python: "3.x"
           - os: macos-latest
