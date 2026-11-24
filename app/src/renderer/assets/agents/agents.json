@@ -1,4 +1,24 @@
 {
+  "orchestrator": {
+    "label": {
+      "en": "Orchestrator",
+      "pt-BR": "Orquestrador"
+    },
+    "description": {
+      "en": "Main session that coordinates the team",
+      "pt-BR": "Sessão principal que coordena o time"
+    },
+    "category": "planning",
+    "tier": "reasoning",
+    "model": "opus",
+    "hue": 220,
+    "colors": {
+      "light": "#8fa3c4",
+      "base": "#4b5d80",
+      "dark": "#263049"
+    },
+    "icon": "orchestrator.svg"
+  },
   "product-analyst": {
     "label": {
       "en": "Product Analyst",
