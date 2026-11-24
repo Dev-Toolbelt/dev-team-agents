@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **The desktop app's signed macOS build no longer fails at keychain setup.** `electron-builder` 26.15.3 passed the certificate's password, not its temporary keychain's, to `security set-key-partition-list`, so every build with `MAC_CSC_*` secrets failed with `SecKeychainUnlock: The user name or passphrase you entered is not correct` and app-v0.1.2 published nothing. The app now builds with `electron-builder` 26.17.0, which carries the upstream fix. App version 0.1.3.
+
 ## [2.50.2] - 2026-11-24
 
 ### Fixed
