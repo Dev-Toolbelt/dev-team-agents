@@ -36,7 +36,17 @@ step() {
   if "$@"; then echo "PASS  $label"; else echo "FAIL  $label"; fail=1; fi
 }
 
-has_developer_id() { codesign -dvv "$APP" 2>&1 | tee /dev/stderr | grep -q 'Authority=Developer ID Application'; }
+# Captured, then matched in the shell: under pipefail, `… | tee | grep -q` failed on a
+# correctly signed app, because grep -q exits at the first match and tee then dies of SIGPIPE.
+has_developer_id() {
+  local details
+  details=$(codesign -dvv "$APP" 2>&1) || { printf '%s\n' "$details" >&2; return 1; }
+  printf '%s\n' "$details" >&2
+  case "$details" in
+    *'Authority=Developer ID Application'*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 step "codesign --verify --deep --strict" codesign --verify --deep --strict --verbose=2 "$APP"
 step "signed with a Developer ID Application identity (not ad-hoc)" has_developer_id
