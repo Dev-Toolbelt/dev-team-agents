@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.50.1] - 2026-11-24
+
+### Fixed
+- **The Homebrew formula passes `brew audit` again.** Its dependencies are listed alphabetically, so the release's formula verification no longer fails on FormulaAudit/DependencyOrder and the tap is published.
+- **`winget validate` runs on a winget that knows the manifests' schema.** The release workflow upgrades the runner's winget, through a pinned `Microsoft.WinGet.Client`, when it is older than the manifests' `ManifestVersion`; the 1.11 client on the runner warned on the 1.12.0 schema header and failed the job.
+
 ## [2.50.0] - 2026-11-24
 
 ### Added
@@ -2436,7 +2442,8 @@ Large refactor/performance release focused on reducing per-session and per-spawn
 - `templates/plan-template.md`
 - `CLAUDE.md` authoring standards
 
-[Unreleased]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.50.0...HEAD
+[Unreleased]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.50.1...HEAD
+[2.50.1]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.50.0...v2.50.1
 [2.50.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.49.1...v2.50.0
 [2.49.1]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.49.0...v2.49.1
 [2.49.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.48.0...v2.49.0
