@@ -292,6 +292,17 @@ jobs:
             "dist/devteam-setup-${VERSION}-arm64.exe" \
             dist/SHA256SUMS.txt \
             --clobber
-          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "true" ]; then
-            gh release edit "$TAG" --draft=false
-          fi
+          # A draft just created can answer "release not found" for a few seconds when
+          # looked up by tag; a lookup that fails must not be read as "already published",
+          # which is how v2.50.2 was left a draft. Retry, then fail loudly.
+          for attempt in 1 2 3 4 5 6; do
+            if draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+              if [ "$draft" = "true" ]; then
+                gh release edit "$TAG" --draft=false >/dev/null 2>&1 || { sleep $((attempt * 5)); continue; }
+              fi
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          echo "::error::Release $TAG could not be read or published after the upload; it may still be a draft."
+          exit 1
