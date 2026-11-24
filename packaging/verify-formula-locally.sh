@@ -752,8 +752,10 @@ if [ "$PY_DEP_PRESENT" = "no" ]; then
     note "$PY_DEP was absent before this run; teardown will remove it if the install pulled it in"
 fi
 
-note "brew install --build-from-source $TEMP_FORMULA"
-if ! brew install --build-from-source "$TEMP_FORMULA" 2>&1 | sed 's/^/    /'; then
+# By tap name, like the audit stages: current Homebrew reads a path argument as a tap
+# name ("Invalid tap name: '/opt'") instead of a formula file.
+note "brew install --build-from-source $TAP_FULL/$FORMULA_NAME"
+if ! brew install --build-from-source "$TAP_FULL/$FORMULA_NAME" 2>&1 | sed 's/^/    /'; then
     die "brew install --build-from-source failed"
 fi
 
@@ -793,9 +795,9 @@ record install PASS "install block ran; shebang rewritten to $PY_DEP; cli/ and l
 
 # ── stage: brew test ────────────────────────────────────────────────────────
 stage brewtest
-note "brew test $FORMULA_NAME  (runs the formula's own test do block)"
+note "brew test $TAP_FULL/$FORMULA_NAME  (runs the formula's own test do block)"
 TEST_RC=0
-brew test --verbose "$FORMULA_NAME" 2>&1 | sed 's/^/    /' || TEST_RC=$?
+brew test --verbose "$TAP_FULL/$FORMULA_NAME" 2>&1 | sed 's/^/    /' || TEST_RC=$?
 if [ "$TEST_RC" -eq 0 ]; then
     record brewtest PASS "the formula's test do block passed"
 else
