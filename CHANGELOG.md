@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [2.50.0] - 2026-11-24
 
 ### Added
 - **Client briefing and brand guide (`/devteam:brief`).** Two new skills carry the client-kickoff routine: `client-briefing` turns a client's filled-in briefing form (PDF) into a strategic, reusable briefing — every original question with its answer, marked suggestions and examples, segment references with no invented names or URLs, and an Open Items checklist — and `brand-design-system` turns a logo or moodboard into a brand guide (logo analysis, typography with Google Fonts alternatives, color roles, WCAG AA contrast, image direction, an AI image-generation layer with style signature and prompts) while the values themselves (palette, CSS tokens, scales) go to `design-system`. `product-analyst` and `ui-ux-designer` load them when handed those inputs, and `/devteam:brief` runs both in order, pausing until the inputs exist. Inputs stay out of git (checked per file, ignored on your yes), personal identifiers are redacted from the committed briefing, and in the gated layout the form's answers become a dated source file that PRD rules cite. The docs layout map gains the `client-briefing` (`docs/product/briefing.md`, gated `docs/briefing.md`) and `brand-guide` (`docs/design/brand-guide.md`) keys (ADR-0067). Output follows the `language` preference.
@@ -2436,7 +2436,8 @@ Large refactor/performance release focused on reducing per-session and per-spawn
 - `templates/plan-template.md`
 - `CLAUDE.md` authoring standards
 
-[Unreleased]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.49.1...HEAD
+[Unreleased]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.50.0...HEAD
+[2.50.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.49.1...v2.50.0
 [2.49.1]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.49.0...v2.49.1
 [2.49.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.48.0...v2.49.0
 [1.9.3]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v1.9.2...v1.9.3
