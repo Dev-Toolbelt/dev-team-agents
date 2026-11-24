@@ -1,0 +1,215 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1060" viewBox="0 0 1600 1060">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8f9bb8"/></marker><linearGradient id="hdr" x1="0" x2="1"><stop offset="0" stop-color="#8b7cf6"/><stop offset="0.5" stop-color="#4cc3ff"/><stop offset="1" stop-color="#2dd4bf"/></linearGradient><radialGradient id="glow" cx="0.5" cy="0" r="0.8"><stop offset="0" stop-color="#1c2550"/><stop offset="1" stop-color="#0b1020"/></radialGradient></defs>
+<rect width="1600" height="1060" fill="url(#glow)"/>
+<text x="40" y="64" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="34" font-weight="800" fill="#e7eaf3" text-anchor="start" >Dev Team Agents</text>
+<rect x="40" y="78" width="120" height="4" rx="2" fill="url(#hdr)"/>
+<text x="40" y="108" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#8f9bb8" text-anchor="start" >Um harness multi-agente para desenvolvimento — como uma tarefa vai do seu prompt até o PR</text>
+<rect x="1464" y="40" width="86" height="62" rx="12" fill="#131a2c" stroke="#25304b" stroke-width="1" />
+<text x="1507.0" y="72" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="22" font-weight="800" fill="#e7eaf3" text-anchor="middle" >3</text>
+<text x="1507.0" y="92" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="middle" >providers</text>
+<rect x="1368" y="40" width="86" height="62" rx="12" fill="#131a2c" stroke="#25304b" stroke-width="1" />
+<text x="1411.0" y="72" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="22" font-weight="800" fill="#e7eaf3" text-anchor="middle" >43</text>
+<text x="1411.0" y="92" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="middle" >comandos</text>
+<rect x="1272" y="40" width="86" height="62" rx="12" fill="#131a2c" stroke="#25304b" stroke-width="1" />
+<text x="1315.0" y="72" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="22" font-weight="800" fill="#e7eaf3" text-anchor="middle" >150+</text>
+<text x="1315.0" y="92" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="middle" >skills</text>
+<rect x="1176" y="40" width="86" height="62" rx="12" fill="#131a2c" stroke="#25304b" stroke-width="1" />
+<text x="1219.0" y="72" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="22" font-weight="800" fill="#e7eaf3" text-anchor="middle" >19</text>
+<text x="1219.0" y="92" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="middle" >agentes</text>
+<rect x="40" y="140" width="270" height="500" rx="16" fill="#111a30" stroke="#3a3170" stroke-width="1.5" />
+<text x="60" y="174" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#e7eaf3" text-anchor="start" >Contexto primeiro</text>
+<text x="60" y="196" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >Todo agente carrega o projeto antes de agir</text>
+<rect x="58" y="220" width="234" height="34" rx="8" fill="#0d1426" stroke="#25304b" stroke-width="1" />
+<text x="72" y="242" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" font-weight="500" fill="#e7eaf3" text-anchor="start" >CLAUDE.md / AGENTS.md</text>
+<rect x="58" y="264" width="234" height="34" rx="8" fill="#0d1426" stroke="#25304b" stroke-width="1" />
+<text x="72" y="286" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" font-weight="500" fill="#e7eaf3" text-anchor="start" >docs/project.md</text>
+<rect x="58" y="308" width="234" height="34" rx="8" fill="#0d1426" stroke="#25304b" stroke-width="1" />
+<text x="72" y="330" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="500" fill="#e7eaf3" text-anchor="start" >Arquitetura e padrões</text>
+<rect x="58" y="352" width="234" height="34" rx="8" fill="#0d1426" stroke="#25304b" stroke-width="1" />
+<text x="72" y="374" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="500" fill="#e7eaf3" text-anchor="start" >ADRs (decisões)</text>
+<rect x="58" y="396" width="234" height="34" rx="8" fill="#0d1426" stroke="#25304b" stroke-width="1" />
+<text x="72" y="418" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="500" fill="#e7eaf3" text-anchor="start" >Índice da wiki</text>
+<rect x="58" y="440" width="234" height="34" rx="8" fill="#0d1426" stroke="#25304b" stroke-width="1" />
+<text x="72" y="462" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="500" fill="#e7eaf3" text-anchor="start" >Specs de features</text>
+<rect x="58" y="484" width="234" height="34" rx="8" fill="#0d1426" stroke="#25304b" stroke-width="1" />
+<text x="72" y="506" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" font-weight="500" fill="#e7eaf3" text-anchor="start" >preferences.json</text>
+<rect x="58" y="578" width="234" height="44" rx="10" fill="#2a2350" stroke="#8b7cf6" stroke-width="1" />
+<text x="175.0" y="606" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#d9d3ff" text-anchor="middle" >As regras do seu projeto sempre vencem</text>
+<rect x="340" y="140" width="120" height="70" rx="35" fill="#1e2a4a" stroke="#4cc3ff" stroke-width="1.5" />
+<text x="400" y="182" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#e7eaf3" text-anchor="middle" >Você</text>
+<line x1="464" y1="175" x2="508" y2="175" stroke="#8f9bb8" stroke-width="2"  marker-end="url(#ah)"/>
+<rect x="512" y="140" width="470" height="70" rx="12" fill="#0d1426" stroke="#25304b" stroke-width="1" />
+<text x="530" y="170" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="15" font-weight="600" fill="#9fe3ff" text-anchor="start" >/devteam:plan · fix · review · commit · pr</text>
+<text x="530" y="192" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >um comando · ou linguagem natural</text>
+<line x1="986" y1="175" x2="1030" y2="175" stroke="#8f9bb8" stroke-width="2"  marker-end="url(#ah)"/>
+<rect x="1034" y="140" width="526" height="70" rx="12" fill="#1a1f3d" stroke="#8b7cf6" stroke-width="1.5" />
+<text x="1054" y="170" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#e7eaf3" text-anchor="start" >Orquestrador</text>
+<text x="1540" y="170" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" font-weight="600" fill="#9fe3ff" text-anchor="end" >/devteam:orchestrate</text>
+<text x="1054" y="192" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >persona da sessão principal: roteia e dispara agentes em paralelo</text>
+<path d="M1297.0,210 L1297.0,230 L435,230 L435,244" fill="none" stroke="#8f9bb8" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="312" y1="420" x2="334" y2="420" stroke="#8b7cf6" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<rect x="340.0" y="250" width="188.33333333333334" height="390" rx="14" fill="#131a2c" stroke="#25304b" stroke-width="1" />
+<rect x="340.0" y="250" width="188.33333333333334" height="6" rx="3" fill="#8b7cf6"/>
+<circle cx="366.0" cy="286" r="13" fill="#8b7cf6" fill-opacity="0.18" stroke="#8b7cf6"/>
+<text x="366.0" y="291" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="800" fill="#8b7cf6" text-anchor="middle" >1</text>
+<text x="388.0" y="291" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14" font-weight="800" fill="#e7eaf3" text-anchor="start" letter-spacing="1">PLANEJAR</text>
+<rect x="352.0" y="314" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#8b7cf6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="362.0" y="334" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >product-analyst</text>
+<rect x="352.0" y="352" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#8b7cf6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="362.0" y="372" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >software-architect</text>
+<rect x="352.0" y="390" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#8b7cf6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="362.0" y="410" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >database-specialist</text>
+<rect x="352.0" y="428" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#8b7cf6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="362.0" y="448" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >ui-ux-designer</text>
+<line x1="354.0" y1="576" x2="514.3333333333334" y2="576" stroke="#25304b"/>
+<text x="354.0" y="600" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >Spec com critérios</text>
+<text x="354.0" y="618" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >Given/When/Then</text>
+<line x1="529.3333333333334" y1="286" x2="545.3333333333334" y2="286" stroke="#8f9bb8" stroke-width="2"  marker-end="url(#ah)"/>
+<rect x="546.3333333333334" y="250" width="188.33333333333334" height="390" rx="14" fill="#1d1a12" stroke="#f5b54a" stroke-width="1.5" />
+<rect x="546.3333333333334" y="250" width="188.33333333333334" height="6" rx="3" fill="#f5b54a"/>
+<circle cx="572.3333333333334" cy="286" r="13" fill="#f5b54a" fill-opacity="0.18" stroke="#f5b54a"/>
+<text x="572.3333333333334" y="291" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="800" fill="#f5b54a" text-anchor="middle" >2</text>
+<text x="594.3333333333334" y="291" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14" font-weight="800" fill="#e7eaf3" text-anchor="start" letter-spacing="1">APROVAÇÃO</text>
+<rect x="618.5" y="344" width="44" height="34" rx="6" fill="none" stroke="#f5b54a" stroke-width="2.5"/>
+<path d="M627.5,344 v-10 a13,13 0 0 1 26,0 v10" fill="none" stroke="#f5b54a" stroke-width="2.5"/>
+<circle cx="640.5" cy="360" r="4" fill="#f5b54a"/>
+<rect x="558.3333333333334" y="400" width="164.33333333333334" height="34" rx="8" fill="#3a2d10" stroke="#f5b54a" stroke-width="1" />
+<text x="640.5" y="422" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#ffd88a" text-anchor="middle" >✓ você aprova</text>
+<line x1="560.3333333333334" y1="558" x2="720.6666666666667" y2="558" stroke="#25304b"/>
+<text x="560.3333333333334" y="582" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >Nada executa antes da</text>
+<text x="560.3333333333334" y="600" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >aprovação. Os passos vão</text>
+<text x="560.3333333333334" y="618" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >para o quadro de tarefas.</text>
+<line x1="735.6666666666667" y1="286" x2="751.6666666666667" y2="286" stroke="#8f9bb8" stroke-width="2"  marker-end="url(#ah)"/>
+<rect x="752.6666666666667" y="250" width="188.33333333333334" height="390" rx="14" fill="#131a2c" stroke="#25304b" stroke-width="1" />
+<rect x="752.6666666666667" y="250" width="188.33333333333334" height="6" rx="3" fill="#4cc3ff"/>
+<circle cx="778.6666666666667" cy="286" r="13" fill="#4cc3ff" fill-opacity="0.18" stroke="#4cc3ff"/>
+<text x="778.6666666666667" y="291" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="800" fill="#4cc3ff" text-anchor="middle" >3</text>
+<text x="800.6666666666667" y="291" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14" font-weight="800" fill="#e7eaf3" text-anchor="start" letter-spacing="1">CONSTRUIR</text>
+<rect x="764.6666666666667" y="314" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#4cc3ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="774.6666666666667" y="334" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >backend-developer</text>
+<rect x="764.6666666666667" y="352" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#4cc3ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="774.6666666666667" y="372" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >frontend-developer</text>
+<rect x="764.6666666666667" y="390" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#4cc3ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="774.6666666666667" y="410" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >mobile-developer</text>
+<rect x="764.6666666666667" y="428" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#4cc3ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="774.6666666666667" y="448" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >devops-specialist</text>
+<rect x="764.6666666666667" y="466" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#4cc3ff" stroke-width="1" stroke-opacity="0.55"/>
+<text x="774.6666666666667" y="486" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >seo-specialist</text>
+<line x1="766.6666666666667" y1="576" x2="927.0000000000001" y2="576" stroke="#25304b"/>
+<text x="766.6666666666667" y="600" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >Worktree git isolada,</text>
+<text x="766.6666666666667" y="618" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >ondas em paralelo</text>
+<line x1="942.0000000000001" y1="286" x2="958.0000000000001" y2="286" stroke="#8f9bb8" stroke-width="2"  marker-end="url(#ah)"/>
+<rect x="959.0" y="250" width="188.33333333333334" height="390" rx="14" fill="#131a2c" stroke="#25304b" stroke-width="1" />
+<rect x="959.0" y="250" width="188.33333333333334" height="6" rx="3" fill="#4ade80"/>
+<circle cx="985.0" cy="286" r="13" fill="#4ade80" fill-opacity="0.18" stroke="#4ade80"/>
+<text x="985.0" y="291" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="800" fill="#4ade80" text-anchor="middle" >4</text>
+<text x="1007.0" y="291" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14" font-weight="800" fill="#e7eaf3" text-anchor="start" letter-spacing="1">TESTAR</text>
+<rect x="971.0" y="314" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#4ade80" stroke-width="1" stroke-opacity="0.55"/>
+<text x="981.0" y="334" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="10.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >backend-test-specialist</text>
+<rect x="971.0" y="352" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#4ade80" stroke-width="1" stroke-opacity="0.55"/>
+<text x="981.0" y="372" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="10.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >frontend-test-specialist</text>
+<line x1="973.0" y1="576" x2="1133.3333333333333" y2="576" stroke="#25304b"/>
+<text x="973.0" y="600" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >Só os testes do</text>
+<text x="973.0" y="618" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >código alterado</text>
+<line x1="1148.3333333333333" y1="286" x2="1164.3333333333333" y2="286" stroke="#8f9bb8" stroke-width="2"  marker-end="url(#ah)"/>
+<rect x="1165.3333333333335" y="250" width="188.33333333333334" height="390" rx="14" fill="#131a2c" stroke="#25304b" stroke-width="1" />
+<rect x="1165.3333333333335" y="250" width="188.33333333333334" height="6" rx="3" fill="#f472b6"/>
+<circle cx="1191.3333333333335" cy="286" r="13" fill="#f472b6" fill-opacity="0.18" stroke="#f472b6"/>
+<text x="1191.3333333333335" y="291" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="800" fill="#f472b6" text-anchor="middle" >5</text>
+<text x="1213.3333333333335" y="291" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14" font-weight="800" fill="#e7eaf3" text-anchor="start" letter-spacing="1">QUALIDADE</text>
+<rect x="1177.3333333333335" y="314" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#f472b6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="1187.3333333333335" y="334" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >code-reviewer</text>
+<rect x="1189.3333333333335" y="352" width="152.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#25304b" stroke-width="1" stroke-opacity="0.55"/>
+<path d="M1183.3333333333335,346 v21 h5" fill="none" stroke="#8f9bb8" stroke-width="1.5"/>
+<text x="1199.3333333333335" y="372" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >backend-reviewer</text>
+<rect x="1189.3333333333335" y="390" width="152.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#25304b" stroke-width="1" stroke-opacity="0.55"/>
+<path d="M1183.3333333333335,384 v21 h5" fill="none" stroke="#8f9bb8" stroke-width="1.5"/>
+<text x="1199.3333333333335" y="410" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >frontend-reviewer</text>
+<rect x="1177.3333333333335" y="428" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#f472b6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="1187.3333333333335" y="448" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >security-specialist</text>
+<rect x="1177.3333333333335" y="466" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#f472b6" stroke-width="1" stroke-opacity="0.55"/>
+<text x="1187.3333333333335" y="486" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >qa-specialist</text>
+<line x1="1179.3333333333335" y1="576" x2="1339.6666666666667" y2="576" stroke="#25304b"/>
+<text x="1179.3333333333335" y="600" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >Achados corrigidos</text>
+<text x="1179.3333333333335" y="618" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >e revisados de novo</text>
+<line x1="1354.6666666666667" y1="286" x2="1370.6666666666667" y2="286" stroke="#8f9bb8" stroke-width="2"  marker-end="url(#ah)"/>
+<rect x="1371.6666666666667" y="250" width="188.33333333333334" height="390" rx="14" fill="#131a2c" stroke="#25304b" stroke-width="1" />
+<rect x="1371.6666666666667" y="250" width="188.33333333333334" height="6" rx="3" fill="#2dd4bf"/>
+<circle cx="1397.6666666666667" cy="286" r="13" fill="#2dd4bf" fill-opacity="0.18" stroke="#2dd4bf"/>
+<text x="1397.6666666666667" y="291" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="800" fill="#2dd4bf" text-anchor="middle" >6</text>
+<text x="1419.6666666666667" y="291" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14" font-weight="800" fill="#e7eaf3" text-anchor="start" letter-spacing="1">ENTREGAR</text>
+<rect x="1383.6666666666667" y="314" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#2dd4bf" stroke-width="1" stroke-opacity="0.55"/>
+<text x="1393.6666666666667" y="334" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >/devteam:commit</text>
+<rect x="1383.6666666666667" y="352" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#2dd4bf" stroke-width="1" stroke-opacity="0.55"/>
+<text x="1393.6666666666667" y="372" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >/devteam:pr</text>
+<rect x="1383.6666666666667" y="390" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#2dd4bf" stroke-width="1" stroke-opacity="0.55"/>
+<text x="1393.6666666666667" y="410" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >/devteam:push</text>
+<rect x="1383.6666666666667" y="428" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#2dd4bf" stroke-width="1" stroke-opacity="0.55"/>
+<text x="1393.6666666666667" y="448" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >/devteam:learn</text>
+<rect x="1383.6666666666667" y="466" width="164.33333333333334" height="30" rx="7" fill="#0d1426" stroke="#2dd4bf" stroke-width="1" stroke-opacity="0.55"/>
+<text x="1393.6666666666667" y="486" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="start" >technical-writer</text>
+<line x1="1385.6666666666667" y1="558" x2="1546.0" y2="558" stroke="#25304b"/>
+<text x="1385.6666666666667" y="582" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >Check de decisões no PR,</text>
+<text x="1385.6666666666667" y="600" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >CI monitorado e corrigido,</text>
+<text x="1385.6666666666667" y="618" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8f9bb8" text-anchor="start" >docs sempre em dia</text>
+<path d="M1259.5000000000002,640 V662 H846.8333333333334 V644" fill="none" stroke="#f472b6" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ah)"/>
+<rect x="963.1666666666667" y="650" width="180" height="24" rx="12" fill="#0b1020" stroke="#f472b6" stroke-width="1" />
+<text x="1053.1666666666667" y="667" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#f9a8d4" text-anchor="middle" >ciclo corrigir → revisar</text>
+<text x="40" y="700" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="800" fill="#8f9bb8" text-anchor="start" letter-spacing="2">O HARNESS — sempre ativo, garantido por hooks</text>
+<rect x="40" y="716" width="493.3333333333333" height="214" rx="14" fill="#131a2c" stroke="#25304b" stroke-width="1" />
+<text x="60" y="748" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#e7eaf3" text-anchor="start" >Hooks de ciclo de vida</text>
+<text x="60" y="780" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="600" fill="#9fe3ff" text-anchor="start" >SessionStart</text>
+<text x="190" y="780" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#e7eaf3" text-anchor="start" >banner, idioma, contexto</text>
+<text x="60" y="810" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="600" fill="#9fe3ff" text-anchor="start" >UserPromptSubmit</text>
+<text x="190" y="810" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#e7eaf3" text-anchor="start" >recall e dicas de contexto</text>
+<text x="60" y="840" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="600" fill="#9fe3ff" text-anchor="start" >PreToolUse</text>
+<text x="190" y="840" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#e7eaf3" text-anchor="start" >guardas e plugins</text>
+<text x="60" y="870" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="600" fill="#9fe3ff" text-anchor="start" >Stop</text>
+<text x="190" y="870" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#e7eaf3" text-anchor="start" >resumo da sessão obrigatório</text>
+<text x="60" y="900" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="600" fill="#9fe3ff" text-anchor="start" >Stop</text>
+<text x="190" y="900" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#e7eaf3" text-anchor="start" >lints e lacunas de ADR</text>
+<rect x="553.3333333333333" y="716" width="493.3333333333333" height="214" rx="14" fill="#131a2c" stroke="#25304b" stroke-width="1" />
+<text x="573.3333333333333" y="748" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#e7eaf3" text-anchor="start" >Memória em 5 camadas</text>
+<rect x="573.3333333333333" y="766" width="6" height="22" rx="3" fill="#8b7cf6"/>
+<text x="589.3333333333333" y="782" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#e7eaf3" text-anchor="start" >Estrutural</text>
+<text x="693.3333333333333" y="782" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#8f9bb8" text-anchor="start" >docs/ — stack, arquitetura</text>
+<rect x="573.3333333333333" y="796" width="6" height="22" rx="3" fill="#4cc3ff"/>
+<text x="589.3333333333333" y="812" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#e7eaf3" text-anchor="start" >Episódica</text>
+<text x="693.3333333333333" y="812" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#8f9bb8" text-anchor="start" >resumo de sessão, ~30 dias</text>
+<rect x="573.3333333333333" y="826" width="6" height="22" rx="3" fill="#4ade80"/>
+<text x="589.3333333333333" y="842" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#e7eaf3" text-anchor="start" >Semântica</text>
+<text x="693.3333333333333" y="842" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#8f9bb8" text-anchor="start" >docs/wiki/ — nunca apagada</text>
+<rect x="573.3333333333333" y="856" width="6" height="22" rx="3" fill="#f5b54a"/>
+<text x="589.3333333333333" y="872" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#e7eaf3" text-anchor="start" >Decisória</text>
+<text x="693.3333333333333" y="872" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#8f9bb8" text-anchor="start" >ADRs — o porquê, imutável</text>
+<rect x="573.3333333333333" y="886" width="6" height="22" rx="3" fill="#2dd4bf"/>
+<text x="589.3333333333333" y="902" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#e7eaf3" text-anchor="start" >Mecânica</text>
+<text x="693.3333333333333" y="902" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#8f9bb8" text-anchor="start" >grafo do código — regenerado</text>
+<rect x="1066.6666666666665" y="716" width="493.3333333333333" height="214" rx="14" fill="#131a2c" stroke="#25304b" stroke-width="1" />
+<text x="1086.6666666666665" y="748" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#e7eaf3" text-anchor="start" >O modelo certo por papel</text>
+<text x="1086.6666666666665" y="784" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="600" fill="#8f9bb8" text-anchor="start" >reasoning</text>
+<rect x="1204.6666666666665" y="768" width="70" height="24" rx="12" fill="#0d1426" stroke="#8b7cf6" stroke-width="1" />
+<text x="1239.6666666666665" y="785" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#8b7cf6" text-anchor="middle" >opus</text>
+<text x="1288.6666666666665" y="785" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#e7eaf3" text-anchor="start" >arquitetura, planejamento, segurança</text>
+<text x="1086.6666666666665" y="822" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="600" fill="#8f9bb8" text-anchor="start" >backend-exec</text>
+<rect x="1204.6666666666665" y="806" width="70" height="24" rx="12" fill="#0d1426" stroke="#4cc3ff" stroke-width="1" />
+<text x="1239.6666666666665" y="823" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#4cc3ff" text-anchor="middle" >sonnet</text>
+<text x="1288.6666666666665" y="823" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#e7eaf3" text-anchor="start" >implementação, revisão, QA</text>
+<text x="1086.6666666666665" y="860" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="600" fill="#8f9bb8" text-anchor="start" >frontend</text>
+<rect x="1204.6666666666665" y="844" width="70" height="24" rx="12" fill="#0d1426" stroke="#4cc3ff" stroke-width="1" />
+<text x="1239.6666666666665" y="861" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#4cc3ff" text-anchor="middle" >sonnet</text>
+<text x="1288.6666666666665" y="861" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#e7eaf3" text-anchor="start" >UI, componentes, testes de front</text>
+<text x="1086.6666666666665" y="898" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="600" fill="#8f9bb8" text-anchor="start" >repetitive</text>
+<rect x="1204.6666666666665" y="882" width="70" height="24" rx="12" fill="#0d1426" stroke="#4ade80" stroke-width="1" />
+<text x="1239.6666666666665" y="899" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#4ade80" text-anchor="middle" >haiku</text>
+<text x="1288.6666666666665" y="899" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#e7eaf3" text-anchor="start" >docs, changelogs</text>
+<rect x="40" y="952" width="1520" height="70" rx="14" fill="#0f1628" stroke="#25304b" stroke-width="1" />
+<text x="64" y="982" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#e7eaf3" text-anchor="start" >Uma fonte canônica, renderizada para cada provider</text>
+<text x="64" y="1004" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#8f9bb8" text-anchor="start" >CLI devteam + app desktop · store global · bind uma vez por projeto</text>
+<rect x="1384.4" y="970" width="151.6" height="34" rx="17" fill="#1a2340" stroke="#4cc3ff" stroke-width="1" />
+<text x="1460.2" y="992" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#e7eaf3" text-anchor="middle" >OpenAI Codex CLI</text>
+<rect x="1289.6000000000001" y="970" width="82.8" height="34" rx="17" fill="#1a2340" stroke="#4cc3ff" stroke-width="1" />
+<text x="1331.0000000000002" y="992" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#e7eaf3" text-anchor="middle" >opencode</text>
+<rect x="1169.0000000000002" y="970" width="108.6" height="34" rx="17" fill="#1a2340" stroke="#4cc3ff" stroke-width="1" />
+<text x="1223.3000000000002" y="992" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#e7eaf3" text-anchor="middle" >Claude Code</text>
+</svg>

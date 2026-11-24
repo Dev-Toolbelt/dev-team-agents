@@ -1,0 +1,250 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1480" viewBox="0 0 1600 1480">
+<defs><radialGradient id="bg" cx="0.3" cy="0.1" r="1"><stop offset="0" stop-color="#1b2450"/><stop offset="1" stop-color="#0b1020"/></radialGradient><linearGradient id="beam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="0.5" stop-color="#9fe3ff"/><stop offset="1" stop-color="#f472b6"/></linearGradient><linearGradient id="hdr" x1="0" x2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="0.5" stop-color="#4cc3ff"/><stop offset="1" stop-color="#f472b6"/></linearGradient><radialGradient id="hole"><stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/><stop offset="0.35" stop-color="#9fe3ff" stop-opacity="0.6"/><stop offset="1" stop-color="#4cc3ff" stop-opacity="0"/></radialGradient><filter id="blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4ade80"/></marker></defs>
+<rect width="1600" height="1480" fill="url(#bg)"/>
+<text x="60" y="72" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="34" font-weight="800" fill="#e7eaf3" text-anchor="start" >Dev Team Agents — the layers</text>
+<rect x="60" y="88" width="140" height="4" rx="2" fill="url(#hdr)"/>
+<text x="60" y="120" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="17" font-weight="400" fill="#8f9bb8" text-anchor="start" >Your prompt crosses every layer of the harness before a single line of code is written</text>
+<rect x="210.0" y="160" width="520" height="84" rx="20" fill="#1a2245" stroke="#ffffff" stroke-opacity="0.55" stroke-width="1.5"/>
+<path d="M456,244 L470,262 L484,244 z" fill="#1a2245"/>
+<text x="470" y="190" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="800" fill="#9fe3ff" text-anchor="middle" letter-spacing="3">YOUR PROMPT</text>
+<text x="470" y="222" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="22" font-weight="600" fill="#e7eaf3" text-anchor="middle" >“Add password reset to the API”</text>
+<rect x="462" y="264" width="16" height="1056" fill="#4cc3ff" fill-opacity="0.25" filter="url(#blur)"/>
+<rect x="461" y="264" width="18" height="66" fill="#ffffff" fill-opacity="0.22" filter="url(#blur)"/>
+<rect x="468" y="264" width="4" height="66" rx="2" fill="#ffffff"/>
+<path d="M170,330 L470,392 L470,406 L170,344 z" fill="#a78bfa" fill-opacity="0.35"/>
+<path d="M470,392 L770,330 L770,344 L470,406 z" fill="#a78bfa" fill-opacity="0.22"/>
+<path d="M170,330 L470,268 L770,330 L470,392 z" fill="#a78bfa" fill-opacity="0.16" stroke="#a78bfa" stroke-width="1.6"/>
+<line x1="245.0" y1="314.5" x2="545.0" y2="376.5" stroke="#a78bfa" stroke-opacity="0.18"/>
+<line x1="245.0" y1="345.5" x2="545.0" y2="283.5" stroke="#a78bfa" stroke-opacity="0.18"/>
+<line x1="320.0" y1="299.0" x2="620.0" y2="361.0" stroke="#a78bfa" stroke-opacity="0.18"/>
+<line x1="320.0" y1="361.0" x2="620.0" y2="299.0" stroke="#a78bfa" stroke-opacity="0.18"/>
+<line x1="395.0" y1="283.5" x2="695.0" y2="345.5" stroke="#a78bfa" stroke-opacity="0.18"/>
+<line x1="395.0" y1="376.5" x2="695.0" y2="314.5" stroke="#a78bfa" stroke-opacity="0.18"/>
+<text x="240" y="336" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="16" font-weight="800" fill="#a78bfa" text-anchor="middle" >01</text>
+<ellipse cx="470" cy="330" rx="34" ry="12" fill="url(#hole)"/>
+<rect x="461" y="332" width="18" height="118" fill="#a78bfa" fill-opacity="0.22" filter="url(#blur)"/>
+<rect x="468" y="332" width="4" height="118" rx="2" fill="#a78bfa"/>
+<line x1="778" y1="330" x2="852" y2="330" stroke="#a78bfa" stroke-opacity="0.6" stroke-dasharray="3 5"/>
+<circle cx="774" cy="330" r="4" fill="#a78bfa"/>
+<rect x="860" y="280.0" width="700" height="100" rx="14" fill="#121a2e" stroke="#25304b" stroke-width="1" />
+<rect x="860" y="280.0" width="6" height="100" rx="3" fill="#a78bfa"/>
+<text x="884" y="312" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e7eaf3" text-anchor="start" >Hooks</text>
+<text x="884" y="334" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#8f9bb8" text-anchor="start" >Every prompt is enriched with recall and context hints before the model sees it</text>
+<rect x="884" y="345" width="107.6" height="24" rx="12" fill="#0d1426" stroke="#a78bfa" stroke-width="1" stroke-opacity="0.7"/>
+<text x="937.8" y="361" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >SessionStart</text>
+<rect x="999.6" y="345" width="136.8" height="24" rx="12" fill="#0d1426" stroke="#a78bfa" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1068.0" y="361" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >UserPromptSubmit</text>
+<rect x="1144.4" y="345" width="63.8" height="24" rx="12" fill="#0d1426" stroke="#a78bfa" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1176.3000000000002" y="361" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >recall</text>
+<rect x="1216.2" y="345" width="56.5" height="24" rx="12" fill="#0d1426" stroke="#a78bfa" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1244.45" y="361" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >hints</text>
+<rect x="1280.7" y="345" width="78.4" height="24" rx="12" fill="#0d1426" stroke="#a78bfa" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1319.9" y="361" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >language</text>
+<path d="M170,450 L470,512 L470,526 L170,464 z" fill="#8b7cf6" fill-opacity="0.35"/>
+<path d="M470,512 L770,450 L770,464 L470,526 z" fill="#8b7cf6" fill-opacity="0.22"/>
+<path d="M170,450 L470,388 L770,450 L470,512 z" fill="#8b7cf6" fill-opacity="0.16" stroke="#8b7cf6" stroke-width="1.6"/>
+<line x1="245.0" y1="434.5" x2="545.0" y2="496.5" stroke="#8b7cf6" stroke-opacity="0.18"/>
+<line x1="245.0" y1="465.5" x2="545.0" y2="403.5" stroke="#8b7cf6" stroke-opacity="0.18"/>
+<line x1="320.0" y1="419.0" x2="620.0" y2="481.0" stroke="#8b7cf6" stroke-opacity="0.18"/>
+<line x1="320.0" y1="481.0" x2="620.0" y2="419.0" stroke="#8b7cf6" stroke-opacity="0.18"/>
+<line x1="395.0" y1="403.5" x2="695.0" y2="465.5" stroke="#8b7cf6" stroke-opacity="0.18"/>
+<line x1="395.0" y1="496.5" x2="695.0" y2="434.5" stroke="#8b7cf6" stroke-opacity="0.18"/>
+<text x="240" y="456" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="16" font-weight="800" fill="#8b7cf6" text-anchor="middle" >02</text>
+<ellipse cx="470" cy="450" rx="34" ry="12" fill="url(#hole)"/>
+<rect x="461" y="452" width="18" height="118" fill="#8b7cf6" fill-opacity="0.22" filter="url(#blur)"/>
+<rect x="468" y="452" width="4" height="118" rx="2" fill="#8b7cf6"/>
+<line x1="778" y1="450" x2="852" y2="450" stroke="#8b7cf6" stroke-opacity="0.6" stroke-dasharray="3 5"/>
+<circle cx="774" cy="450" r="4" fill="#8b7cf6"/>
+<rect x="860" y="400.0" width="700" height="100" rx="14" fill="#121a2e" stroke="#25304b" stroke-width="1" />
+<rect x="860" y="400.0" width="6" height="100" rx="3" fill="#8b7cf6"/>
+<text x="884" y="432" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e7eaf3" text-anchor="start" >Project rules</text>
+<text x="884" y="454" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#8f9bb8" text-anchor="start" >Your conventions come first — conflicts are flagged, never ignored</text>
+<rect x="884" y="465" width="85.7" height="24" rx="12" fill="#0d1426" stroke="#8b7cf6" stroke-width="1" stroke-opacity="0.7"/>
+<text x="926.85" y="481" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >CLAUDE.md</text>
+<rect x="977.7" y="465" width="85.7" height="24" rx="12" fill="#0d1426" stroke="#8b7cf6" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1020.5500000000001" y="481" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >AGENTS.md</text>
+<rect x="1071.4" y="465" width="158.7" height="24" rx="12" fill="#0d1426" stroke="#8b7cf6" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1150.75" y="481" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >contradiction guard</text>
+<path d="M170,570 L470,632 L470,646 L170,584 z" fill="#6d8bff" fill-opacity="0.35"/>
+<path d="M470,632 L770,570 L770,584 L470,646 z" fill="#6d8bff" fill-opacity="0.22"/>
+<path d="M170,570 L470,508 L770,570 L470,632 z" fill="#6d8bff" fill-opacity="0.16" stroke="#6d8bff" stroke-width="1.6"/>
+<line x1="245.0" y1="554.5" x2="545.0" y2="616.5" stroke="#6d8bff" stroke-opacity="0.18"/>
+<line x1="245.0" y1="585.5" x2="545.0" y2="523.5" stroke="#6d8bff" stroke-opacity="0.18"/>
+<line x1="320.0" y1="539.0" x2="620.0" y2="601.0" stroke="#6d8bff" stroke-opacity="0.18"/>
+<line x1="320.0" y1="601.0" x2="620.0" y2="539.0" stroke="#6d8bff" stroke-opacity="0.18"/>
+<line x1="395.0" y1="523.5" x2="695.0" y2="585.5" stroke="#6d8bff" stroke-opacity="0.18"/>
+<line x1="395.0" y1="616.5" x2="695.0" y2="554.5" stroke="#6d8bff" stroke-opacity="0.18"/>
+<text x="240" y="576" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="16" font-weight="800" fill="#6d8bff" text-anchor="middle" >03</text>
+<ellipse cx="470" cy="570" rx="34" ry="12" fill="url(#hole)"/>
+<rect x="461" y="572" width="18" height="118" fill="#6d8bff" fill-opacity="0.22" filter="url(#blur)"/>
+<rect x="468" y="572" width="4" height="118" rx="2" fill="#6d8bff"/>
+<line x1="778" y1="570" x2="852" y2="570" stroke="#6d8bff" stroke-opacity="0.6" stroke-dasharray="3 5"/>
+<circle cx="774" cy="570" r="4" fill="#6d8bff"/>
+<rect x="860" y="520.0" width="700" height="100" rx="14" fill="#121a2e" stroke="#25304b" stroke-width="1" />
+<rect x="860" y="520.0" width="6" height="100" rx="3" fill="#6d8bff"/>
+<text x="884" y="552" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e7eaf3" text-anchor="start" >Memory</text>
+<text x="884" y="574" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#8f9bb8" text-anchor="start" >What the project already knows, loaded by keyword, not in bulk</text>
+<rect x="884" y="585" width="129.5" height="24" rx="12" fill="#0d1426" stroke="#6d8bff" stroke-width="1" stroke-opacity="0.7"/>
+<text x="948.75" y="601" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >docs/project.md</text>
+<rect x="1021.5" y="585" width="93.0" height="24" rx="12" fill="#0d1426" stroke="#6d8bff" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1068.0" y="601" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >wiki index</text>
+<rect x="1122.5" y="585" width="49.2" height="24" rx="12" fill="#0d1426" stroke="#6d8bff" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1147.1" y="601" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >ADRs</text>
+<rect x="1179.7" y="585" width="129.5" height="24" rx="12" fill="#0d1426" stroke="#6d8bff" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1244.45" y="601" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >session summary</text>
+<rect x="1317.2" y="585" width="93.0" height="24" rx="12" fill="#0d1426" stroke="#6d8bff" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1363.7" y="601" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >code graph</text>
+<path d="M170,690 L470,752 L470,766 L170,704 z" fill="#4cc3ff" fill-opacity="0.35"/>
+<path d="M470,752 L770,690 L770,704 L470,766 z" fill="#4cc3ff" fill-opacity="0.22"/>
+<path d="M170,690 L470,628 L770,690 L470,752 z" fill="#4cc3ff" fill-opacity="0.16" stroke="#4cc3ff" stroke-width="1.6"/>
+<line x1="245.0" y1="674.5" x2="545.0" y2="736.5" stroke="#4cc3ff" stroke-opacity="0.18"/>
+<line x1="245.0" y1="705.5" x2="545.0" y2="643.5" stroke="#4cc3ff" stroke-opacity="0.18"/>
+<line x1="320.0" y1="659.0" x2="620.0" y2="721.0" stroke="#4cc3ff" stroke-opacity="0.18"/>
+<line x1="320.0" y1="721.0" x2="620.0" y2="659.0" stroke="#4cc3ff" stroke-opacity="0.18"/>
+<line x1="395.0" y1="643.5" x2="695.0" y2="705.5" stroke="#4cc3ff" stroke-opacity="0.18"/>
+<line x1="395.0" y1="736.5" x2="695.0" y2="674.5" stroke="#4cc3ff" stroke-opacity="0.18"/>
+<text x="240" y="696" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="16" font-weight="800" fill="#4cc3ff" text-anchor="middle" >04</text>
+<ellipse cx="470" cy="690" rx="34" ry="12" fill="url(#hole)"/>
+<rect x="461" y="692" width="18" height="118" fill="#4cc3ff" fill-opacity="0.22" filter="url(#blur)"/>
+<rect x="468" y="692" width="4" height="118" rx="2" fill="#4cc3ff"/>
+<line x1="778" y1="690" x2="852" y2="690" stroke="#4cc3ff" stroke-opacity="0.6" stroke-dasharray="3 5"/>
+<circle cx="774" cy="690" r="4" fill="#4cc3ff"/>
+<rect x="860" y="640.0" width="700" height="100" rx="14" fill="#121a2e" stroke="#25304b" stroke-width="1" />
+<rect x="860" y="640.0" width="6" height="100" rx="3" fill="#4cc3ff"/>
+<text x="884" y="672" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e7eaf3" text-anchor="start" >Routing</text>
+<text x="884" y="694" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#8f9bb8" text-anchor="start" >The command and the diff decide which specialists are needed</text>
+<rect x="884" y="705" width="93.0" height="24" rx="12" fill="#0d1426" stroke="#4cc3ff" stroke-width="1" stroke-opacity="0.7"/>
+<text x="930.5" y="721" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >/devteam:*</text>
+<rect x="985.0" y="705" width="107.6" height="24" rx="12" fill="#0d1426" stroke="#4cc3ff" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1038.8" y="721" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >orchestrator</text>
+<rect x="1100.6" y="705" width="107.6" height="24" rx="12" fill="#0d1426" stroke="#4cc3ff" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1154.3999999999999" y="721" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >auto-routing</text>
+<rect x="1216.1999999999998" y="705" width="136.8" height="24" rx="12" fill="#0d1426" stroke="#4cc3ff" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1284.6" y="721" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >spawn classifier</text>
+<path d="M170,810 L470,872 L470,886 L170,824 z" fill="#2dd4bf" fill-opacity="0.35"/>
+<path d="M470,872 L770,810 L770,824 L470,886 z" fill="#2dd4bf" fill-opacity="0.22"/>
+<path d="M170,810 L470,748 L770,810 L470,872 z" fill="#2dd4bf" fill-opacity="0.16" stroke="#2dd4bf" stroke-width="1.6"/>
+<line x1="245.0" y1="794.5" x2="545.0" y2="856.5" stroke="#2dd4bf" stroke-opacity="0.18"/>
+<line x1="245.0" y1="825.5" x2="545.0" y2="763.5" stroke="#2dd4bf" stroke-opacity="0.18"/>
+<line x1="320.0" y1="779.0" x2="620.0" y2="841.0" stroke="#2dd4bf" stroke-opacity="0.18"/>
+<line x1="320.0" y1="841.0" x2="620.0" y2="779.0" stroke="#2dd4bf" stroke-opacity="0.18"/>
+<line x1="395.0" y1="763.5" x2="695.0" y2="825.5" stroke="#2dd4bf" stroke-opacity="0.18"/>
+<line x1="395.0" y1="856.5" x2="695.0" y2="794.5" stroke="#2dd4bf" stroke-opacity="0.18"/>
+<text x="240" y="816" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="16" font-weight="800" fill="#2dd4bf" text-anchor="middle" >05</text>
+<ellipse cx="470" cy="810" rx="34" ry="12" fill="url(#hole)"/>
+<rect x="461" y="812" width="18" height="118" fill="#2dd4bf" fill-opacity="0.22" filter="url(#blur)"/>
+<rect x="468" y="812" width="4" height="118" rx="2" fill="#2dd4bf"/>
+<line x1="778" y1="810" x2="852" y2="810" stroke="#2dd4bf" stroke-opacity="0.6" stroke-dasharray="3 5"/>
+<circle cx="774" cy="810" r="4" fill="#2dd4bf"/>
+<rect x="860" y="760.0" width="700" height="100" rx="14" fill="#121a2e" stroke="#25304b" stroke-width="1" />
+<rect x="860" y="760.0" width="6" height="100" rx="3" fill="#2dd4bf"/>
+<text x="884" y="792" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e7eaf3" text-anchor="start" >Plan &amp; spec</text>
+<text x="884" y="814" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#8f9bb8" text-anchor="start" >Acceptance criteria and a plan — nothing runs without your approval</text>
+<rect x="884" y="825" width="129.5" height="24" rx="12" fill="#0d1426" stroke="#2dd4bf" stroke-width="1" stroke-opacity="0.7"/>
+<text x="948.75" y="841" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >Given/When/Then</text>
+<rect x="1021.5" y="825" width="114.89999999999999" height="24" rx="12" fill="#0d1426" stroke="#2dd4bf" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1078.95" y="841" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >plan template</text>
+<rect x="1144.4" y="825" width="114.89999999999999" height="24" rx="12" fill="#0d1426" stroke="#2dd4bf" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1201.8500000000001" y="841" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >approval gate</text>
+<path d="M170,930 L470,992 L470,1006 L170,944 z" fill="#4ade80" fill-opacity="0.35"/>
+<path d="M470,992 L770,930 L770,944 L470,1006 z" fill="#4ade80" fill-opacity="0.22"/>
+<path d="M170,930 L470,868 L770,930 L470,992 z" fill="#4ade80" fill-opacity="0.16" stroke="#4ade80" stroke-width="1.6"/>
+<line x1="245.0" y1="914.5" x2="545.0" y2="976.5" stroke="#4ade80" stroke-opacity="0.18"/>
+<line x1="245.0" y1="945.5" x2="545.0" y2="883.5" stroke="#4ade80" stroke-opacity="0.18"/>
+<line x1="320.0" y1="899.0" x2="620.0" y2="961.0" stroke="#4ade80" stroke-opacity="0.18"/>
+<line x1="320.0" y1="961.0" x2="620.0" y2="899.0" stroke="#4ade80" stroke-opacity="0.18"/>
+<line x1="395.0" y1="883.5" x2="695.0" y2="945.5" stroke="#4ade80" stroke-opacity="0.18"/>
+<line x1="395.0" y1="976.5" x2="695.0" y2="914.5" stroke="#4ade80" stroke-opacity="0.18"/>
+<text x="240" y="936" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="16" font-weight="800" fill="#4ade80" text-anchor="middle" >06</text>
+<ellipse cx="470" cy="930" rx="34" ry="12" fill="url(#hole)"/>
+<rect x="461" y="932" width="18" height="118" fill="#4ade80" fill-opacity="0.22" filter="url(#blur)"/>
+<rect x="468" y="932" width="4" height="118" rx="2" fill="#4ade80"/>
+<line x1="778" y1="930" x2="852" y2="930" stroke="#4ade80" stroke-opacity="0.6" stroke-dasharray="3 5"/>
+<circle cx="774" cy="930" r="4" fill="#4ade80"/>
+<rect x="860" y="880.0" width="700" height="100" rx="14" fill="#121a2e" stroke="#25304b" stroke-width="1" />
+<rect x="860" y="880.0" width="6" height="100" rx="3" fill="#4ade80"/>
+<text x="884" y="912" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e7eaf3" text-anchor="start" >Agents &amp; skills</text>
+<text x="884" y="934" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#8f9bb8" text-anchor="start" >19 specialists, each on the right model, loading only the skills it needs</text>
+<rect x="884" y="945" width="49.2" height="24" rx="12" fill="#0d1426" stroke="#4ade80" stroke-width="1" stroke-opacity="0.7"/>
+<text x="908.6" y="961" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >opus</text>
+<rect x="941.2" y="945" width="63.8" height="24" rx="12" fill="#0d1426" stroke="#4ade80" stroke-width="1" stroke-opacity="0.7"/>
+<text x="973.1" y="961" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >sonnet</text>
+<rect x="1013.0" y="945" width="56.5" height="24" rx="12" fill="#0d1426" stroke="#4ade80" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1041.25" y="961" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >haiku</text>
+<rect x="1077.5" y="945" width="100.3" height="24" rx="12" fill="#0d1426" stroke="#4ade80" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1127.65" y="961" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >150+ skills</text>
+<path d="M170,1050 L470,1112 L470,1126 L170,1064 z" fill="#f5b54a" fill-opacity="0.35"/>
+<path d="M470,1112 L770,1050 L770,1064 L470,1126 z" fill="#f5b54a" fill-opacity="0.22"/>
+<path d="M170,1050 L470,988 L770,1050 L470,1112 z" fill="#f5b54a" fill-opacity="0.16" stroke="#f5b54a" stroke-width="1.6"/>
+<line x1="245.0" y1="1034.5" x2="545.0" y2="1096.5" stroke="#f5b54a" stroke-opacity="0.18"/>
+<line x1="245.0" y1="1065.5" x2="545.0" y2="1003.5" stroke="#f5b54a" stroke-opacity="0.18"/>
+<line x1="320.0" y1="1019.0" x2="620.0" y2="1081.0" stroke="#f5b54a" stroke-opacity="0.18"/>
+<line x1="320.0" y1="1081.0" x2="620.0" y2="1019.0" stroke="#f5b54a" stroke-opacity="0.18"/>
+<line x1="395.0" y1="1003.5" x2="695.0" y2="1065.5" stroke="#f5b54a" stroke-opacity="0.18"/>
+<line x1="395.0" y1="1096.5" x2="695.0" y2="1034.5" stroke="#f5b54a" stroke-opacity="0.18"/>
+<text x="240" y="1056" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="16" font-weight="800" fill="#f5b54a" text-anchor="middle" >07</text>
+<ellipse cx="470" cy="1050" rx="34" ry="12" fill="url(#hole)"/>
+<rect x="461" y="1052" width="18" height="118" fill="#f5b54a" fill-opacity="0.22" filter="url(#blur)"/>
+<rect x="468" y="1052" width="4" height="118" rx="2" fill="#f5b54a"/>
+<line x1="778" y1="1050" x2="852" y2="1050" stroke="#f5b54a" stroke-opacity="0.6" stroke-dasharray="3 5"/>
+<circle cx="774" cy="1050" r="4" fill="#f5b54a"/>
+<rect x="860" y="1000.0" width="700" height="100" rx="14" fill="#121a2e" stroke="#25304b" stroke-width="1" />
+<rect x="860" y="1000.0" width="6" height="100" rx="3" fill="#f5b54a"/>
+<text x="884" y="1032" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e7eaf3" text-anchor="start" >Workflow</text>
+<text x="884" y="1054" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#8f9bb8" text-anchor="start" >Isolated worktree, parallel waves, review until it is clean</text>
+<rect x="884" y="1065" width="56.5" height="24" rx="12" fill="#0d1426" stroke="#f5b54a" stroke-width="1" stroke-opacity="0.7"/>
+<text x="912.25" y="1081" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >build</text>
+<rect x="948.5" y="1065" width="49.2" height="24" rx="12" fill="#0d1426" stroke="#f5b54a" stroke-width="1" stroke-opacity="0.7"/>
+<text x="973.1" y="1081" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >test</text>
+<rect x="1005.7" y="1065" width="63.8" height="24" rx="12" fill="#0d1426" stroke="#f5b54a" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1037.6000000000001" y="1081" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >review</text>
+<rect x="1077.5" y="1065" width="34.6" height="24" rx="12" fill="#0d1426" stroke="#f5b54a" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1094.8" y="1081" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >QA</text>
+<rect x="1120.1" y="1065" width="78.4" height="24" rx="12" fill="#0d1426" stroke="#f5b54a" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1159.3" y="1081" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >fix loop</text>
+<path d="M170,1170 L470,1232 L470,1246 L170,1184 z" fill="#f472b6" fill-opacity="0.35"/>
+<path d="M470,1232 L770,1170 L770,1184 L470,1246 z" fill="#f472b6" fill-opacity="0.22"/>
+<path d="M170,1170 L470,1108 L770,1170 L470,1232 z" fill="#f472b6" fill-opacity="0.16" stroke="#f472b6" stroke-width="1.6"/>
+<line x1="245.0" y1="1154.5" x2="545.0" y2="1216.5" stroke="#f472b6" stroke-opacity="0.18"/>
+<line x1="245.0" y1="1185.5" x2="545.0" y2="1123.5" stroke="#f472b6" stroke-opacity="0.18"/>
+<line x1="320.0" y1="1139.0" x2="620.0" y2="1201.0" stroke="#f472b6" stroke-opacity="0.18"/>
+<line x1="320.0" y1="1201.0" x2="620.0" y2="1139.0" stroke="#f472b6" stroke-opacity="0.18"/>
+<line x1="395.0" y1="1123.5" x2="695.0" y2="1185.5" stroke="#f472b6" stroke-opacity="0.18"/>
+<line x1="395.0" y1="1216.5" x2="695.0" y2="1154.5" stroke="#f472b6" stroke-opacity="0.18"/>
+<text x="240" y="1176" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="16" font-weight="800" fill="#f472b6" text-anchor="middle" >08</text>
+<ellipse cx="470" cy="1170" rx="34" ry="12" fill="url(#hole)"/>
+<rect x="461" y="1172" width="18" height="148" fill="#f472b6" fill-opacity="0.22" filter="url(#blur)"/>
+<rect x="468" y="1172" width="4" height="148" rx="2" fill="#f472b6"/>
+<line x1="778" y1="1170" x2="852" y2="1170" stroke="#f472b6" stroke-opacity="0.6" stroke-dasharray="3 5"/>
+<circle cx="774" cy="1170" r="4" fill="#f472b6"/>
+<rect x="860" y="1120.0" width="700" height="100" rx="14" fill="#121a2e" stroke="#25304b" stroke-width="1" />
+<rect x="860" y="1120.0" width="6" height="100" rx="3" fill="#f472b6"/>
+<text x="884" y="1152" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e7eaf3" text-anchor="start" >Guardrails</text>
+<text x="884" y="1174" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="400" fill="#8f9bb8" text-anchor="start" >Stop hooks check the work before the session ends; devteam check guards the PR</text>
+<rect x="884" y="1185" width="129.5" height="24" rx="12" fill="#0d1426" stroke="#f472b6" stroke-width="1" stroke-opacity="0.7"/>
+<text x="948.75" y="1201" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >session summary</text>
+<rect x="1021.5" y="1185" width="56.5" height="24" rx="12" fill="#0d1426" stroke="#f472b6" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1049.75" y="1201" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >lints</text>
+<rect x="1086.0" y="1185" width="71.1" height="24" rx="12" fill="#0d1426" stroke="#f472b6" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1121.55" y="1201" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >ADR gap</text>
+<rect x="1165.1" y="1185" width="114.89999999999999" height="24" rx="12" fill="#0d1426" stroke="#f472b6" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1222.55" y="1201" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >devteam check</text>
+<rect x="1288.0" y="1185" width="114.89999999999999" height="24" rx="12" fill="#0d1426" stroke="#f472b6" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1345.45" y="1201" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="11.5" font-weight="500" fill="#e7eaf3" text-anchor="middle" >scoped review</text>
+<rect x="160.0" y="1320" width="620" height="110" rx="20" fill="#0f2a24" stroke="#4ade80" stroke-width="2"/>
+<text x="470" y="1352" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12" font-weight="800" fill="#4ade80" text-anchor="middle" letter-spacing="3">RESULT</text>
+<rect x="184.0" y="1370" width="137.0" height="40" rx="10" fill="#123a30" stroke="#4ade80" stroke-width="1" stroke-opacity="0.5"/>
+<text x="252.5" y="1395" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#c9f7d9" text-anchor="middle" >✓ Code + tests</text>
+<rect x="329.0" y="1370" width="137.0" height="40" rx="10" fill="#123a30" stroke="#4ade80" stroke-width="1" stroke-opacity="0.5"/>
+<text x="397.5" y="1395" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#c9f7d9" text-anchor="middle" >✓ Commit &amp; PR</text>
+<rect x="474.0" y="1370" width="137.0" height="40" rx="10" fill="#123a30" stroke="#4ade80" stroke-width="1" stroke-opacity="0.5"/>
+<text x="542.5" y="1395" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#c9f7d9" text-anchor="middle" >✓ CI green</text>
+<rect x="619.0" y="1370" width="137.0" height="40" rx="10" fill="#123a30" stroke="#4ade80" stroke-width="1" stroke-opacity="0.5"/>
+<text x="687.5" y="1395" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#c9f7d9" text-anchor="middle" >✓ Docs in sync</text>
+<path d="M160.0,1375 H70 V570 H160" fill="none" stroke="#4ade80" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#ah)"/>
+<g transform="translate(60,972.5) rotate(-90)">
+<rect x="-150" y="-14" width="300" height="28" rx="14" fill="#0b1020" stroke="#4ade80" stroke-width="1" />
+<text x="0" y="5" font-family="'JetBrains Mono', Menlo, Consolas, monospace" font-size="12.5" font-weight="700" fill="#86efac" text-anchor="middle" >/devteam:learn — memory grows</text>
+</g>
+<text x="1540" y="1446" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="500" fill="#8f9bb8" text-anchor="end" >Same layers on Claude Code · opencode · OpenAI Codex CLI</text>
+</svg>
