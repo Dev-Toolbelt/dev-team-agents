@@ -161,6 +161,68 @@ describe('the declaration is the app’s own constant', () => {
     await writeDeclarationFile(dir);
     expect(await readdir(dir)).toEqual(['client-schemas.json']);
   });
+
+  it('leaves an existing private file with the same declaration alone instead of renaming over it', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-'));
+    onTestFinished(async () => {
+      await rm(dir, { recursive: true, force: true });
+    });
+    await writeDeclarationFile(dir);
+    // Windows refuses a rename onto a file another process holds open (EPERM); a
+    // declaration that is already correct must not need one.
+    const rename = (): Promise<void> =>
+      Promise.reject(Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' }));
+
+    const path = await writeDeclarationFile(dir, { platform: 'win32', rename, sleep: async () => {} });
+
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual(APP_STORE_SCHEMAS);
+    expect(await readdir(dir)).toEqual(['client-schemas.json']);
+  });
+
+  it.skipIf(skipOnWindows)('replaces a symlink even when its target already holds the declaration', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-'));
+    const targetDir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-target-'));
+    onTestFinished(async () => {
+      await rm(dir, { recursive: true, force: true });
+      await rm(targetDir, { recursive: true, force: true });
+    });
+    const content = `${JSON.stringify(APP_STORE_SCHEMAS, null, 2)}\n`;
+    const target = join(targetDir, 'elsewhere.json');
+    await writeFile(target, content, { mode: 0o600 });
+    const declarationPath = join(dir, 'client-schemas.json');
+    await symlink(target, declarationPath);
+
+    await writeDeclarationFile(dir);
+
+    expect((await lstat(declarationPath)).isSymbolicLink()).toBe(false);
+    expect(await readFile(declarationPath, 'utf8')).toBe(content);
+  });
+
+  it.skipIf(skipOnWindows)('replaces a world-writable file even when it already holds the declaration', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-'));
+    onTestFinished(async () => {
+      await rm(dir, { recursive: true, force: true });
+    });
+    const declarationPath = join(dir, 'client-schemas.json');
+    await writeFile(declarationPath, `${JSON.stringify(APP_STORE_SCHEMAS, null, 2)}\n`);
+    await chmod(declarationPath, 0o666);
+
+    await writeDeclarationFile(dir);
+
+    expect((await stat(declarationPath)).mode & 0o777).toBe(0o600);
+  });
+
+  it('replaces an existing file whose declaration is stale', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'devteam-app-decl-'));
+    onTestFinished(async () => {
+      await rm(dir, { recursive: true, force: true });
+    });
+    await writeFile(join(dir, 'client-schemas.json'), '{"project": 0}\n', { mode: 0o600 });
+
+    const path = await writeDeclarationFile(dir);
+
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual(APP_STORE_SCHEMAS);
+  });
 });
 
 describe.skipIf(skipOnWindowsWithoutLauncher)('compatible', () => {
