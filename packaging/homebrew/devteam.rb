@@ -47,30 +47,35 @@ class Devteam < Formula
   # python@3.12 when the file was written (2026-09), while homebrew-core's
   # python3 had moved to python@3.14 by the first real `brew install` of it.
   #
-  # This line is now the ONLY place the python version appears — `install`
-  # reads the version back off this dependency instead of repeating it, so the
-  # python Homebrew installs and the interpreter the shebang invokes cannot
-  # disagree. Nor is the drift against homebrew-core something a human has to
-  # remember to check: packaging/verify-formula-locally.sh parses this line,
-  # resolves `brew info python3`, and prints the two side by side on every run.
-  depends_on "python@3.14"
-
-  # The helper tools `devteam tools install` provisions everywhere else (ADR-0060). A formula
-  # cannot download into ~/.local/bin from its sandbox, so Homebrew installs them as
-  # dependencies instead; `tools install` then finds them on PATH and downloads nothing.
-  # graphify has no formula — the first `devteam bind` installs it into its own venv.
+  # The python@ line below is the ONLY place the python version appears —
+  # `install` reads the version back off that dependency instead of repeating
+  # it, so the python Homebrew installs and the interpreter the shebang invokes
+  # cannot disagree. Nor is the drift against homebrew-core something a human
+  # has to remember to check: packaging/verify-formula-locally.sh parses that
+  # line, resolves `brew info python3`, and prints the two side by side on
+  # every run.
+  #
+  # The others are the helper tools `devteam tools install` provisions everywhere else
+  # (ADR-0060). A formula cannot download into ~/.local/bin from its sandbox, so Homebrew
+  # installs them as dependencies instead; `tools install` then finds them on PATH and
+  # downloads nothing. graphify has no formula — the first `devteam bind` installs it into
+  # its own venv.
+  #
+  # Keep the list alphabetical: `brew audit` (FormulaAudit/DependencyOrder) fails the
+  # release's formula verification otherwise, and that skips the tap publish.
   depends_on "ast-grep"
   depends_on "fd"
   depends_on "git-delta"
   depends_on "gitleaks"
   depends_on "jq"
+  depends_on "python@3.14"
   depends_on "ripgrep"
   depends_on "semgrep"
   depends_on "tokei"
 
   # The CLI enforces python 3.9+ itself (scripts/cli/devteam checks
   # sys.version_info before importing anything) and imports only the stdlib, so
-  # the runtime floor here is the dependency above, not a version check this
+  # the runtime floor here is the `python@` dependency above, not a version check this
   # formula duplicates.
 
   def install
