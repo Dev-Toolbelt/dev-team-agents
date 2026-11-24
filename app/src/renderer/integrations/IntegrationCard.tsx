@@ -271,7 +271,14 @@ export function IntegrationCard({
     >
       <div className="space-y-2 border-t px-5 py-4">
         <h4 className="text-sm font-medium">{isAccount ? 'Connection' : 'Account'}</h4>
-        {accountReadout ? <StatusFacts summary={view.status.summary} facts={shownFacts} inline={!isAccount} /> : null}
+        {accountReadout ? (
+          <StatusFacts
+            summary={view.status.summary}
+            facts={shownFacts}
+            inline={!isAccount}
+            summaryTone={!isAccount && view.status.state === 'connected' && !staleToken ? 'positive' : null}
+          />
+        ) : null}
         {isAccount && view.status.checked_at !== null ? (
           <p className="text-xs text-muted-foreground">
             Last checked <CheckedAt iso={view.status.checked_at} />.

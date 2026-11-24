@@ -19,15 +19,26 @@ export function StatusFacts({
   summary,
   facts,
   inline = false,
+  summaryTone = null,
 }: {
   summary: string;
   facts: readonly { readonly label: string; readonly value: string; readonly tone: Tone | null }[];
   inline?: boolean;
+  /** Draws the inline summary as a badge of this tone; `null` keeps it plain text. */
+  summaryTone?: Tone | null;
 }) {
   if (inline) {
     return (
-      <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2 text-sm" data-layout="inline">
-        {summary !== '' ? <p>{summary}</p> : null}
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm" data-layout="inline">
+        {summary !== '' ? (
+          summaryTone !== null ? (
+            <Badge variant="outline" className={FACT_TONE_CLASS[summaryTone]}>
+              {summary}
+            </Badge>
+          ) : (
+            <p>{summary}</p>
+          )
+        ) : null}
         {facts.length > 0 ? (
           <dl className="contents">
             {facts.map((fact) => (
