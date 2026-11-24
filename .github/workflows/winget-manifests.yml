@@ -89,10 +89,14 @@ jobs:
           name: ${{ needs.render.outputs.artifact }}
           path: rendered
 
-      # Server images do not always ship winget. Bootstrap it with Microsoft's own module
-      # when it is missing, and fail with a plain message if that does not work.
+      # Server images do not always ship winget, and the one they ship can be older than the
+      # manifests' ManifestVersion: a v1.11 client does not know the 1.12.0 schema header and
+      # `winget validate` exits non-zero on that warning alone. Bootstrap or upgrade it with
+      # Microsoft's own module, and fail with a plain message if that does not work.
       - name: Make sure winget is available
         shell: pwsh
+        env:
+          MANIFEST_DIR: ${{ needs.render.outputs.dir }}
         run: |
           $ErrorActionPreference = 'Stop'
           function Refresh-Path {
@@ -100,16 +104,47 @@ jobs:
               [Environment]::GetEnvironmentVariable('Path', 'User') + ';' +
               (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps')
           }
+          # Pinned: PSGallery never republishes a version, so this fixes the code that runs.
+          # Bump it deliberately, to a version published at least two weeks earlier.
+          $WingetClient = [version]'1.29.380'
+          function Install-WingetClient {
+            $have = Get-Module -ListAvailable -Name Microsoft.WinGet.Client | Where-Object Version -eq $WingetClient
+            if (-not $have) {
+              Install-PackageProvider -Name NuGet -Force | Out-Null
+              Install-Module -Name Microsoft.WinGet.Client -RequiredVersion $WingetClient -Force -Repository PSGallery | Out-Null
+            }
+            Import-Module -Name Microsoft.WinGet.Client -RequiredVersion $WingetClient -Force
+          }
           Refresh-Path
           if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-            Write-Host 'winget not found; bootstrapping with Microsoft.WinGet.Client'
-            Install-PackageProvider -Name NuGet -Force | Out-Null
-            Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery | Out-Null
+            Write-Host "winget not found; bootstrapping with Microsoft.WinGet.Client $WingetClient"
+            Install-WingetClient
             Repair-WinGetPackageManager -AllUsers
             Refresh-Path
           }
           if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
             throw 'winget is not available on this runner and could not be bootstrapped; cannot run winget validate.'
+          }
+
+          function Get-WingetVersion {
+            $out = winget --version | Select-Object -First 1
+            [version](([string]$out).Trim().TrimStart('v') -replace '-.*$', '')
+          }
+
+          $dir = Join-Path 'rendered' ($env:MANIFEST_DIR -replace '^rendered/', '')
+          $line = Select-String -Path (Join-Path $dir '*.yaml') -Pattern '^ManifestVersion:\s*(\d+\.\d+\.\d+)\s*$' | Select-Object -First 1
+          if ($null -eq $line) { throw "no ManifestVersion line in the manifests under $dir" }
+          $required = [version]$line.Matches[0].Groups[1].Value
+          $current = Get-WingetVersion
+          if ([version]::new($current.Major, $current.Minor) -lt [version]::new($required.Major, $required.Minor)) {
+            Write-Host "winget $current is older than ManifestVersion $required; upgrading with Microsoft.WinGet.Client $WingetClient"
+            Install-WingetClient
+            Repair-WinGetPackageManager -AllUsers -Latest -Force
+            Refresh-Path
+            $current = Get-WingetVersion
+            if ([version]::new($current.Major, $current.Minor) -lt [version]::new($required.Major, $required.Minor)) {
+              throw "winget is $current after the upgrade, still older than ManifestVersion $required; cannot run winget validate."
+            }
           }
           winget --version
 
