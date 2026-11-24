@@ -110,7 +110,8 @@ jobs:
           function Install-WingetClient {
             $have = Get-Module -ListAvailable -Name Microsoft.WinGet.Client | Where-Object Version -eq $WingetClient
             if (-not $have) {
-              Install-PackageProvider -Name NuGet -Force | Out-Null
+              # PowerShell 7 installs from PSGallery without the NuGet package provider;
+              # Install-PackageProvider finds no NuGet provider on the runner and fails.
               Install-Module -Name Microsoft.WinGet.Client -RequiredVersion $WingetClient -Force -Repository PSGallery | Out-Null
             }
             Import-Module -Name Microsoft.WinGet.Client -RequiredVersion $WingetClient -Force
