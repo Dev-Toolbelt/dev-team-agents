@@ -16,10 +16,10 @@
  * must never be the thing that silently drops a hand-edited CLI path.
  */
 
-import { randomBytes } from 'node:crypto';
-import { readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { replaceFile } from '../cli/replaceFile.js';
 import { BOARD_SETTING_BOUNDS, type BoardSettings } from '../shared/api.js';
 import { isEmptyFolders, normalizeProjectFolders, NO_FOLDERS, type ProjectFolders } from '../shared/projectFolders.js';
 
@@ -173,9 +173,9 @@ export async function readSettings(userDataDir: string): Promise<AppSettings> {
  * directory's basename, and writing `""` would defeat that by giving every reader a name
  * to render instead of letting them fall back.
  *
- * Written the same way `cli/declaration.ts`'s `writeDeclarationFile` is: to a temp file in
- * the same directory, then renamed into place, so a pre-planted symlink at `path` is
- * replaced rather than written through.
+ * Written through `cli/replaceFile.ts`, as `writeDeclarationFile` is: a temp file in the
+ * same directory renamed into place, so a pre-planted symlink at `path` is replaced
+ * rather than written through.
  */
 export async function writeProjectName(userDataDir: string, projectId: string, name: string): Promise<void> {
   const trimmed = name.trim();
@@ -273,16 +273,5 @@ async function writeSettingsNow(
   if (!isEmptyFolders(projectFolders)) payload['projectFolders'] = projectFolders;
   if (patch.onboardingCompleted ?? current.onboardingCompleted) payload['onboardingCompleted'] = true;
 
-  const tempPath = join(userDataDir, `.${SETTINGS_FILE_NAME}.${randomBytes(8).toString('hex')}.tmp`);
-  await writeFile(tempPath, `${JSON.stringify(payload, null, 2)}\n`, {
-    encoding: 'utf8',
-    mode: 0o600,
-    flag: 'wx',
-  });
-  try {
-    await rename(tempPath, path);
-  } catch (error) {
-    await rm(tempPath, { force: true });
-    throw error;
-  }
+  await replaceFile(path, `${JSON.stringify(payload, null, 2)}\n`);
 }

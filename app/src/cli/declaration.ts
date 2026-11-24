@@ -14,10 +14,11 @@
  * to be present here.
  */
 
-import { randomBytes } from 'node:crypto';
-import { rm, rename, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { replaceFile, type ReplaceFileOptions } from './replaceFile.js';
 import { invokeDevteam, type InvokeOptions } from './invoke.js';
 import { ranAndAnswered, type CliResult } from './contract.js';
 import type { HandshakeView, UnsupportedShape } from '../shared/api.js';
@@ -44,29 +45,48 @@ export const DECLARATION_FILE_NAME = 'client-schemas.json';
  * because an inherited variable is the thing most likely to be stale. A flag on each
  * invocation says what *that* call believes.
  *
- * Written to a temp name in the same directory and then renamed into place, rather than
- * `writeFile(path, …)` directly. A direct write follows a symlink at `path` — a
- * pre-planted one would have been written through and truncated — and `{ mode: 0o600 }`
- * is a no-op when the file already exists, so a pre-planted world-writable file would
- * have kept its permissions. The temp file is created fresh (so its mode is honoured)
- * and `rename()` replaces whatever is at `path` — symlink or not — as a single
- * directory-entry swap rather than writing through it.
+ * Written through `replaceFile` (a fresh temp file renamed into place), never through
+ * `writeFile(path, …)`, so a pre-planted symlink or world-writable file is replaced
+ * rather than written through. The content is this build's constant, so a file that
+ * already holds it — a regular file, private to this user — is left as it is: on Windows
+ * the rename is what fails while another process has the file open.
  */
-export async function writeDeclarationFile(directory: string): Promise<string> {
+export async function writeDeclarationFile(directory: string, options: ReplaceFileOptions = {}): Promise<string> {
   const path = join(directory, DECLARATION_FILE_NAME);
-  const tempPath = join(directory, `.${DECLARATION_FILE_NAME}.${randomBytes(8).toString('hex')}.tmp`);
-  await writeFile(tempPath, `${JSON.stringify(APP_STORE_SCHEMAS, null, 2)}\n`, {
-    encoding: 'utf8',
-    mode: 0o600,
-    flag: 'wx', // exclusive create: refuse to follow anything already at the temp name too.
-  });
-  try {
-    await rename(tempPath, path);
-  } catch (error) {
-    await rm(tempPath, { force: true });
-    throw error;
-  }
+  const content = `${JSON.stringify(APP_STORE_SCHEMAS, null, 2)}\n`;
+  if (await alreadyDeclared(path, content, options.platform ?? process.platform)) return path;
+  await replaceFile(path, content, options);
   return path;
+}
+
+/**
+ * Whether `path` is a regular, private, singly linked file whose content is exactly
+ * `content`. Checked on the opened handle, not by name, so a swap between check and read
+ * cannot point the read at a symlink, a FIFO or an unbounded file.
+ */
+async function alreadyDeclared(path: string, content: string, platform: NodeJS.Platform): Promise<boolean> {
+  const expected = Buffer.from(content, 'utf8');
+  let handle: FileHandle | undefined;
+  try {
+    // O_NOFOLLOW and O_NONBLOCK are undefined on Windows; there `isFile()` below still
+    // refuses anything but a regular file.
+    handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+    const info = await handle.stat();
+    if (!info.isFile() || info.nlink > 1 || info.size !== expected.length) return false;
+    // Windows has no POSIX permission bits to check; elsewhere a file others can write,
+    // or one another user owns, is replaced so it ends up 0o600 and ours.
+    if (platform !== 'win32') {
+      if ((info.mode & 0o077) !== 0) return false;
+      if (typeof process.getuid === 'function' && info.uid !== process.getuid()) return false;
+    }
+    const buffer = Buffer.alloc(expected.length + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    return bytesRead === expected.length && buffer.subarray(0, bytesRead).equals(expected);
+  } catch {
+    return false;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
 }
 
 // `UnsupportedShape` and the handshake view itself are declared once, in `shared/api.ts`
