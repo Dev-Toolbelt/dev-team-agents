@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **The installed CLI ships every data file it reads.** The Windows installer, the Homebrew formula and `scripts/install-cli.sh` copied an explicit list of `scripts/lib` files that left out `stack-signals.json`, `first-task.json`, `commands.json`, `command-map.json`, `global-skill-roots.json`, `credentials-local-template.json` and `credentials-local-legacy-blanks.json`, so `devteam detect` and `devteam start` failed with a `FileNotFoundError` (exit 3) in an installed CLI. All three now ship them, and `tests/test_cli_lib_packaging.py` derives the list from the code so a new file the package reads fails the suite until every installer ships it.
+- **The desktop app writes its schema declaration on Windows while the file is open elsewhere.** Replacing `client-schemas.json` (and the app's `settings.json`) by rename failed with `EPERM` when an antivirus scan or a running `devteam` call held the file, and the app then refused every command that writes. The rename is now retried for about a second on `EPERM`/`EACCES`/`EBUSY`, and a declaration file that already holds this build's content is left in place.
+
 ## [2.50.1] - 2026-11-24
 
 ### Fixed
