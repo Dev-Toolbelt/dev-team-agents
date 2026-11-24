@@ -109,6 +109,15 @@ class Devteam < Formula
     (libexec/"scripts/lib").install "scripts/lib/docs_root.py"
     (libexec/"scripts/lib").install "scripts/lib/index_lint.py"
     (libexec/"scripts/lib").install "scripts/lib/doc-layouts.json"
+    # Data files the package reads as its own siblings (detect, start, the command
+    # catalog, skills install, cred local).
+    (libexec/"scripts/lib").install "scripts/lib/command-map.json"
+    (libexec/"scripts/lib").install "scripts/lib/commands.json"
+    (libexec/"scripts/lib").install "scripts/lib/credentials-local-legacy-blanks.json"
+    (libexec/"scripts/lib").install "scripts/lib/credentials-local-template.json"
+    (libexec/"scripts/lib").install "scripts/lib/first-task.json"
+    (libexec/"scripts/lib").install "scripts/lib/global-skill-roots.json"
+    (libexec/"scripts/lib").install "scripts/lib/stack-signals.json"
 
     inreplace libexec/"scripts/cli/devteam",
               "#!/usr/bin/env python3",

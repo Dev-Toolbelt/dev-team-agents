@@ -97,6 +97,12 @@ main() {
     # its layout map, and the index lint's ADR filename rule).
     cp "$source/scripts/lib/docs_root.py" "$source/scripts/lib/index_lint.py" \
         "$source/scripts/lib/doc-layouts.json" "$stage/lib/"
+    # Data files the package reads as its own siblings (detect, start, the command catalog,
+    # skills install, cred local). Keep in step with CLI_LIB_FILES in
+    # packaging/windows-cli/build.py and the Homebrew formula.
+    for name in command-map.json commands.json credentials-local-legacy-blanks.json credentials-local-template.json first-task.json global-skill-roots.json stack-signals.json; do
+        cp "$source/scripts/lib/$name" "$stage/lib/$name"
+    done
     find "$stage" -name '__pycache__' -type d -prune -exec rm -rf {} +
     rm -rf "$cli_home/scripts"
     mv "$stage" "$cli_home/scripts"

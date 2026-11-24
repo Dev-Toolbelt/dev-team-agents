@@ -37,8 +37,21 @@ from devteam.versions import CORE_TREES, OPTIONAL_TREES, version_from_tree  # no
 #: Root files `store install` copies beside the trees (versions.install_from_tree).
 PAYLOAD_FILES = ("CHANGELOG.md", "CLAUDE.md")
 #: Files under scripts/lib the CLI loads as siblings of its package — the same list the
-#: Homebrew formula installs there: the account identity, and what `devteam check` imports.
-CLI_LIB_FILES = ("auth-config.json", "docs_root.py", "index_lint.py", "doc-layouts.json")
+#: Homebrew formula and install-cli.sh install there: the account identity, what
+#: `devteam check` imports, and the data files the package reads beside itself.
+CLI_LIB_FILES = (
+    "auth-config.json",
+    "docs_root.py",
+    "index_lint.py",
+    "doc-layouts.json",
+    "command-map.json",
+    "commands.json",
+    "credentials-local-legacy-blanks.json",
+    "credentials-local-template.json",
+    "first-task.json",
+    "global-skill-roots.json",
+    "stack-signals.json",
+)
 
 
 def sha256(data):
