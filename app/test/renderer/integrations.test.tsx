@@ -268,10 +268,70 @@ describe('project mode', () => {
   it('asks for the project list, shows only project fields and leaves the account read-only', async () => {
     const { bridge } = await openProject();
     expect(bridge.integrationList).toHaveBeenCalledWith('proj-1');
-    expect(screen.getByLabelText('Repository')).toHaveValue('acme/app');
+    expect(screen.getByText('acme/app')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/API URL/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Personal access token')).not.toBeInTheDocument();
-    expect(screen.getByText('Signed in as octocat')).toBeInTheDocument();
+    expect(screen.getByText('Signed in as octocat', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+  });
+
+  it('keeps the sign-in summary plain text when the last test did not pass', async () => {
+    await openProject({}, view({ status: { state: 'unreachable', checked_at: null, summary: 'No route', facts: [] } }));
+    expect(screen.getByText('No route').tagName).toBe('P');
+  });
+
+  it('names the chosen option instead of its id, and picks from a compact list only', async () => {
+    const zones = vi.fn(() => Promise.resolve(ok({ items: [{ value: 'z1', label: 'example.com' }, { value: 'z2', label: 'other.dev' }], truncated: false })));
+    const { user } = await openProject({ integrationResources: zones }, view({ project: { repository: 'z1' } }));
+    expect(await screen.findByText('example.com')).toBeInTheDocument();
+    expect(screen.queryByText('z1')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Load options' }));
+    const select = screen.getByRole('combobox', { name: 'Repository' });
+    expect(select).toHaveValue('z1');
+    expect(select).toHaveClass('sm:w-80');
+    await user.selectOptions(select, 'z2');
+    expect(screen.getByText('other.dev', { selector: 'p' })).toBeInTheDocument();
+    expect(zones).toHaveBeenCalledTimes(1);
+  });
+
+  it('labels the chosen value by its field before the list is open', async () => {
+    await openProject();
+    expect(screen.getByRole('group', { name: 'Repository' })).toHaveTextContent('acme/app');
+  });
+
+  it('offers Load options again after a failed load, and the retry fills the list', async () => {
+    const resources = vi
+      .fn()
+      .mockResolvedValueOnce(fail('no network'))
+      .mockResolvedValueOnce(fail('no network'))
+      .mockResolvedValue(ok({ items: [{ value: 'acme/app', label: 'acme/app' }], truncated: false }));
+    const { user } = await openProject({ integrationResources: resources });
+    await waitFor(() => expect(resources).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole('button', { name: 'Load options' }));
+    expect(await screen.findByText('no network')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Load options' }));
+    expect(await screen.findByRole('combobox', { name: 'Repository' })).toHaveValue('acme/app');
+  });
+
+  it('keeps the sign-in summary plain text while the token needs reconnecting', async () => {
+    const stale = view({ auth: { kind: 'token', label: 'T', help: null, has_token: true, stale: true, backend: 'keychain' } });
+    await openProject({}, stale);
+    expect(screen.getByText('Signed in as octocat').tagName).toBe('P');
+  });
+
+  it('says the name needs a connected account instead of loading options', async () => {
+    const resources = vi.fn(() => Promise.resolve(ok({ items: [], truncated: false })));
+    const stale = view({ connected: false, auth: { kind: 'token', label: 'T', help: null, has_token: true, stale: true, backend: 'keychain' } });
+    await openProject({ integrationResources: resources }, stale);
+    expect(screen.getByText(/connect the account to see its name/)).toBeInTheDocument();
+    expect(resources).not.toHaveBeenCalled();
+  });
+
+  it('shows the saved value itself when the options cannot name it', async () => {
+    await openProject({ integrationResources: vi.fn(() => Promise.resolve(fail('no network'))) });
+    expect(screen.getByText('acme/app')).toBeInTheDocument();
+    expect(screen.queryByText('no network')).not.toBeInTheDocument();
   });
 
   it('identifies the GitHub account on one line — signed in and name — and nothing else', async () => {
@@ -306,22 +366,23 @@ describe('project mode', () => {
     await openProject();
     expect(screen.queryByRole('heading', { name: 'Project settings' })).not.toBeInTheDocument();
     expect(screen.queryByText(/committed to the repository and apply to everyone/)).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Repository').closest('[data-layout]')).toHaveAttribute('data-layout', 'stacked');
+    expect(screen.getByText('acme/app').closest('[data-layout]')).toHaveAttribute('data-layout', 'stacked');
   });
 
-  it('saves a project field through config set, and unsets it when emptied', async () => {
+  it('saves a project field through config set, and unsets it when cleared', async () => {
     const set = vi.fn(() => Promise.resolve(ok({ integration: view({ project: { repository: 'acme/other' } }), key: 'repository' })));
     const unset = vi.fn(() => Promise.resolve(ok({ integration: view({ project: {} }), key: 'repository', removed: true })));
-    const { user } = await openProject({ integrationConfigSet: set, integrationConfigUnset: unset });
-    const field = screen.getByLabelText('Repository');
-    await user.clear(field);
-    await user.type(field, 'acme/other');
+    const resources = vi.fn(() => Promise.resolve(ok({ items: [{ value: 'acme/app', label: 'acme/app' }, { value: 'acme/other', label: 'acme/other' }], truncated: false })));
+    const { user } = await openProject({ integrationConfigSet: set, integrationConfigUnset: unset, integrationResources: resources });
+    await user.click(screen.getByRole('button', { name: 'Load options' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Repository' }), 'acme/other');
     expect(set).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(set).toHaveBeenCalledWith('github', 'repository', 'acme/other', 'proj-1');
-    await waitFor(() => expect(screen.getByLabelText('Repository')).toHaveValue('acme/other'));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Repository' })).toHaveValue('acme/other'));
 
-    await user.clear(screen.getByLabelText('Repository'));
+    await user.click(screen.getByRole('button', { name: 'Clear Repository' }));
+    expect(screen.getByText('Nothing selected')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(unset).toHaveBeenCalledWith('github', 'repository', 'proj-1');
   });
@@ -343,8 +404,8 @@ describe('project mode', () => {
     await user.click(screen.getByRole('button', { name: 'Load options' }));
     expect(resources).toHaveBeenCalledWith('github', 'repos', 'proj-1');
     expect(await screen.findByText(/Only the first options are listed/)).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('Repository options'), 'acme/web');
-    expect(screen.getByLabelText('Repository')).toHaveValue('acme/web');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Repository' }), 'acme/web');
+    expect(screen.getByRole('combobox', { name: 'Repository' })).toHaveValue('acme/web');
     expect(within(card()).getAllByText('1 unsaved change').length).toBeGreaterThan(0);
   });
 
@@ -356,8 +417,9 @@ describe('project mode', () => {
 
   it('offers a detected value as a one-click suggestion', async () => {
     const { user } = await openProject({}, view({ project: {}, detected: { repository: 'acme/detected' } }));
+    expect(screen.getByText('Nothing selected')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Use detected: acme/detected' }));
-    expect(screen.getByLabelText('Repository')).toHaveValue('acme/detected');
+    expect(screen.getByText('acme/detected')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Use detected/ })).not.toBeInTheDocument();
   });
 
@@ -379,7 +441,7 @@ describe('project mode', () => {
 
   it('disables Save when config set and config unset are withheld', async () => {
     const { user } = await openProject({}, view(), withheldEnv('integration config set'));
-    await user.type(screen.getByLabelText('Repository'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Clear Repository' }));
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
   });
 });
@@ -397,7 +459,7 @@ describe('the project screen', () => {
     await user.click(screen.getByRole('tab', { name: /Integrations/ }));
     await screen.findByRole('heading', { name: 'GitHub' });
     await expand();
-    await user.type(screen.getByLabelText('Repository'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Clear Repository' }));
     await user.click(screen.getByRole('button', { name: 'Back to Projects' }));
     expect(within(await screen.findByRole('dialog')).getByText(/1 change to project-1 will be lost/)).toBeInTheDocument();
     expect(onBack).not.toHaveBeenCalled();
