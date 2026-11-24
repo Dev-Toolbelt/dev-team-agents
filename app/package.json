@@ -1,7 +1,7 @@
 {
   "name": "dev-team-agents-app",
   "productName": "Dev Team Agents",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Desktop client for the dev-team-agents multi-agent development harness (ADR-0011)",
   "license": "MIT",
