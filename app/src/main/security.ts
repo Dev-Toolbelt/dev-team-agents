@@ -24,8 +24,13 @@
  *     passes it through `validateTrackerLink` (below) before `shell.openExternal` — an exact
  *     `https:` URL on a host the CLI named for that link kind, with one allow-listed path
  *     shape. Anything else is refused. See the ADR on allow-listed tracker links.
- *   - every permission request (notifications, media, geolocation…) is denied. This app
- *     needs none, so the handler is a flat `false` rather than a list to maintain.
+ *   - every permission request and check (notifications, media, geolocation, clipboard
+ *     read…) is denied, with one exception: `clipboard-sanitized-write`, granted only to the
+ *     renderer's own main frame, for the onboarding "Copy command" button. It carries no
+ *     user-gesture condition (Electron's permission details expose none), so code running in
+ *     the renderer could overwrite the clipboard; that needs code execution the CSP and the
+ *     no-remote-content filter already block, and such code would hold the IPC surface too.
+ *     Reading the clipboard stays denied, so a secret copied under ADR-0046 is never readable.
  */
 
 import { isAbsolute, relative, resolve, sep } from 'node:path';
@@ -253,7 +258,7 @@ export function trustedHandler<Args extends unknown[], R>(
   };
 }
 
-export function hardenSession(session: Session, target: Pick<RendererTarget, 'bundleDir' | 'devServerOrigin'>): void {
+export function hardenSession(session: Session, target: Pick<RendererTarget, 'indexUrl' | 'bundleDir' | 'devServerOrigin'>): void {
   const { devServerOrigin } = target;
   const csp = devServerOrigin === null ? PRODUCTION_CSP : developmentCsp(devServerOrigin);
 
@@ -273,8 +278,34 @@ export function hardenSession(session: Session, target: Pick<RendererTarget, 'bu
     callback({ cancel: !isRequestAllowed(details.url, target) });
   });
 
-  session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-  session.setPermissionCheckHandler(() => false);
+  session.setPermissionRequestHandler((_contents, permission, callback, details) => {
+    callback(isPermissionGranted(permission, details, target));
+  });
+  session.setPermissionCheckHandler((_contents, permission, _origin, details) => isPermissionGranted(permission, details, target));
+}
+
+/** The one web permission the renderer is given: writing text to the clipboard. Reading it stays denied. */
+const GRANTED_PERMISSIONS: ReadonlySet<string> = new Set(['clipboard-sanitized-write']);
+
+/** The slice of a permission request or check the grant reads; `requestingUrl` is absent only on some checks. */
+export interface PermissionDetails {
+  readonly isMainFrame?: boolean;
+  readonly requestingUrl?: string;
+}
+
+/**
+ * Whether a web permission is granted. Everything is denied except `clipboard-sanitized-write`,
+ * and that only for the renderer's own main frame: the onboarding "Copy command" button uses
+ * `navigator.clipboard.writeText`, which needs it.
+ */
+export function isPermissionGranted(
+  permission: string,
+  details: PermissionDetails | undefined,
+  target: Pick<RendererTarget, 'indexUrl' | 'devServerOrigin'>,
+): boolean {
+  if (!GRANTED_PERMISSIONS.has(permission)) return false;
+  if (details?.isMainFrame !== true || details.requestingUrl === undefined) return false;
+  return isRendererUrl(details.requestingUrl, target);
 }
 
 /**

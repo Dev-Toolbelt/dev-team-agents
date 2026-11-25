@@ -26,6 +26,7 @@ import {
   developmentCsp,
   hardenContents,
   hardenSession,
+  isPermissionGranted,
   isRendererUrl,
   isRequestAllowed,
   isTrustedSender,
@@ -202,13 +203,61 @@ describe('hardenSession — the response header and the request filter', () => {
     expect(outcome?.cancel).toBe(false);
   });
 
-  it('denies every permission request and every permission check unconditionally', () => {
+  it('denies a permission request and a permission check that are not the clipboard write', () => {
     const { session, getPermissionRequestResult, getPermissionCheckResult } = fakeSession();
     hardenSession(session as unknown as Session, PROD);
     // Mutation: `callback(true)` here is the exact sabotage the review performed —
     // flipping the permission handler to grant everything, silently.
     expect(getPermissionRequestResult()).toBe(false);
     expect(getPermissionCheckResult()).toBe(false);
+  });
+});
+
+describe('isPermissionGranted — the clipboard write is the one exception', () => {
+  const mainFrame = (url: string) => ({ isMainFrame: true, requestingUrl: url });
+
+  it('grants clipboard-sanitized-write to the renderer main frame, hash and query ignored', () => {
+    expect(isPermissionGranted('clipboard-sanitized-write', mainFrame(`${INDEX}#/onboarding`), PROD)).toBe(true);
+    expect(isPermissionGranted('clipboard-sanitized-write', mainFrame('http://localhost:5173/x'), devTarget('http://localhost:5173'))).toBe(true);
+  });
+
+  it('denies the clipboard write to anything that is not the renderer main frame', () => {
+    expect(isPermissionGranted('clipboard-sanitized-write', { isMainFrame: false, requestingUrl: INDEX }, PROD)).toBe(false);
+    expect(isPermissionGranted('clipboard-sanitized-write', mainFrame('https://example.com/'), PROD)).toBe(false);
+    expect(isPermissionGranted('clipboard-sanitized-write', mainFrame(`${FILE_ROOT}/app/dist/renderer/other.html`), PROD)).toBe(false);
+    expect(isPermissionGranted('clipboard-sanitized-write', { isMainFrame: true }, PROD)).toBe(false);
+    expect(isPermissionGranted('clipboard-sanitized-write', undefined, PROD)).toBe(false);
+    expect(isPermissionGranted('clipboard-sanitized-write', mainFrame('http://localhost:5173/'), PROD)).toBe(false);
+    expect(
+      isPermissionGranted('clipboard-sanitized-write', mainFrame('http://localhost:5173.evil.tld/'), devTarget('http://localhost:5173')),
+    ).toBe(false);
+  });
+
+  it('keeps every other permission denied, clipboard read included, even for the renderer', () => {
+    for (const permission of ['clipboard-read', 'deprecated-sync-clipboard-read', 'notifications', 'media', 'openExternal']) {
+      expect(isPermissionGranted(permission, mainFrame(INDEX), PROD)).toBe(false);
+    }
+  });
+
+  it('is what both session handlers answer with, for a grant and for a denial', () => {
+    const answers = (permission: string, details: unknown) => {
+      const calls: { request?: boolean; check?: boolean } = {};
+      const session = {
+        webRequest: { onHeadersReceived: vi.fn(), onBeforeRequest: vi.fn() },
+        setPermissionRequestHandler: vi.fn((cb: (c: unknown, p: string, done: (g: boolean) => void, d: unknown) => void) => {
+          cb(null, permission, (g) => { calls.request = g; }, details);
+        }),
+        setPermissionCheckHandler: vi.fn((cb: (c: unknown, p: string, o: string, d: unknown) => boolean) => {
+          calls.check = cb(null, permission, 'file://', details);
+        }),
+      };
+      hardenSession(session as unknown as Session, PROD);
+      return calls;
+    };
+    expect(answers('clipboard-sanitized-write', mainFrame(INDEX))).toEqual({ request: true, check: true });
+    // Mutation: handlers keyed on the permission name alone would grant these.
+    expect(answers('clipboard-read', mainFrame(INDEX))).toEqual({ request: false, check: false });
+    expect(answers('clipboard-sanitized-write', mainFrame('https://example.com/'))).toEqual({ request: false, check: false });
   });
 });
 
