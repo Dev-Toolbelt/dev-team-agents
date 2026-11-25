@@ -83,7 +83,10 @@ for rel in (l.strip() for l in open(targets_file)):
         continue
     if rel in owned:
         continue
-    if os.path.islink(path):
+    # A junction (ADR-0069) is a link too: native Windows python reports it as a directory.
+    st = os.lstat(path)
+    junction = bool(getattr(st, "st_file_attributes", 0) & 0x400) and getattr(st, "st_reparse_tag", None) == 0xA0000003
+    if os.path.islink(path) or junction:
         target = os.readlink(path)
         lexical = os.path.normpath(os.path.join(os.path.dirname(path), target))
         if inside(lexical, fw_roots) or inside(os.path.realpath(path), real_roots):
@@ -153,7 +156,9 @@ if target == root or target.startswith(root + os.sep):
 PY
 )"
   [[ -n "$rel" ]] && target="$rel"
-  if [[ -L "$link" || -e "$link" ]]; then rm -rf "$link"; fi
+  # A link (MSYS reports a junction as one) is unlinked, never descended into: `rm -rf` through a
+  # junction to the store would delete the store's skills.
+  if [[ -L "$link" ]]; then rm -f "$link"; elif [[ -e "$link" ]]; then rm -rf "$link"; fi
   mkdir -p "$(dirname "$link")"
   # Git Bash's `ln -s` silently COPIES unless native symlinks are requested: ask for a native
   # one, and when the OS refuses (Windows without Developer Mode) copy explicitly instead, the
@@ -162,11 +167,30 @@ PY
   case "$(uname -s 2>/dev/null)" in
     MINGW*|MSYS*) export MSYS=winsymlinks:nativestrict ;;
   esac
-  if ln -s "$target" "$link" 2>/dev/null && [[ -L "$link" ]]; then
+  # DEVTEAM_TEST_NO_SYMLINK: tests on a Windows runner (which holds the symlink privilege) use it to
+  # reach the junction branch below.
+  if [[ -z "${DEVTEAM_TEST_NO_SYMLINK:-}" ]] && ln -s "$target" "$link" 2>/dev/null && [[ -L "$link" ]]; then
     echo "  + symlinked $target -> ${link#"$root"/}"
     return 0
   fi
   rm -rf "$link"
+  # Windows without Developer Mode: a junction needs no privilege and is what bind's link mode
+  # falls back to. Absolute only, so never for a relative (committed, vendored) target.
+  if [[ -z "$rel" ]]; then
+    case "$(uname -s 2>/dev/null)" in
+      MINGW*|MSYS*)
+        # Through python's _winapi, paths as argv: `cmd /c mklink` would parse `&`, `^` and `%`
+        # inside a path as syntax.
+        if python3 -c 'import _winapi, sys; _winapi.CreateJunction(sys.argv[1], sys.argv[2])' \
+            "$(po_native_path "$source_dir")" "$(po_native_path "$link")" >/dev/null 2>&1 \
+          && [[ -d "$link" ]]; then
+          echo "  + junction $source_dir -> ${link#"$root"/}"
+          return 0
+        fi
+        rm -rf "$link" 2>/dev/null || true
+        ;;
+    esac
+  fi
   cp -R "$source_dir" "$link" || return 1
   echo "  + copied $source_dir -> ${link#"$root"/} (symlinks unavailable; refreshed on every sync)"
 }

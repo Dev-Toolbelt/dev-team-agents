@@ -722,9 +722,9 @@ def _targets(providers, root_ids):
 
 
 def _move_aside(path, root):
-    """Unlink a symlink, quarantine a real directory. Returns the quarantine path or None."""
-    if path.is_symlink():
-        path.unlink()
+    """Remove a link (symlink or junction), quarantine a real directory. Returns the quarantine path or None."""
+    if paths.is_link(path):
+        paths.remove_link(path)  # quarantine.move refuses a junction (ADR-0069)
         return None
     return quarantine.move(path, None, group="global-skills/{}".format(root["id"]))
 

@@ -554,13 +554,13 @@ def check_project(project_root):
             )
             continue
         candidate = root / rel
-        if candidate.is_symlink() and not candidate.exists():
+        if paths.is_link(candidate) and not candidate.exists():
             broken.append(rel)
             continue
         if not candidate.exists():
             missing.append(rel)
             continue
-        if item.get("kind") == "link" and candidate.is_symlink():
+        if item.get("kind") == "link" and paths.is_link(candidate):
             target = Path(os.readlink(str(candidate)))
             if not _points_into(target, expected_version):
                 wrong_version.append(rel)
@@ -584,7 +584,7 @@ def check_project(project_root):
             _finding(
                 WARN,
                 "bind",
-                "{} artifact(s) are broken symlinks".format(len(broken)),
+                "{} artifact(s) are broken links".format(len(broken)),
                 "Run `devteam sync`.",
             )
         )

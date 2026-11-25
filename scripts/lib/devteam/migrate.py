@@ -51,7 +51,7 @@ import time
 from pathlib import Path
 
 from . import bind as bind_module
-from . import credentials_local, project, providers, quarantine, registry, versions
+from . import credentials_local, paths, project, providers, quarantine, registry, versions
 from .errors import ConflictError, UsageError
 
 #: Everything a v2 install placed under ``.dev-team-agents/`` that a bind
@@ -115,8 +115,8 @@ def detect(project_root):
         install_rel = PRE_ROOT_DIR.as_posix()
         install_dir = root / PRE_ROOT_DIR
         children = sorted(install_dir.iterdir(), key=lambda child: child.name)
-        trees = [c.name for c in children if c.is_dir() and not c.is_symlink() and c.name not in PRESERVED]
-        files = [c.name for c in children if not (c.is_dir() and not c.is_symlink()) and c.name not in PRESERVED]
+        trees = [c.name for c in children if c.is_dir() and not paths.is_link(c) and c.name not in PRESERVED]
+        files = [c.name for c in children if not (c.is_dir() and not paths.is_link(c)) and c.name not in PRESERVED]
         return {
             "is_v2": True,
             "layout": LAYOUT_PRE_ROOT,
@@ -160,7 +160,7 @@ def _root_install(root):
     trees = [
         name
         for name in VENDORED_TREES
-        if (install_dir / name).is_dir() and not (install_dir / name).is_symlink()
+        if (install_dir / name).is_dir() and not paths.is_link(install_dir / name)
     ]
     files = [name for name in VENDORED_FILES if (install_dir / name).is_file()]
     unknown = []
@@ -234,7 +234,7 @@ def leftover_installs(project_root):
     """
     root = Path(project_root)
     pre_root_dir = root / PRE_ROOT_DIR
-    if pre_root_dir.is_symlink() or (
+    if paths.is_link(pre_root_dir) or (
         pre_root_dir.exists()
         and os.path.commonpath([os.path.realpath(str(root)), os.path.realpath(str(pre_root_dir))])
         != os.path.realpath(str(root))
@@ -411,7 +411,7 @@ def _memory_moves(project_root, found):
     candidates = [
         rel
         for rel in (project.PRE_ROOT_MEMORY_DIR, "{}/user-data".format(PRE_ROOT_DIR.as_posix()))
-        if (root / rel).is_dir() and not (root / rel).is_symlink()
+        if (root / rel).is_dir() and not paths.is_link(root / rel)
     ]
     if not candidates:
         return []
@@ -445,7 +445,7 @@ def _docs_write_root(project_root, added):
     """
     if project.PRE_ROOT_DOCS_DIR not in added:
         return None
-    if (Path(project_root) / project.PRE_ROOT_DOCS_DIR).is_symlink():
+    if paths.is_link(Path(project_root) / project.PRE_ROOT_DOCS_DIR):
         return None
     return None if (Path(project_root) / _current_write_root(project_root)).is_dir() else project.PRE_ROOT_DOCS_DIR
 
@@ -638,10 +638,10 @@ def _retire_pre_root_links(project_root):
     retired = []
     for folder in ("agents", "commands", "skills"):
         base = root / ".claude" / folder
-        if not base.is_dir() or base.is_symlink():
+        if not base.is_dir() or paths.is_link(base):
             continue
         for child in sorted(base.iterdir(), key=lambda item: item.name):
-            if not child.is_symlink():
+            if not paths.is_link(child):
                 continue
             target = Path(os.readlink(str(child)))
             if not target.is_absolute():
@@ -652,7 +652,7 @@ def _retire_pre_root_links(project_root):
             except ValueError:
                 inside = False
             if inside:
-                child.unlink()
+                paths.remove_link(child)
                 retired.append(child.relative_to(root).as_posix())
     return retired
 
@@ -785,7 +785,7 @@ def apply(root=None, provider_names=None, mode="auto", pin=None, emitter=None, u
         # Checked again at the move: the plan was read before the bind's preflight,
         # and a parent swapped for a link since would carry the move out of the tree.
         source = bind_module.require_inside(project_root / rel, project_root, what="v2 copy")
-        if source.is_symlink():
+        if paths.is_link(source):
             continue
         destination = quarantine.move(
             project_root / rel, project_id, group=_copy_group(rel), stamp=stamp

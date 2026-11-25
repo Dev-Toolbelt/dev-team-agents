@@ -148,11 +148,12 @@ def tracked_artifacts(project_root, manifest):
 
 
 def symlink_supported(project_root):
-    """Probe, rather than guess from the platform name.
+    """Whether link mode can work here: probe, rather than guess from the platform name.
 
-    Windows with Developer Mode on supports symlinks; Windows without it does
-    not, and neither does a filesystem mounted without the capability. Only an
-    attempt answers the question.
+    Windows with Developer Mode on supports symlinks; Windows without it does not, but
+    lets any user create a junction, which link mode falls back to (`paths.make_dir_link`).
+    A filesystem mounted without either capability answers no. Only an attempt answers
+    the question.
     """
     probe_root = Path(project_root) / project.PROJECT_DIR
     # A probe that created the directory removes it again: the bind may still be
@@ -165,8 +166,11 @@ def symlink_supported(project_root):
             target = Path(tmp) / "target"
             target.mkdir()
             link = Path(tmp) / "link"
-            os.symlink(str(target), str(link), target_is_directory=True)
-            return link.is_symlink()
+            paths.make_dir_link(target, link)
+            linked = paths.is_link(link)
+            if linked:
+                paths.remove_link(link)  # a junction must go before the temp dir is removed
+            return linked
     except (OSError, NotImplementedError, AttributeError):
         return False
     finally:
@@ -188,33 +192,37 @@ def resolve_mode(requested, project_root):
     if requested == "link":
         if not symlink_supported(project_root):
             raise EnvError(
-                "this filesystem cannot create symlinks, so --mode=link is impossible",
-                hint="Use --mode=copy, or enable Developer Mode on Windows and retry.",
+                "this filesystem cannot create symlinks or junctions, so --mode=link is impossible",
+                hint="Use --mode=copy (or --mode=auto), or move the project to a local NTFS or "
+                "APFS/ext4 volume and retry.",
             )
         return "link", None
     if symlink_supported(project_root):
         return "link", None
-    return "copy", "symlinks are unavailable here"
+    return "copy", "symlinks and junctions are unavailable here"
 
 
 def _is_managed_path(rel, path, previous_paths, project_root):
     """True when ``path`` is something dev-team-agents created and may replace.
 
-    Three cases count as managed: a path this project's own manifest claims, a
-    symlink into the versioned core (a v3 artifact), and a symlink into the
-    project's own ``.dev-team-agents/`` (a **v2** artifact — the relative links
-    `install.sh` created). The third is what lets a v2 install be taken over
-    without asking the user to delete anything by hand.
+    These count as managed: a path this project's own manifest claims, a symlink
+    into the versioned core (a v3 artifact), a symlink into the project's own
+    ``.dev-team-agents/`` (a **v2** artifact — the relative links `install.sh`
+    created), and a symlink — or its checkout as a stub file — into *another*
+    machine's core store (a v3 artifact committed elsewhere, `_is_core_link_text`).
+    The v2 case is what lets a v2 install be taken over without asking the user to
+    delete anything by hand.
     """
     path = Path(path)
     if rel and rel in previous_paths:
         return True
-    if not path.is_symlink():
-        return False
+    if not paths.is_link(path):
+        return _foreign_core_link_file(path, project_root)
     try:
-        target = Path(os.readlink(str(path)))
+        raw_target = os.readlink(str(path))
     except OSError:
         return False
+    target = Path(raw_target)
     if not target.is_absolute():
         target = path.parent / target
     # The pre-v2.1.0 install directory too: `migrate` quarantines that tree and then
@@ -226,7 +234,52 @@ def _is_managed_path(rel, path, previous_paths, project_root):
         Path(project_root) / project.PROJECT_DIR,
         Path(project_root) / project.PRE_ROOT_DIR,
     ]
-    return any(_is_inside(target, root) for root in roots)
+    if any(_is_inside(target, root) for root in roots):
+        return True
+    return _is_core_link_text(raw_target)
+
+
+#: A v3 bind artifact's link target in any machine's core store:
+#: ``<absolute>/core/versions/<version>/<tree>``, where ``<tree>`` is a tree a bind links
+#: (``skills`` itself for the opencode and Codex skills link) or up to two levels below
+#: ``skills``. Absolute only (POSIX, MSYS
+#: ``/c/…``, drive, UNC or ``\\?\``): a bind never writes a relative one.
+_CORE_LINK_TARGET = re.compile(
+    r"^(?:[A-Za-z]:|//\?/[A-Za-z]:)?/(?:.*/)?core/versions/\d+\.\d+\.\d+[0-9A-Za-z.+-]*/"
+    r"(?:agents|commands|scripts|templates|plugins|skills(?:/[^/]+){0,2})/?$"
+)
+
+
+def _is_core_link_text(target):
+    """True when a link target names a tree in *a* core store, this machine's or another's.
+
+    A bind made on one machine and committed carries that machine's absolute store
+    path (`/Users/<name>/Library/Application Support/dev-team-agents/core/versions/
+    2.50.2/agents`). Another machine cannot resolve it, but the shape alone proves the
+    link is a bind artifact: it holds no content, and the bind may replace it.
+    """
+    if not target:
+        return False
+    text = target.replace("\\", "/")
+    # A bind never writes `.` or `..` into a link; one built from them is not its shape.
+    if any(part in (".", "..") for part in text.split("/")):
+        return False
+    return _CORE_LINK_TARGET.search(text) is not None
+
+
+def _foreign_core_link_file(path, project_root):
+    """True when ``path`` is a committed core-store link that a checkout wrote as a file.
+
+    Git without symlink support writes each link as a regular file holding its target
+    (`providers.read_link_stub` decodes that and the MSYS and Cygwin shapes). The stub
+    must live inside the project, as in `_v2_link_file`.
+    """
+    try:
+        require_inside(path, project_root)
+    except ConflictError:
+        return False
+    target = providers.read_link_stub(path)
+    return target is not None and _is_core_link_text(target)
 
 
 def _is_inside(candidate, root):
@@ -314,7 +367,7 @@ def _mkdir_within(directory, project_root):
     current = root
     for part in relative.parts:
         current = current / part
-        if current.is_symlink():
+        if paths.is_link(current):
             raise ConflictError(
                 "{} is a symlink; refusing to create artifacts through it".format(current),
                 hint="Remove or repoint that link, then run `devteam sync` again.",
@@ -325,9 +378,9 @@ def _mkdir_within(directory, project_root):
 
 
 def _retire_artifact(path, project_id, project_root, group="replaced"):
-    """Retire one artifact. Symlinks are unlinked; real content is quarantined.
+    """Retire one artifact. Links (symlinks and junctions) are removed; real content is quarantined.
 
-    A symlink holds no content and ``sync`` recreates it, so unlinking is free.
+    A link holds no content and ``sync`` recreates it, so unlinking is free.
     A real file or directory is the only copy of whatever is inside it — in
     ``copy`` and ``vendored`` modes that includes anything the user added — so it
     is **moved**, never deleted. Returns ``("unlinked", None)`` or
@@ -335,8 +388,8 @@ def _retire_artifact(path, project_id, project_root, group="replaced"):
     """
     path = Path(path)
     require_inside(path, project_root, what="artifact")
-    if path.is_symlink():
-        path.unlink()
+    if paths.is_link(path):
+        paths.remove_link(path)  # a junction too: removes the link, never the store's files
         return "unlinked", None
     destination = quarantine.move(path, project_id, group=group)
     return "quarantined", destination
@@ -446,7 +499,7 @@ def v2_copy(rel, dest, version_dir, project_root):
     — so a project's own directory at the same path is still refused as foreign.
     """
     dest = Path(dest)
-    if dest.is_symlink() or not dest.exists():
+    if paths.is_link(dest) or not dest.exists():
         return False
     if dest.is_file():
         return _v2_link_file(dest, project_root)
@@ -459,7 +512,7 @@ def v2_copy(rel, dest, version_dir, project_root):
         return (
             bool(entries)
             and all(
-                item.is_file() and not item.is_symlink() and item.suffix == ".md" for item in entries
+                item.is_file() and not paths.is_link(item) and item.suffix == ".md" for item in entries
             )
             and any(item.name in known for item in entries)
         )
@@ -502,7 +555,7 @@ def kept_project_skills(version_dir, project_root, previous_paths):
             continue
         rel = rel_path.as_posix()
         dest = root / rel_path
-        if (dest.exists() or dest.is_symlink()) and not _is_managed_path(
+        if (dest.exists() or paths.is_link(dest)) and not _is_managed_path(
             rel, dest, previous_paths, project_root
         ):
             kept.append(rel)
@@ -529,7 +582,7 @@ def provider_ledgers(project_root, provider_names):
         if provider_name not in providers.DELEGATED_INSTALLERS:
             continue
         rel = "{}/.provider-owned-{}".format(project.PROJECT_DIR, provider_name)
-        if (root / rel).is_file() and not (root / rel).is_symlink():
+        if (root / rel).is_file() and not paths.is_link(root / rel):
             found.append(rel)
     return found
 
@@ -555,7 +608,7 @@ def v2_delegated_copies(version_dir, project_root, provider_names, claimed=froze
             listed = providers.delegated_targets(provider_name, version_dir, project_root)
         for rel in listed:
             dest = root / rel
-            if rel in claimed or dest.is_symlink() or not dest.exists():
+            if rel in claimed or paths.is_link(dest) or not dest.exists():
                 continue
             try:
                 require_inside(dest, project_root, what="artifact")
@@ -611,7 +664,7 @@ def _preflight(
         for rel_path, _source in providers.claude_artifacts(version_dir):
             rel = rel_path.as_posix()
             dest = root / rel_path
-            if rel in vacated or rel in kept or not (dest.exists() or dest.is_symlink()):
+            if rel in vacated or rel in kept or not (dest.exists() or paths.is_link(dest)):
                 continue
             if _is_managed_path(rel, dest, previous_paths, project_root):
                 continue
@@ -624,11 +677,11 @@ def _preflight(
         dest = root / rel
         if rel in vacated:
             continue
-        if dest.is_dir() and not dest.is_symlink() and rel not in previous_copies:
+        if dest.is_dir() and not paths.is_link(dest) and rel not in previous_copies:
             raise _v2_runtime_tree_error(dest, rel)
         if name == "plugins" and not (Path(version_dir) / name).exists():
             continue  # `_runtime_root` skips it too
-        if (dest.exists() or dest.is_symlink()) and not _is_managed_path(rel, dest, previous_paths, project_root):
+        if (dest.exists() or paths.is_link(dest)) and not _is_managed_path(rel, dest, previous_paths, project_root):
             raise _foreign_path_error(dest)
     for provider_name in selected:
         if provider_name not in providers.DELEGATED_INSTALLERS:
@@ -649,7 +702,7 @@ def _preflight(
         existing = []
         for rel in targets:
             dest = root / rel
-            if rel in vacated or not (dest.exists() or dest.is_symlink()):
+            if rel in vacated or not (dest.exists() or paths.is_link(dest)):
                 continue
             if not _is_managed_path(rel, dest, claimed, project_root):
                 if rel in providers.V2_SKILL_LINKS and _v2_link_file(dest, project_root):
@@ -675,7 +728,7 @@ def _materialize(source, dest, mode, previous_paths, rel, project_root, project_
 
     require_inside(dest, project_root, what="artifact")
 
-    if dest.exists() or dest.is_symlink():
+    if dest.exists() or paths.is_link(dest):
         if not _is_managed_path(rel, dest, previous_paths, project_root):
             raise _foreign_path_error(dest)
         action, destination = _retire_artifact(dest, project_id, project_root)
@@ -685,7 +738,10 @@ def _materialize(source, dest, mode, previous_paths, rel, project_root, project_
     _mkdir_within(dest.parent, project_root)
     try:
         if mode == "link":
-            os.symlink(str(source), str(dest), target_is_directory=source.is_dir())
+            if source.is_dir():
+                paths.make_dir_link(source, dest)  # a junction on Windows without symlinks
+            else:
+                os.symlink(str(source), str(dest))
             return "link"
         if source.is_dir():
             shutil.copytree(str(source), str(dest), symlinks=False)
@@ -727,7 +783,7 @@ def _vendored_tree(version_dir, project_root, previous_paths, project_id, retire
         # artifacts went un-ignored and every manifest lookup keyed on this
         # string missed.
         rel = Path(project.PROJECT_DIR, name).as_posix()
-        if dest.exists() or dest.is_symlink():
+        if dest.exists() or paths.is_link(dest):
             action, destination = _retire_artifact(
                 dest, project_id, project_root, group="revendored"
             )
@@ -744,7 +800,7 @@ def _vendored_tree(version_dir, project_root, previous_paths, project_id, retire
         if rel in kept:
             continue
         require_inside(dest, project_root, what="artifact")
-        if dest.exists() or dest.is_symlink():
+        if dest.exists() or paths.is_link(dest):
             action, destination = _retire_artifact(dest, project_id, project_root)
             if action == "quarantined":
                 retired.append({"path": rel, "to": str(destination)})
@@ -756,7 +812,19 @@ def _vendored_tree(version_dir, project_root, previous_paths, project_id, retire
         # Windows checkout that created it, but the whole point of a *relative*
         # vendored link is that a POSIX clone of the same repository can follow
         # it too — and a POSIX symlink reader has no notion of `\` as a separator.
-        os.symlink(relative_target.as_posix(), str(dest), target_is_directory=True)
+        try:
+            os.symlink(relative_target.as_posix(), str(dest), target_is_directory=True)
+        except OSError as exc:
+            if os.name != "nt" or getattr(exc, "winerror", None) != paths._NO_SYMLINK_PRIVILEGE:
+                raise
+            # A junction is absolute, so it would not survive the commit vendored mode is
+            # for. Without symlinks, vendor the tree itself: a clone gets real files.
+            try:
+                shutil.copytree(str(source), str(dest), symlinks=False)
+            except OSError as copy_exc:
+                raise EnvError("cannot create {}: {}".format(dest, copy_exc)) from copy_exc
+            created.append({"path": rel, "kind": "copy"})
+            continue
         created.append({"path": rel, "kind": "relative-link"})
     return created
 
@@ -852,7 +920,7 @@ def _runtime_root(version_dir, project_root, mode, previous_paths, previous_copi
         # this string ends up in the manifest, the exclude block and `.gitignore`.
         rel = rel_path.as_posix()
         dest = Path(project_root) / rel_path
-        if dest.is_dir() and not dest.is_symlink() and rel not in previous_copies:
+        if dest.is_dir() and not paths.is_link(dest) and rel not in previous_copies:
             raise _v2_runtime_tree_error(dest, rel)
         if not (Path(version_dir) / name).exists() and name == "plugins":
             # A core version older than ADR-0019 has no plugins tree; refusing the whole
@@ -1093,6 +1161,21 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
             )
         )
 
+    # Owned paths the installers are about to rewrite. A symlink is unlinked: `cp -f` would
+    # write through it, out of the project, and the installer recreates the path anyway. A
+    # committed core link that a checkout wrote as a stub file would be `rm -rf`ed by the
+    # installer, so it is quarantined here instead, as `_materialize` does for Claude.
+    for provider_name, owned_paths in delegated_owned.items():
+        if provider_name not in selected:
+            continue
+        for rel in owned_paths:
+            dest = Path(project_root) / rel
+            if not paths.is_link(dest) and not (dest.is_file() and _foreign_core_link_file(dest, project_root)):
+                continue
+            action, destination = _retire_artifact(dest, project_id, project_root)
+            if action == "quarantined":
+                retired.append({"path": rel, "to": str(destination)})
+
     # Every mode. In vendored mode the installers find the vendored `skills/` and link
     # it relatively, and the hook paths they write point into the vendored `scripts/`,
     # so everything they produce is portable and committed with the rest of the tree.
@@ -1173,6 +1256,16 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
             "not a git repository: bind artifacts were not added to any ignore file"
         )
 
+    # Ignoring them has no effect while git tracks them: a bind committed on another machine
+    # comes back on every clone, and on Windows a `git add -A` after this bind would commit
+    # the copies. Same wording and command as `doctor`.
+    tracked = tracked_artifacts(project_root, {"mode": resolved_mode, "artifacts": artifacts})
+    if tracked and emitter:
+        emitter.warn(
+            "{} bind artifact(s) are tracked by git; untrack them (the files stay on disk) and "
+            "commit the removal: git rm -r --cached {}".format(len(tracked), " ".join(tracked))
+        )
+
     return {
         "project_id": project_id,
         "path": str(project_root),
@@ -1181,6 +1274,7 @@ def bind(root=None, provider_names=None, mode="auto", pin=None, emitter=None):
         "providers": selected,
         "artifacts": len(artifacts),
         "retired": retired,
+        "tracked_artifacts": tracked,
         "merged_project_files": sorted(set(merged)),
         "pin": effective_pin,
         "identity_created": created_identity,
@@ -1250,7 +1344,7 @@ def _prune_stale(project_root, previous, current_paths, project_id, version_dir=
                 unlinked.append("{} (hooks: {})".format(rel, ", ".join(events)))
             continue
         candidate = Path(project_root) / rel
-        if not (candidate.exists() or candidate.is_symlink()):
+        if not (candidate.exists() or paths.is_link(candidate)):
             continue
         try:
             action, destination = _retire_artifact(
@@ -1482,7 +1576,7 @@ def unbind(root=None, project_id=None, keep_artifacts=False):
                     problems.append({"path": default_agent.CLAUDE_FILE, "error": str(exc)})
                 continue
             candidate = Path(project_root) / rel
-            if not (candidate.exists() or candidate.is_symlink()):
+            if not (candidate.exists() or paths.is_link(candidate)):
                 continue
             try:
                 action, destination = _retire_artifact(

@@ -24,6 +24,7 @@ import json
 import os
 import re
 import socket
+import stat
 import sys
 import uuid
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -257,6 +258,84 @@ def realpath_normalized(path):
         resolved = resolved[len(_EXTENDED_PREFIX) :]
     return Path(resolved)
 
+
+
+# ── links: symlinks and Windows junctions ─────────────────────────────────────
+# Windows without Developer Mode refuses `os.symlink`, but lets any user create an NTFS
+# junction to a directory. Every link a bind makes is to a directory, so link mode falls back
+# to a junction there. Python sees a junction as a directory, not a symlink, so anything that
+# asks "is this a link?" must ask `is_link`: treating a junction as real content would move it
+# to quarantine, or delete the store's files through it.
+
+_REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+_MOUNT_POINT_TAG = getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", 0xA0000003)
+
+
+def is_junction(path):
+    """True for an NTFS junction (a mount-point reparse point). Never True off Windows."""
+    try:
+        info = os.lstat(str(path))
+    except (OSError, ValueError):
+        return False
+    attributes = getattr(info, "st_file_attributes", 0)
+    return bool(attributes & _REPARSE_POINT) and getattr(info, "st_reparse_tag", None) == _MOUNT_POINT_TAG
+
+
+def is_link(path):
+    """A symlink or a junction: something that points elsewhere and holds no content."""
+    return os.path.islink(str(path)) or is_junction(path)
+
+
+def read_link(path):
+    """The target of a symlink or a junction (``os.readlink`` reads both on Windows)."""
+    return os.readlink(str(path))
+
+
+def remove_link(path):
+    """Remove the link itself, never what it points to. Refuses anything that is not a link."""
+    path = str(path)
+    if os.path.islink(path):
+        os.unlink(path)
+    elif is_junction(path):
+        # RemoveDirectoryW on a junction deletes the reparse point, not the target's files.
+        os.rmdir(path)
+    else:
+        raise OSError("not a link: {}".format(path))
+
+
+def create_junction(target, link):
+    """Make ``link`` an NTFS junction to the directory ``target``; needs no privilege.
+
+    Through ``_winapi.CreateJunction`` only, never ``cmd /c mklink``: cmd parses ``&``, ``^``
+    and ``%`` inside a path as syntax, and a bare ``cmd`` is looked up in the current folder.
+    """
+    try:
+        import _winapi  # CPython on Windows only
+    except ImportError as exc:
+        raise OSError("junctions are only available on Windows") from exc
+    _winapi.CreateJunction(os.path.abspath(str(target)), os.path.abspath(str(link)))
+
+
+#: ``ERROR_PRIVILEGE_NOT_HELD``: Windows refused the symlink for want of Developer Mode.
+_NO_SYMLINK_PRIVILEGE = 1314
+
+
+def make_dir_link(target, link):
+    """Link the directory ``link`` to ``target``: a symlink, else (Windows) a junction.
+
+    Returns ``"symlink"`` or ``"junction"``. A junction needs an absolute target on a
+    local volume, so it is only tried on Windows and only after the symlink is refused.
+    """
+    try:
+        os.symlink(str(target), str(link), target_is_directory=True)
+        return "symlink"
+    except OSError as exc:
+        # The real host, not the overridable platform_key(); and only for the missing
+        # privilege, so an existing path or a missing parent keeps its own error.
+        if os.name != "nt" or getattr(exc, "winerror", None) != _NO_SYMLINK_PRIVILEGE:
+            raise
+    create_junction(target, link)
+    return "junction"
 
 # ── machine identity ──────────────────────────────────────────────────────────
 # A single UUID per machine, created on first use. It exists so the store can say

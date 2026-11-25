@@ -18,7 +18,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import permissions, shells
+from . import paths, permissions, shells
 from .errors import ConflictError, EnvError
 
 ALL_PROVIDERS = ("claude", "opencode", "codex")
@@ -151,6 +151,9 @@ _ENV_PASSTHROUGH = (
     "LC_ALL",
     "TMPDIR",
     "DEVTEAM_HOME",
+    # Test-only: makes po_link_skills skip `ln -s`, so a Windows runner (which holds the
+    # symlink privilege) exercises the junction branch (ADR-0069).
+    "DEVTEAM_TEST_NO_SYMLINK",
     "TERM",
     # Windows (Git Bash, python, mktemp) cannot start or find a temp dir without
     # these; all are absent on POSIX, so passing them through changes nothing there.
@@ -188,9 +191,15 @@ def _run_installer(script, version_dir, project_root, extra_args=None):
         raise EnvError("installer not found in the core version: {}".format(script))
     bash = shells.bash_path()
     if bash is None:
+        if shells.is_windows():
+            raise EnvError(
+                "Git Bash is required to run {} but was not found".format(script.name),
+                hint="Looked for {}. Install Git for Windows (or put its cmd or bin folder on PATH) "
+                "and retry.".format(shells.GIT_BASH_SEARCH),
+            )
         raise EnvError(
             "bash is required to run {} but was not found on PATH".format(script.name),
-            hint="On Windows, install Git for Windows (which provides bash) and retry.",
+            hint="Install bash and retry.",
         )
     command = [bash, str(script), "--source", str(version_dir)]
     if extra_args:
@@ -441,7 +450,7 @@ def is_v2_render(rel, dest, version_dir):
     if rel.parent.as_posix() == ".codex/skills" and rel.name.startswith("devteam-"):
         # The renderer writes one SKILL.md per command and nothing else: a skill
         # holding anything more has been extended by the project and stays its own.
-        if dest.is_symlink() or not dest.is_dir():
+        if paths.is_link(dest) or not dest.is_dir():
             return False
         if [item.name for item in dest.iterdir()] != ["SKILL.md"]:
             return False
@@ -494,7 +503,7 @@ def delegated_artifacts(provider, project_root, targets):
     records = []
     for rel in targets:
         candidate = root / rel
-        if candidate.exists() or candidate.is_symlink():
+        if candidate.exists() or paths.is_link(candidate):
             records.append({"path": rel, "kind": "delegated", "provider": provider})
     if provider == "codex" and (root / CODEX_HOOKS_FILE).is_file():
         records.append({"path": CODEX_HOOKS_FILE, "kind": "codex-hooks", "provider": provider})
