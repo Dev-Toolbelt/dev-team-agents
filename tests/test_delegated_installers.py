@@ -11,10 +11,12 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from devteam_support import REPO_ROOT, StoreTestCase, requires_bash
 
-from devteam import providers
+from devteam import providers, shells
+from devteam.errors import EnvError
 
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
 import codex_hooks_merge  # noqa: E402
@@ -148,6 +150,63 @@ class DelegatedInstallerTest(StoreTestCase):
                 isfile=lambda p: False,
             )
         )
+
+    def test_git_bash_is_found_beside_the_git_exe_on_path(self):
+        layouts = {
+            "D:\\Tools\\Git\\cmd\\git.exe": "D:\\Tools\\Git\\bin\\bash.exe",
+            "C:\\Users\\w\\scoop\\apps\\git\\current\\mingw64\\bin\\git.exe": "C:\\Users\\w\\scoop\\apps\\git\\current\\bin\\bash.exe",
+            "E:\\Git\\bin\\git.exe": "E:\\Git\\bin\\bash.exe",
+            "D:\\Tools\\Git\\CMD\\git.exe": "D:\\Tools\\Git\\bin\\bash.exe",
+        }
+        for git, bash in layouts.items():
+            with self.subTest(git=git):
+                found = codex_hooks_merge.find_git_bash(
+                    which=lambda name, git=git: git if name == "git" else None,
+                    environ={},  # what an app that drops ProgramFiles passes
+                    isfile=lambda p, bash=bash: p == bash,
+                )
+                self.assertEqual(found, bash)
+
+    def test_git_bash_beside_git_is_not_taken_from_wsl_or_an_unknown_layout(self):
+        def isfile(path):
+            return path.endswith("bash.exe")
+
+        # A known layout inside a WSL stub folder: only the stub guard can refuse these.
+        for git in (
+            "C:\\Windows\\System32\\cmd\\git.exe",
+            "C:\\Users\\w\\AppData\\Local\\Microsoft\\WindowsApps\\cmd\\git.exe",
+            "C:\\tools\\git.exe",
+            "E:\\git.exe",
+            "tools\\Git\\cmd\\git.exe",  # a relative PATH entry: resolved against the cwd
+        ):
+            with self.subTest(git=git):
+                self.assertIsNone(
+                    codex_hooks_merge.find_git_bash(
+                        which=lambda name, git=git: git if name == "git" else None,
+                        environ={},
+                        isfile=isfile,
+                    )
+                )
+
+    def test_a_relative_bash_on_path_is_never_used(self):
+        self.assertIsNone(
+            codex_hooks_merge.find_git_bash(
+                which=lambda name: ".\\bash.exe" if name == "bash" else None,
+                environ={},
+                isfile=lambda p: True,
+            )
+        )
+
+    def test_a_missing_git_bash_says_where_it_looked(self):
+        script = self.tmp / "install-codex.sh"
+        script.write_text("#!/bin/sh\n", encoding="utf-8")
+        with mock.patch.object(shells, "bash_path", return_value=None), mock.patch.object(
+            shells, "is_windows", return_value=True
+        ):
+            with self.assertRaises(EnvError) as caught:
+                providers._run_installer(script, self.tmp, self.tmp)
+        self.assertIn("Git Bash is required", caught.exception.message)
+        self.assertIn("beside the git.exe on PATH", caught.exception.hint)
 
     def test_a_jsonc_opencode_config_is_refused_and_untouched(self):
         case = INSTALLERS["opencode"]
