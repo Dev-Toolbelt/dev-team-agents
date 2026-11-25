@@ -89,65 +89,30 @@ jobs:
           name: ${{ needs.render.outputs.artifact }}
           path: rendered
 
-      # Server images do not always ship winget, and the one they ship can be older than the
-      # manifests' ManifestVersion: a v1.11 client does not know the 1.12.0 schema header and
-      # `winget validate` exits non-zero on that warning alone. Bootstrap or upgrade it with
-      # Microsoft's own module, and fail with a plain message if that does not work.
-      - name: Make sure winget is available
+      # The manifests declare ManifestVersion 1.10.0 because the runner image ships a 1.11
+      # winget, which knows that schema. Upgrading winget on the runner does not work: both
+      # Repair-WinGetPackageManager paths failed there (no NuGet provider, then 0x80073CF1
+      # registering the App Installer bundle). So this step only checks the client and
+      # fails with a plain message if an image ever ships one older than the manifests.
+      - name: Check the runner's winget knows the manifests' schema
         shell: pwsh
         env:
           MANIFEST_DIR: ${{ needs.render.outputs.dir }}
         run: |
           $ErrorActionPreference = 'Stop'
-          function Refresh-Path {
-            $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
-              [Environment]::GetEnvironmentVariable('Path', 'User') + ';' +
-              (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps')
-          }
-          # Pinned: PSGallery never republishes a version, so this fixes the code that runs.
-          # Bump it deliberately, to a version published at least two weeks earlier.
-          $WingetClient = [version]'1.29.380'
-          function Install-WingetClient {
-            $have = Get-Module -ListAvailable -Name Microsoft.WinGet.Client | Where-Object Version -eq $WingetClient
-            if (-not $have) {
-              # PowerShell 7 installs from PSGallery without the NuGet package provider;
-              # Install-PackageProvider finds no NuGet provider on the runner and fails.
-              Install-Module -Name Microsoft.WinGet.Client -RequiredVersion $WingetClient -Force -Repository PSGallery | Out-Null
-            }
-            Import-Module -Name Microsoft.WinGet.Client -RequiredVersion $WingetClient -Force
-          }
-          Refresh-Path
           if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-            Write-Host "winget not found; bootstrapping with Microsoft.WinGet.Client $WingetClient"
-            Install-WingetClient
-            Repair-WinGetPackageManager -AllUsers
-            Refresh-Path
+            throw 'winget is not on this runner image; cannot run winget validate.'
           }
-          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-            throw 'winget is not available on this runner and could not be bootstrapped; cannot run winget validate.'
-          }
-
-          function Get-WingetVersion {
-            $out = winget --version | Select-Object -First 1
-            [version](([string]$out).Trim().TrimStart('v') -replace '-.*$', '')
-          }
-
+          $out = winget --version | Select-Object -First 1
+          $current = [version](([string]$out).Trim().TrimStart('v') -replace '-.*$', '')
           $dir = Join-Path 'rendered' ($env:MANIFEST_DIR -replace '^rendered/', '')
           $line = Select-String -Path (Join-Path $dir '*.yaml') -Pattern '^ManifestVersion:\s*(\d+\.\d+\.\d+)\s*$' | Select-Object -First 1
           if ($null -eq $line) { throw "no ManifestVersion line in the manifests under $dir" }
           $required = [version]$line.Matches[0].Groups[1].Value
-          $current = Get-WingetVersion
           if ([version]::new($current.Major, $current.Minor) -lt [version]::new($required.Major, $required.Minor)) {
-            Write-Host "winget $current is older than ManifestVersion $required; upgrading with Microsoft.WinGet.Client $WingetClient"
-            Install-WingetClient
-            Repair-WinGetPackageManager -AllUsers -Latest -Force
-            Refresh-Path
-            $current = Get-WingetVersion
-            if ([version]::new($current.Major, $current.Minor) -lt [version]::new($required.Major, $required.Minor)) {
-              throw "winget is $current after the upgrade, still older than ManifestVersion $required; cannot run winget validate."
-            }
+            throw "winget $current on this runner is older than ManifestVersion $required; lower ManifestVersion in packaging/winget (packaging/README.md) instead of upgrading winget here."
           }
-          winget --version
+          Write-Host "winget $current validates ManifestVersion $required"
 
       - name: winget validate
         shell: pwsh
