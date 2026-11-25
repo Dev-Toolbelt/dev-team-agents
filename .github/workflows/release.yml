@@ -848,6 +848,8 @@ jobs:
         working-directory: release
         env:
           GH_TOKEN: ${{ github.token }}
+          # This job has no checkout, so gh cannot infer the repository from git.
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.app-prepare.outputs.tag }}
           VERSION: ${{ needs.app-prepare.outputs.version }}
           MAC_NOTARISED: ${{ needs.app-build-mac.outputs.notarised }}
@@ -872,9 +874,19 @@ jobs:
             "dev-team-agents-Setup-${VERSION}-arm64.exe" \
             SHA256SUMS.txt \
             --clobber
-          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "true" ]; then
-            gh release edit "$TAG" --draft=false
-          fi
+          # A draft just created can answer "release not found" by tag for a few seconds;
+          # a failed lookup must not be read as "already published". Retry, then fail loudly.
+          last_error=""
+          for attempt in 1 2 3 4 5 6; do
+            if out=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>&1); then
+              if [ "$out" != "true" ]; then exit 0; fi
+              if out=$(gh release edit "$TAG" --draft=false 2>&1); then exit 0; fi
+            fi
+            last_error="$out"
+            [ "$attempt" -lt 6 ] && sleep $((attempt * 5))
+          done
+          echo "::error::Release $TAG could not be read or published after the upload; it may still be a draft. Last gh error: ${last_error}"
+          exit 1
 
   # Only for a dmg that stapler and spctl accepted in app-build-mac.
   app-cask:

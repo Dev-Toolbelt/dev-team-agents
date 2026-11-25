@@ -295,14 +295,14 @@ jobs:
           # A draft just created can answer "release not found" for a few seconds when
           # looked up by tag; a lookup that fails must not be read as "already published",
           # which is how v2.50.2 was left a draft. Retry, then fail loudly.
+          last_error=""
           for attempt in 1 2 3 4 5 6; do
-            if draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
-              if [ "$draft" = "true" ]; then
-                gh release edit "$TAG" --draft=false >/dev/null 2>&1 || { sleep $((attempt * 5)); continue; }
-              fi
-              exit 0
+            if out=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>&1); then
+              if [ "$out" != "true" ]; then exit 0; fi
+              if out=$(gh release edit "$TAG" --draft=false 2>&1); then exit 0; fi
             fi
-            sleep $((attempt * 5))
+            last_error="$out"
+            [ "$attempt" -lt 6 ] && sleep $((attempt * 5))
           done
-          echo "::error::Release $TAG could not be read or published after the upload; it may still be a draft."
+          echo "::error::Release $TAG could not be read or published after the upload; it may still be a draft. Last gh error: ${last_error}"
           exit 1
