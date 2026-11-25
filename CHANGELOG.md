@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **The desktop app's signed macOS build no longer fails at keychain setup.** `electron-builder` 26.15.3 passed the certificate's password, not its temporary keychain's, to `security set-key-partition-list`, so every build with `MAC_CSC_*` secrets failed with `SecKeychainUnlock: The user name or passphrase you entered is not correct` and app-v0.1.2 published nothing. The app now builds with `electron-builder` 26.17.0, which carries the upstream fix. App version 0.1.3.
 - **The release's notarisation check no longer rejects a correctly notarised app.** `verify-mac-notarised.sh` piped `codesign -dvv` through `tee` into `grep -q` under `pipefail`; `grep -q` exits at the first match, `tee` died of SIGPIPE, and the Developer ID check failed on an app that `stapler` and Gatekeeper had just accepted, so app-v0.1.3 published nothing. The output is now captured and matched in the shell. App version 0.1.4.
+- **The app release publishes after both builds pass.** The `app-publish` job has no checkout, so `gh` could not tell which repository to publish to (`fatal: not a git repository`) and app-v0.1.4 published nothing although its dmg was signed and notarised. The job now names the repository through `GH_REPO`, and it retries publishing the draft instead of leaving it one when a fresh draft is not yet found by tag. App version 0.1.5.
 
 ## [2.50.2] - 2026-11-24
 
