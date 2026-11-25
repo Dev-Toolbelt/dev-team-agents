@@ -77,6 +77,7 @@
 }
 
 :root {
+  color-scheme: light;
   /* The system font stack. No webfont: `font-src 'self'` in the production CSP would
      block one anyway, and San Francisco is what a macOS developer tool should look like. */
   --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -136,6 +137,9 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    /* Tells Chromium to draw native controls dark. Without it, Windows opens a <select>
+       list on a light grey surface while the option text keeps the light foreground. */
+    color-scheme: dark;
     --background: oklch(0.185 0 0);
     --foreground: oklch(0.96 0 0);
     --card: oklch(0.225 0 0);
@@ -176,6 +180,14 @@
   body,
   #root {
     height: 100%;
+  }
+
+  /* A native <select> list takes its colours from the options, not from the select. Pin
+     them to the popover tokens so the list reads in both themes on every platform. */
+  option,
+  optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
   }
 
   /* Scrollbars follow the app's tokens instead of the platform default — Windows' grey
