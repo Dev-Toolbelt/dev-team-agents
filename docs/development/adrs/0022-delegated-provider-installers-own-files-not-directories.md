@@ -3,6 +3,7 @@
 **Date:** 2026-09-30  
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
+**Amended by:** [ADR-0068](0068-a-committed-link-into-any-machines-core-store-is-a-bind-artifact.md) — a link into any machine's core store is a fourth proof of ownership; [ADR-0069](0069-link-mode-uses-ntfs-junctions-on-windows-without-symlink-privilege.md) — a junction into the framework counts as a link  
 **Applies to:** `scripts/lib/provider-ownership.sh`, `scripts/install-opencode.sh`, `scripts/install-codex.sh`, `scripts/install-provider.sh`  
 
 ## Context

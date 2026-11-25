@@ -3,6 +3,7 @@
 **Date:** 2026-09-30  
 **Status:** Accepted  
 **Deciders:** dev-team-agents maintainers  
+**Amended by:** [ADR-0069](0069-link-mode-uses-ntfs-junctions-on-windows-without-symlink-privilege.md) — `_move_aside` removes an NTFS junction the way it unlinks a symlink, leaving its target untouched  
 **Applies to:** `scripts/lib/devteam/global_skills.py`, `scripts/lib/global-skill-roots.json`  
 
 ## Context

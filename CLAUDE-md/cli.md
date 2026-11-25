@@ -143,9 +143,9 @@ preferences, markers, `.worktrees/`), between managed markers.
 
 | Mode | Artifacts | Default where | Notes |
 |------|-----------|---------------|-------|
-| `link` | symlinks into `core/versions/<v>` | macOS, Linux | `devteam update` re-points every project at once |
-| `copy` | real copies, refreshed by `sync` | Windows without native symlink support | Recorded in `registry.json`, so the fallback is never silent |
-| `vendored` | full tree in the project, relative links — v2 behaviour | opt-in | CI, containers, air-gapped, repos that must ship the harness |
+| `link` | symlinks into `core/versions/<v>`; NTFS junctions on Windows without symlink privilege | macOS, Linux, Windows | `devteam update` re-points every project at once |
+| `copy` | real copies, refreshed by `sync` | a filesystem with neither symlinks nor junctions | Recorded in `registry.json`, so the fallback is never silent |
+| `vendored` | full tree in the project, relative links — v2 behaviour; real trees where symlinks are refused | opt-in | CI, containers, air-gapped, repos that must ship the harness |
 
 **Every mode serves every provider** (Provider Parity Rule). In `vendored` mode the opencode and
 Codex installers run too: their agents, command skills, plugin and `.codex/hooks.json` are regular
@@ -154,8 +154,15 @@ the vendored `scripts/`, so the whole tree resolves on any clone. A project-owne
 provider target is refused in every mode; vendored re-vendors (quarantines) only its own trees under
 `.dev-team-agents/`.
 
-`auto` probes for symlink support rather than guessing from the platform name. An explicit
-`--mode=link` on a filesystem that cannot do it **fails** instead of silently downgrading.
+`auto` probes rather than guessing from the platform name. An explicit `--mode=link` on a
+filesystem that can make neither a symlink nor a junction **fails** instead of silently downgrading.
+
+**Junctions (ADR-0069).** Every link a bind makes is to a directory, so on Windows without Developer
+Mode `link` mode creates NTFS junctions, which need no privilege. Python sees a junction as a directory,
+not a symlink: code that asks whether a bind artifact is a link uses `paths.is_link`, and removes one
+with `paths.remove_link`, never `is_symlink()`/`unlink()`/`rmtree`. `quarantine.move` refuses a
+junction. `vendored` mode never writes a junction (it is absolute, so it would not survive the commit):
+where symlinks are refused it vendors the Claude trees as real copies.
 
 **`link` is the mode to recommend a user** — it is the only one where a `devteam update` to the
 store reaches every bound project with no further action. `copy` and `vendored` both need an
@@ -164,8 +171,8 @@ those modes who skips that step keeps running the version they bound at. This is
 for a human choosing among the four, not a change to the CLI's own default: `--mode` still
 defaults to `auto`, and `auto` already resolves to `link` on any filesystem that supports it — a
 plain `devteam bind` on macOS or Linux gets the recommended behaviour without the caller having to
-know that. Only a caller for whom `link` is not viable (Windows without symlink privilege, or a
-project that intentionally wants `vendored`) has a reason to override it. The app's bind dialog
+know that. Only a caller for whom `link` is not viable (a filesystem with neither symlinks nor
+junctions, or a project that intentionally wants `vendored`) has a reason to override it. The app's bind dialog
 mirrors this: it pre-selects `link` and labels it recommended, but a user can still choose another
 mode.
 

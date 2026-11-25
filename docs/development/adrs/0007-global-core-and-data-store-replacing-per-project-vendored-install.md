@@ -2,7 +2,8 @@
 
 **Date:** 2026-09-27
 **Status:** Accepted
-**Deciders:** dev-team-agents maintainers
+**Deciders:** dev-team-agents maintainers  
+**Amended by:** [ADR-0069](0069-link-mode-uses-ntfs-junctions-on-windows-without-symlink-privilege.md) — `link` mode uses NTFS junctions on Windows without symlink privilege; `copy` is the fallback only where neither works
 
 ## Context
 
