@@ -158,6 +158,11 @@ const PASS_THROUGH_ENV = [
   'HOMEPATH',
   'PATHEXT',
   'COMSPEC',
+  // Where the CLI looks for Git Bash (ADR-0026): without them `C:\Program Files\Git\bin\bash.exe`
+  // is never tried, and opencode and Codex installs fail with "bash was not found".
+  'ProgramFiles',
+  'ProgramFiles(x86)',
+  'ProgramW6432',
   'DEVTEAM_HOME',
   // The CLI's own children (`git`, and `gh` for the user's recorded commands) reach the
   // network and the user's credentials through these; without them a proxied or

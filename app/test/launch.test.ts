@@ -131,6 +131,23 @@ describe('childEnvironment', () => {
     expect(env[proxies[0] as string]).toBe('http://p');
   });
 
+  it('passes the Program Files folders, where the CLI finds Git Bash', () => {
+    const env = childEnvironment(
+      {
+        ProgramFiles: 'C:\\Program Files',
+        'ProgramFiles(x86)': 'C:\\Program Files (x86)',
+        ProgramW6432: 'C:\\Program Files',
+      },
+      {},
+      'win32',
+    );
+    expect(env['ProgramFiles']).toBe('C:\\Program Files');
+    expect(env['ProgramFiles(x86)']).toBe('C:\\Program Files (x86)');
+    expect(env['ProgramW6432']).toBe('C:\\Program Files');
+    // Windows names are case-insensitive: a parent that spells it differently still passes it.
+    expect(childEnvironment({ 'PROGRAMFILES(X86)': 'C:\\x86' }, {}, 'win32')['ProgramFiles(x86)']).toBe('C:\\x86');
+  });
+
   it('stays case-sensitive off Windows', () => {
     expect(childEnvironment({ Path: '/x' }, {}, 'linux')['PATH']).toBeUndefined();
   });
