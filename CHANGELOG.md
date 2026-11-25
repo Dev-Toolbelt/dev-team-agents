@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The release now validates its winget manifests.** The winget manifests declared ManifestVersion 1.12.0, the `windows-latest` runner ships winget 1.11, and upgrading winget there failed on every release (no NuGet provider, then `0x80073CF1` registering the App Installer bundle), so the manifests were never validated. They now declare 1.10.0, which requires the same fields and which the runner's winget validates as it is; the upgrade step is gone, replaced by a check that names the fix if an image ever ships an older client.
+
 ## [2.50.3] - 2026-11-25
 
 ### Fixed
