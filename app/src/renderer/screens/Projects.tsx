@@ -57,7 +57,7 @@ const MODE_LABELS: Record<BindMode, string> = {
 
 // `link` is what the app recommends — it is the only mode where a store update reaches a
 // bound project with no further step. `auto` stays the CLI's own default (it probes for
-// symlink support and resolves to `link` or `copy` accordingly); this constant only decides
+// symlink or junction support and resolves to `link` or `copy` accordingly); this constant only decides
 // what the dialog pre-selects and labels, never the CLI contract.
 const RECOMMENDED_MODE: BindMode = 'link';
 
@@ -65,9 +65,9 @@ const RECOMMENDED_MODE: BindMode = 'link';
 // One line each (reuse guideline `app_support_copy`): the consequence that decides the
 // choice, not how the mode works — `CLAUDE-md/cli.md` § bind modes has that.
 const MODE_DESCRIPTIONS: Record<BindMode, string> = {
-  auto: 'Link if symlinks work here, else Copy.',
+  auto: 'Link if links work here, else Copy.',
   link: 'Updates reach the project automatically.',
-  copy: 'No symlinks; run sync after each update.',
+  copy: 'No links; run sync after each update.',
   vendored: 'Copies the framework into your repo.',
 };
 

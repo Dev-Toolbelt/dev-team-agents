@@ -374,6 +374,8 @@ export interface BindReport {
    * tree is a bind the user discovers from `git status` days later.
    */
   readonly merged_project_files: readonly string[];
+  /** Bind artifacts git still tracks; ignoring them has no effect until they are untracked. Absent from an older CLI. */
+  readonly tracked_artifacts?: readonly string[];
   readonly pruned?: { readonly unlinked: readonly string[]; readonly quarantined: readonly unknown[] };
   readonly worktrees?: readonly unknown[];
   /**
