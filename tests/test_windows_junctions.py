@@ -24,7 +24,9 @@ ON_WINDOWS = os.name == "nt"
 
 
 def _refuse_symlink(*_args, **_kwargs):
-    raise OSError(1314, "A required privilege is not held by the client")
+    # The 4-argument form sets `winerror` on Windows, as the real refusal does; the
+    # 2-argument form sets only `errno`, which the fallback deliberately ignores.
+    raise OSError(0, "A required privilege is not held by the client", None, 1314)
 
 
 class LinkHelpersEverywhereTest(StoreTestCase):
