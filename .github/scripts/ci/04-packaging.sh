@@ -170,10 +170,10 @@ blocking "homebrew: ruby syntax" homebrew_syntax
 #
 # SOURCE OF TRUTH for the required-field lists: the JSON schema each manifest
 # declares in its own `# yaml-language-server: $schema=` header,
-# https://aka.ms/winget-manifest.<type>.1.12.0.schema.json (mirrored in
-# microsoft/winget-cli under schemas/JSON/manifests/v1.12.0/). The lists encoded
+# https://aka.ms/winget-manifest.<type>.1.10.0.schema.json (mirrored in
+# microsoft/winget-cli under schemas/JSON/manifests/v1.10.0/). The lists encoded
 # below are the ones the manifest files' own header comments record as confirmed
-# against that schema on 2026-09-28 — this script is a second copy of them, not a
+# against that schema on 2026-11-25 — this script is a second copy of them, not a
 # second authority. When ManifestVersion moves, re-read the schema at that URL and
 # update both the headers and the table below together.
 #
@@ -250,14 +250,14 @@ if (owner is None or repo is None
 
 RELEASE_PREFIX = "https://github.com/%s/%s/releases/download/" % (owner, repo)
 
-# Required top-level fields per manifest type, confirmed against the 1.12.0
+# Required top-level fields per manifest type, confirmed against the 1.10.0
 # schema each file declares (see the comment above this heredoc). The `version`
 # manifest's own header records the confirmation trail but does not enumerate the
 # list, so its five fields are taken from the same schema it names.
 #
 # `locale` has no tracked file yet, so no manifest header records its trail: its
-# five fields were read on 2026-09-28 from
-#   schemas/JSON/manifests/v1.12.0/manifest.locale.1.12.0.json
+# five fields were read on 2026-11-25 from
+#   schemas/JSON/manifests/v1.10.0/manifest.locale.1.10.0.json
 # in microsoft/winget-cli, the same path the other three were confirmed against.
 # It is the SHORT list on purpose — Publisher, PackageName, License and
 # ShortDescription are required of `defaultLocale` only, which is exactly why a

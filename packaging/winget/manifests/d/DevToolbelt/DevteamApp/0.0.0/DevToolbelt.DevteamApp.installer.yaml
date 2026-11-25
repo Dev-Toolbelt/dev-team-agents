@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
 
 # DevToolbelt.DevteamApp.installer.yaml — installer manifest for the desktop app.
 #
@@ -45,8 +45,8 @@
 # implicit — the same gap ADR-0011's amendment names for the current,
 # app-manifest-free state ("winget has no cask-style dependency anywhere").
 #
-# Schema: manifestVersion 1.12.0, confirmed 2026-09-28 against
-#   https://raw.githubusercontent.com/microsoft/winget-cli/master/schemas/JSON/manifests/v1.12.0/manifest.installer.1.12.0.json
+# Schema: manifestVersion 1.10.0, confirmed 2026-11-25 against
+#   https://raw.githubusercontent.com/microsoft/winget-cli/master/schemas/JSON/manifests/v1.10.0/manifest.installer.1.10.0.json
 # (microsoft/winget-cli repo) — required top level: PackageIdentifier,
 # PackageVersion, Installers, ManifestType, ManifestVersion; required per
 # Installer entry: Architecture, InstallerUrl, InstallerSha256.
@@ -69,4 +69,4 @@ Installers:
     InstallerUrl: https://github.com/Dev-Toolbelt/dev-team-agents/releases/download/vX.Y.Z/dev-team-agents-Setup-X.Y.Z-arm64.exe
     InstallerSha256: "0000000000000000000000000000000000000000000000000000000000000000"
 ManifestType: installer
-ManifestVersion: 1.12.0
+ManifestVersion: 1.10.0
