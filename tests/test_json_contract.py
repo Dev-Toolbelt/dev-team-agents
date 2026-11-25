@@ -661,6 +661,7 @@ class AppFacingKeySetContractTest(StoreTestCase):
             "artifacts",
             "retired",
             "merged_project_files",
+            "tracked_artifacts",
             "pin",
             "identity_created",
             "pruned",
