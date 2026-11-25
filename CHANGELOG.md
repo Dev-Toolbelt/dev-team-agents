@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.50.3] - 2026-11-25
+
 ### Fixed
 - **The desktop app's signed macOS build no longer fails at keychain setup.** `electron-builder` 26.15.3 passed the certificate's password, not its temporary keychain's, to `security set-key-partition-list`, so every build with `MAC_CSC_*` secrets failed with `SecKeychainUnlock: The user name or passphrase you entered is not correct` and app-v0.1.2 published nothing. The app now builds with `electron-builder` 26.17.0, which carries the upstream fix. App version 0.1.3.
 - **The release's notarisation check no longer rejects a correctly notarised app.** `verify-mac-notarised.sh` piped `codesign -dvv` through `tee` into `grep -q` under `pipefail`; `grep -q` exits at the first match, `tee` died of SIGPIPE, and the Developer ID check failed on an app that `stapler` and Gatekeeper had just accepted, so app-v0.1.3 published nothing. The output is now captured and matched in the shell. App version 0.1.4.
@@ -2460,7 +2462,8 @@ Large refactor/performance release focused on reducing per-session and per-spawn
 - `templates/plan-template.md`
 - `CLAUDE.md` authoring standards
 
-[Unreleased]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.50.2...HEAD
+[Unreleased]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.50.3...HEAD
+[2.50.3]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.50.2...v2.50.3
 [2.50.2]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.50.1...v2.50.2
 [2.50.1]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.50.0...v2.50.1
 [2.50.0]: https://github.com/Dev-Toolbelt/dev-team-agents/compare/v2.49.1...v2.50.0
