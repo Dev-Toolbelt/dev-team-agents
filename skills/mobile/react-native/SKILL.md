@@ -102,7 +102,7 @@ const requestLocation = async () => {
 
 - Check permission status before requesting — avoid re-prompting after a denial
 - Always handle the `denied` and `blocked` states gracefully
-- On iOS: populate all `NSUsageDescription` keys in `app.json → ios.infoPlist` before submitting
+- On iOS: populate the `NSUsageDescription` key for each permission in `app.json → ios.infoPlist`, naming the feature that uses it
 
 ### Push Notifications
 - Use `expo-notifications` (Managed) or `@react-native-firebase/messaging` (Bare/Firebase)
@@ -143,28 +143,24 @@ When a native module is not available in the Expo SDK:
 
 ---
 
-## App Store & Play Store — Publication Checklist
+## App Store & Play Store — Release Build Checklist
+
+Store-review rules (privacy policy, purpose strings, privacy manifest, account deletion, billing, target API, Data safety, age rating, review notes) live in `skills/mobile/store-submission-compliance/SKILL.md`; run it before any submission. This list covers the build itself.
 
 ### Both Platforms
 - [ ] App icon in all required sizes (use `expo-icon-generator` or Sketch/Figma export)
 - [ ] Splash screen tested on all target screen sizes
 - [ ] Version (`version`) and build number (`ios.buildNumber` / `android.versionCode`) incremented
 - [ ] No development/debug code in production build (`__DEV__` guards removed)
-- [ ] Privacy policy URL set in store listing and `app.json` (required for apps accessing camera, location, contacts)
 - [ ] App tested on minimum supported OS version
 
 ### iOS (App Store)
 - [ ] `bundleIdentifier` matches App Store Connect entry
 - [ ] Signing configured: distribution certificate + provisioning profile (or EAS Credentials)
-- [ ] All `NSUsageDescription` keys populated in `infoPlist`
 - [ ] TestFlight build tested by at least one external tester
-- [ ] Age rating and content declarations filled in App Store Connect
-- [ ] App Review notes added for any feature requiring special permissions
 
 ### Android (Play Store)
 - [ ] `package` name matches Play Console entry
 - [ ] Upload keystore stored securely (EAS Credentials or password manager) — **never commit to git**
-- [ ] `targetSdkVersion` ≥ current Google Play requirement (updated annually)
 - [ ] Adaptive icon configured (`android.adaptiveIcon`)
 - [ ] Internal / Closed testing track tested before production rollout
-- [ ] Data safety section filled in Play Console

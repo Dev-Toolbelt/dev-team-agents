@@ -20,8 +20,7 @@ The **design** half lives in `skills/mobile/ios-hig/SKILL.md` (navigation patter
 - Request permissions only at the moment they are first needed (not at launch)
 - Provide a clear in-app rationale before the OS permission dialog appears
 - Handle all permission states: `notDetermined`, `authorized`, `denied`, `restricted`
-- Populate every required `NSUsageDescription` key in `Info.plist` before submitting to App Store
-- **Privacy Manifest** (`PrivacyInfo.xcprivacy`): required for apps using certain APIs (file timestamps, user defaults, disk space) — add it before App Store submission
+- Before any App Store submission, run `skills/mobile/store-submission-compliance/SKILL.md` — it owns the store-review rules, including the privacy manifest
 
 ## Code Signing & Distribution
 

@@ -21,8 +21,7 @@ The **design** half lives in `skills/mobile/material-design/SKILL.md` (color sys
 - Declare only the permissions you actually use in `AndroidManifest.xml`
 - Request runtime permissions with `ActivityResultContracts.RequestPermission`
 - Handle `shouldShowRequestPermissionRationale()` — show an explanation before re-requesting
-- Target the latest stable `targetSdkVersion` required by Google Play
-- Fill the **Data Safety** section in Play Console accurately — it is legally binding
+- Before any Play submission, run `skills/mobile/store-submission-compliance/SKILL.md` — it owns the store-review rules (target API, Data safety, sensitive permissions, billing)
 
 ## Code Signing & Release
 

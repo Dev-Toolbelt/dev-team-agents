@@ -165,21 +165,21 @@ Future<bool> authenticate() async {
 
 ---
 
-## App Store & Play Store — Publication Checklist
+## App Store & Play Store — Release Build Checklist
+
+Store-review rules (privacy policy, purpose strings, privacy manifest, account deletion, billing, target API, Data safety, age rating, review notes) live in `skills/mobile/store-submission-compliance/SKILL.md`; run it before any submission. This list covers the build itself.
 
 ### Both Platforms
 - [ ] `version` and `build_number` incremented in `pubspec.yaml`
 - [ ] Flutter and all dependencies on stable channel and up-to-date (`flutter pub outdated`)
 - [ ] Release build tested on physical device: `flutter run --release`
 - [ ] No `print()` statements in production code (`debugPrint()` only, or a proper logger)
-- [ ] Privacy policy URL configured in store listing
 - [ ] App icon generated in all sizes (`flutter_launcher_icons` package)
 - [ ] Splash screen configured (`flutter_native_splash` package)
 
 ### iOS (App Store)
 - [ ] `CFBundleIdentifier` matches App Store Connect entry
 - [ ] `CFBundleShortVersionString` and `CFBundleVersion` match `pubspec.yaml` version/build
-- [ ] All required `NSUsageDescription` keys set in `ios/Runner/Info.plist`
 - [ ] Signed with distribution certificate via Xcode or Fastlane
 - [ ] TestFlight build validated before production submission
 - [ ] Bitcode setting matches App Store Connect requirements (disabled for most modern apps)
@@ -189,7 +189,5 @@ Future<bool> authenticate() async {
 - [ ] `versionName` and `versionCode` match `pubspec.yaml`
 - [ ] Release APK/AAB signed with the upload keystore (never commit keystore to git)
 - [ ] ProGuard/R8 rules verified — check for missing keep rules with a release build
-- [ ] `targetSdkVersion` ≥ current Google Play requirement
 - [ ] Adaptive icon configured in `android/app/src/main/res/`
 - [ ] Internal testing track validated before production rollout
-- [ ] Data safety section filled in Play Console
