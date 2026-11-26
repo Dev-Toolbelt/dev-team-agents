@@ -61,6 +61,8 @@ When the project targets mobile, detect the platform and load the corresponding 
 | **Android** | `build.gradle`, Kotlin files, `react-native` or Flutter with Android support, user mentions "Android design" or "Material" | `skills/mobile/material-design/SKILL.md` |
 | **Cross-platform** | React Native, Expo, or Flutter targeting both platforms | Load **both** `ios-hig` and `material-design` skills |
 
+When the screen is one the store reviews (the `ui-ux-designer` row of its § When It Runs), also load `skills/mobile/store-submission-compliance/SKILL.md` and design to its § Build It Right.
+
 When both skills are loaded, apply each platform's guidelines to its respective target: do not mix iOS HIG patterns into Android screens or Material patterns into iOS screens. Flag inconsistencies when the same design violates one platform's conventions.
 
 ---

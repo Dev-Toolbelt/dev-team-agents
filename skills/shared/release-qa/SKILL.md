@@ -95,6 +95,8 @@ passed. A state-changing action that is not on the authorized list is never perf
 scenario as `not run (needs authorization)`. In production, record every record you created or
 changed (type, identifier, scenario)."
 
+When the release ships an iOS or Android app, add to that prompt: "Run `skills/mobile/store-submission-compliance/SKILL.md` for each app target and report its verdict." Open manual checks it returns under `## Open Decisions` are asked and sent back per `skills/shared/interaction-patterns/SKILL.md` § Sub-agent Question Relay; when the user leaves them open, the store verdict is `NOT CHECKED` with the list.
+
 ## Step 6 — Report and Close
 
 | Section | Content |
@@ -103,6 +105,7 @@ changed (type, identifier, scenario)."
 | Regression | Cross-feature findings |
 | Records created | Production and staging only; nothing is deleted by the run — deletion is a separate action the user confirms |
 | Build | Environment, ref or integration branch, deployed version read |
+| Store compliance | Mobile releases only: the verdict and findings from the store-submission-compliance run |
 
 Then `devteam qa auth clean --json` (Step 4). Local: keep the integration worktree until the user
 decides — offer `/devteam:pr` for `release/<slug>` when every row passed.

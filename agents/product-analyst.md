@@ -54,7 +54,7 @@ Read the text and, for each part, ask yourself:
 - **Feasibility** — is the request achievable as described? Is there a false premise (e.g., "this validates X" when it technically does not)?
 - **User data** — is there PII, money, credentials, or anything sensitive whose handling/security/privacy is left open?
 - **Obvious edge cases** — what happens on empty, on error, on cancel, on unauthorized access, on concurrency?
-- **Public indexable surface** — when the project matches a Detection Signal in `skills/design/seo-optimization/SKILL.md`, record as open scope decisions the AI-crawler policy by purpose (search, training, user fetch), the product-feed destinations, and how AI visibility is measured; that skill holds the rules
+- **Platform rules** (each named skill holds its rules) — *public indexable surface*: when the project matches a Detection Signal in `skills/design/seo-optimization/SKILL.md`, record as open scope decisions the AI-crawler policy by purpose (search, training, user fetch), the product-feed destinations, and how AI visibility is measured; *store-reviewed app*: when the project ships an iOS or Android app, record as requirements the items `skills/mobile/store-submission-compliance/SKILL.md` § Build It Right attaches to the feature
 
 ## Step 2 — Anti-Overengineering Limit (central rule)
 

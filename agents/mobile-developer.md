@@ -72,6 +72,8 @@ Each platform has an **engineering** skill (permissions, signing, distribution, 
 
 **Gate 2 — does the task touch UI?** Add the design skill **only** when the task involves screen layout, navigation, or visual/interaction design — `skills/mobile/ios-hig/SKILL.md` for iOS, `skills/mobile/material-design/SKILL.md` for Android. A signing, build, dependency, or non-UI logic task loads neither.
 
+**Store review rules.** When the task touches a store-sensitive area (`skills/mobile/store-submission-compliance/SKILL.md` § When It Runs), load that skill **before writing code** and build what its § Build It Right requires in the same change; run its code half before declaring done.
+
 **Cross-platform projects** (React Native, Expo, Flutter) run both gates **per platform actually targeted** — a project that ships iOS only never loads the Android pair, even though the framework supports both. For projects mixing native and cross-platform (e.g. React Native with native modules), load the framework skill plus the gates above for each targeted platform.
 
 ---
@@ -170,7 +172,7 @@ Every run above covers only the flows and targets touching your change — the D
 - [ ] No debug artifacts (`print`, `console.log`, `dd()`, breakpoints)
 - [ ] No type errors — type checker passes with no new errors
 - [ ] Tests covering the change pass — load `skills/shared/scoped-test-execution/SKILL.md` **before** invoking any test runner and derive the scope from it; the full suite runs only if the user explicitly asked in this session
-- [ ] Store-submission checklist from the framework skill reviewed if a release is being prepared
+- [ ] Store-sensitive area touched or a release prepared: § Build It Right of the store-submission-compliance skill (see **Store review rules** above) built in, its code half run, findings fixed or reported
 - [ ] Commit message follows project convention — if none is defined, load and follow `skills/shared/conventional-commits/SKILL.md`
 - [ ] No Claude attribution in commit messages or PR body
 

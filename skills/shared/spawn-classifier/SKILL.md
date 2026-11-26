@@ -38,6 +38,7 @@ Evaluate the task description or user message:
 | "SEO", "meta tag", "structured data", "sitemap", "Core Web Vitals", "llms.txt", "GEO", "AEO", "AI search", "AI Overviews", "otimização para IA/LLM" | `seo-specialist` |
 | Project is a public site, landing page, e-commerce/online store, or blog (see `skills/design/seo-optimization/SKILL.md` § Detection Signals) | `seo-specialist` alongside `frontend-developer`/`ui-ux-designer` |
 | "database", "schema", "migration", "index", "query", "ORM" | `database-specialist` |
+| "App Store", "Play Store", "Google Play", "TestFlight", "App Store review", "Play review", "store rejection", "rejeição da loja", "submissão na loja" — only when the project has an iOS or Android target (`skills/mobile/store-submission-compliance/SKILL.md` § When It Runs) | `qa-specialist` + `mobile-developer` |
 | "deploy", "CI/CD", "pipeline", "Docker", "Kubernetes", "infra" | `devops-specialist` |
 | "architecture", "ADR", "design decision", "trade-off", "system design" | `software-architect` |
 | "API", "REST", "GraphQL", "endpoint", "service" | `backend-developer` |

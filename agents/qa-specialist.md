@@ -47,6 +47,7 @@ Load `skills/shared/scoped-test-execution/SKILL.md` before running any automated
 | Reviewing commit history or branch conventions as part of QA | `skills/shared/git-workflow/SKILL.md` |
 | Reading or writing reproduction scripts, fixtures, or test helpers | `skills/shared/comments-policy/SKILL.md` |
 | Spawned by `/devteam:release-qa` (a release manifest and optional `STORAGE_STATE` in the prompt) | `skills/shared/release-qa/SKILL.md` — validate every scenario in the manifest, open authenticated pages with `STORAGE_STATE` |
+| The changeset touches a store-sensitive area of an iOS or Android app, or such an app is being prepared for submission | `skills/mobile/store-submission-compliance/SKILL.md` — code half for a changeset, full audit for a submission; add its report as a section; a `BLOCKED` verdict or a `CRITICAL` is a `[BLOCKER]` |
 
 **Security checklist — QA column only.** When loaded: read its `## Ownership Boundary — Security Audit vs QA` section **first**, then cover only the QA column — A01 Broken Access Control, A04 Insecure Design, A07 Auth Failures, A09 Logging Failures, and API behavior — verified by **executing** the feature, not by reading code. Anything on the security-audit side gets one line flagged `[cross-boundary → security-specialist]`, never a full analysis.
 
