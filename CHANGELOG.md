@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **QA audits mobile apps against App Store and Google Play review before submission.** A new skill, `store-submission-compliance`, lists the causes that get builds rejected again and again: a staging backend, a missing purpose string or privacy manifest, no in-app account deletion, digital goods sold outside store billing, a target API below Play's floor, sensitive Android permissions, a Data safety form that does not match the SDKs. It splits the audit into what the code shows and what only a person can prove on the release build (demo account, live backend, review notes, screenshots, deletion on a device), and ends with `CLEAR`, `BLOCKED` or `NOT CHECKED`. `qa-specialist` runs it for an iOS or Android release and `/devteam:release-qa` reports its verdict. The rules also apply before the gate: its Build It Right table lists what a feature must ship with (deletion with any sign-up, a usage string and a "Continue" pre-prompt with any permission, store billing and restore with any paywall, consent before personal data reaches an AI service), `product-analyst` records those as requirements, `ui-ux-designer` designs paywalls and permission screens to them, `mobile-developer` loads the skill before writing code, and every code reviewer runs its checks on a diff that touches such an area, with a critical finding blocking the pull request. Each volatile fact carries its Apple or Google source and the date it was verified. The skill is written from those primary pages, not vendored, because the closest open project's licence would pass a revenue royalty to every installed project (ADR-0070).
+
+### Changed
+- **The React Native, Flutter, iOS and Android skills no longer carry their own store checklists.** Their store-review items moved to `store-submission-compliance`; what stays is the release build itself (signing, versions, icons, R8).
+
 ### Fixed
 - **The release now validates its winget manifests.** The winget manifests declared ManifestVersion 1.12.0, the `windows-latest` runner ships winget 1.11, and upgrading winget there failed on every release (no NuGet provider, then `0x80073CF1` registering the App Installer bundle), so the manifests were never validated. They now declare 1.10.0, which requires the same fields and which the runner's winget validates as it is; the upgrade step is gone, replaced by a check that names the fix if an image ever ships an older client.
 

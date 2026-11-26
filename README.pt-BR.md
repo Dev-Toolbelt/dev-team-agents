@@ -300,7 +300,7 @@ O time tem **18 agentes** cobrindo todo o ciclo de vida. Detalhes completos na [
 |--------|-----------|
 | `backend-developer` | Código server-side — APIs, serviços, regras de negócio |
 | `frontend-developer` | Código client-side — telas, componentes, fluxos de UI |
-| `mobile-developer` | Features mobile — React Native, Expo, Flutter, iOS/Android nativo |
+| `mobile-developer` | Features mobile — React Native, Expo, Flutter, iOS/Android nativo; já constrói o que a revisão da App Store e do Google Play exige (exclusão de conta, purpose strings, billing da loja, privacy manifest) |
 | `ui-ux-designer` | Design system, fluxos de UX e decisões visuais |
 | `seo-specialist` | Quality gate de SEO — técnico, on-page, Core Web Vitals, dados estruturados, busca por IA (AEO/GEO) |
 | `devops-specialist` | CI/CD, Docker, infraestrutura e scripts de deploy |
@@ -312,7 +312,7 @@ O time tem **18 agentes** cobrindo todo o ciclo de vida. Detalhes completos na [
 | `code-reviewer` | Revisor de entrada — roteia para os revisores de backend/frontend e sintetiza um único veredito |
 | `backend-reviewer` | Revisão estrutural profunda de mudanças no backend |
 | `frontend-reviewer` | Revisão estrutural profunda de mudanças no frontend |
-| `qa-specialist` | Valida comportamento do produto, fluxos de usuário e risco de regressão |
+| `qa-specialist` | Valida comportamento do produto, fluxos de usuário e risco de regressão; numa release iOS ou Android, audita o app contra as regras de revisão da App Store e do Google Play antes do envio |
 | `security-specialist` | Auditorias de segurança, análise de vulnerabilidades, questões OWASP |
 | `backend-test-specialist` | Escreve e mantém testes de backend |
 | `frontend-test-specialist` | Escreve e mantém testes de frontend |

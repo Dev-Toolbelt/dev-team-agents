@@ -300,7 +300,7 @@ The team has **18 agents** covering the full lifecycle. Full details in the [Age
 |-------|-------------|
 | `backend-developer` | Server-side code — APIs, services, business logic |
 | `frontend-developer` | Client-side code — screens, components, UI flows |
-| `mobile-developer` | Mobile features — React Native, Expo, Flutter, native iOS/Android |
+| `mobile-developer` | Mobile features — React Native, Expo, Flutter, native iOS/Android; builds in what App Store and Google Play review require (account deletion, purpose strings, store billing, privacy manifest) |
 | `ui-ux-designer` | Design system, UX flows, and visual decisions |
 | `seo-specialist` | SEO quality gate — technical, on-page, Core Web Vitals, structured data, AI search (AEO/GEO) |
 | `devops-specialist` | CI/CD, Docker, infrastructure, and deploy scripts |
@@ -312,7 +312,7 @@ The team has **18 agents** covering the full lifecycle. Full details in the [Age
 | `code-reviewer` | Entry-point reviewer — routes to the backend/frontend reviewers and synthesizes a single verdict |
 | `backend-reviewer` | Deep structural review of backend changes |
 | `frontend-reviewer` | Deep structural review of frontend changes |
-| `qa-specialist` | Validates product behavior, user flows, and regression risk |
+| `qa-specialist` | Validates product behavior, user flows, and regression risk; for an iOS or Android release, audits the app against App Store and Google Play review rules before submission |
 | `security-specialist` | Security audits, vulnerability analysis, OWASP concerns |
 | `backend-test-specialist` | Writes and maintains backend tests |
 | `frontend-test-specialist` | Writes and maintains frontend tests |
