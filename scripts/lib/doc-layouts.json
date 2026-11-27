@@ -139,6 +139,13 @@
       "gated": "design/design-system-full.md",
       "readonly": false
     },
+    "layout-proposals": {
+      "owns": "Record of the three flow-only layout proposals for client approval — source map, directions, assumptions, approval; the wireframe page sits beside it as layout-proposals.html",
+      "owner": "ui-ux-designer",
+      "development": "design/layout-proposals.md",
+      "gated": "design/layout-proposals.md",
+      "readonly": false
+    },
     "design-prototypes": {
       "owns": "Raw design-tool exports, one dated folder per feature import, never edited",
       "owner": "ui-ux-designer",

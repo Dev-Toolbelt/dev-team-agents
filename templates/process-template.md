@@ -68,6 +68,7 @@ Paths are relative to the docs root (`context_paths[0]`, `docs` by default).
 | `design-system` | `design/design-system.md` | `ui-ux-designer` | no |
 | `brand-guide` | `design/brand-guide.md` | `ui-ux-designer` | no |
 | `design-system-full` | `design/design-system-full.md` | `ui-ux-designer` | no |
+| `layout-proposals` | `design/layout-proposals.md` | `ui-ux-designer` | no |
 | `design-prototypes` | `design/prototypes/` | `ui-ux-designer` | yes |
 | `design-screens` | `design/screens/` | `ui-ux-designer` | no |
 | `design-flows` | `design/flows/` | `ui-ux-designer` | no |
