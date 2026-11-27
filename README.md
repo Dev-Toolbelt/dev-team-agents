@@ -237,7 +237,7 @@ Implementation commands also take a sprint task (`/devteam:backend TASK-003`): t
 | `/devteam:brief` | Client kickoff, business-only — strategic briefing from the client's filled-in form (product-analyst) |
 | `/devteam:briefing` | Plan a project using the client's filled-in briefing form as the top reference |
 | `/devteam:brand` | Visual identity — brand guide and design system from the client's logo (ui-ux-designer) |
-| `/devteam:layout` | Three distinct flow-only layout proposals from a reference folder (briefing, references, logos) for client approval, optionally published as an Artifact on Claude Code (ui-ux-designer) |
+| `/devteam:layout` | Three distinct flow-only layout proposals from a reference folder (briefing, references, logos) for client approval, a full mobile flow per direction, saved locally, or published as a private Artifact on Claude Code with `--publish` (ui-ux-designer) |
 | `/devteam:design-system` | One self-contained design system document from the client's logo and, optionally, a briefing (ui-ux-designer) |
 | `/devteam:design` | UI/UX design — ui-ux-designer |
 | `/devteam:relayout` | Redesign an existing screen to match visual references — ui-ux-designer + frontend-developer, mandatory reference/target-screen gate, isolated worktree, automatic post-execution review |
