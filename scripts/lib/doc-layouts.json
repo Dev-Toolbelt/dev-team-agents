@@ -132,6 +132,13 @@
       "gated": "design/brand-guide.md",
       "readonly": false
     },
+    "design-system-full": {
+      "owns": "Self-contained design system for one brand image — values, reasoning and AI image layer in one document; a derived snapshot when design-system and brand-guide exist",
+      "owner": "ui-ux-designer",
+      "development": "design/design-system-full.md",
+      "gated": "design/design-system-full.md",
+      "readonly": false
+    },
     "design-prototypes": {
       "owns": "Raw design-tool exports, one dated folder per feature import, never edited",
       "owner": "ui-ux-designer",

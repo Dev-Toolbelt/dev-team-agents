@@ -42,6 +42,7 @@ _devteam_doc_rel() {
         client-briefing) printf '%s' "product/briefing.md" ;;
         design-system) printf '%s' "design/design-system.md" ;;
         brand-guide) printf '%s' "design/brand-guide.md" ;;
+        design-system-full) printf '%s' "design/design-system-full.md" ;;
         specs) printf '%s' "specs/" ;;
         testing) printf '%s' "tests/testing-strategy.md" ;;
         backlog-index) printf '%s' "backlog/sprints/sprints.md" ;;
