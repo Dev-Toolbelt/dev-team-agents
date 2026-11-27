@@ -140,7 +140,7 @@
       "readonly": false
     },
     "layout-proposals": {
-      "owns": "Record of the three flow-only layout proposals for client approval — source map, directions, assumptions, approval; the wireframe page sits beside it as layout-proposals.html",
+      "owns": "Record of the three flow-only layout proposals for client approval — source map, directions, assumptions, approval; the wireframe page sits beside it as layout-proposals.html, and earlier runs are kept as layout-proposals-v<N>",
       "owner": "ui-ux-designer",
       "development": "design/layout-proposals.md",
       "gated": "design/layout-proposals.md",
