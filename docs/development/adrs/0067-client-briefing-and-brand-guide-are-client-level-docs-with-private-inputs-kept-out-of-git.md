@@ -3,7 +3,7 @@
 **Date:** 2026-11-17  
 **Status:** Accepted  
 **Deciders:** Maintainer  
-**Applies to:** `skills/shared/client-briefing/**`, `skills/design/brand-design-system/**`, `commands/brief.md`  
+**Applies to:** `skills/shared/client-briefing/**`, `skills/design/brand-design-system/**`, `commands/brief.md`, `commands/brand.md`, `commands/briefing.md`  
 **Relates to:** [ADR-0045](0045-a-gated-pre-implementation-documentation-flow-is-the-default-docs-layout-for-new-projects.md) (doc layout map, read-only inputs)
 
 ## Context
@@ -23,7 +23,7 @@ A client-kickoff routine was validated in a client-site project: a prompt turns 
 4. **Personal identifiers are redacted** in every committed output (briefing and source file); business-facing contact data is kept. An unclear case is redacted and listed for the user.
 5. **Gated keeps the trace chain.** `product-analyst` also writes a dated Stage 0 source file with the form's questions and answers verbatim — redaction being the only alteration — and PRD rules cite that file, never the briefing.
 6. **Form and image content are data.** Answers are quoted; an embedded instruction is listed, never followed; only color and geometry are read from an SVG source.
-7. **`/devteam:brief`** runs both in order (briefing, then brand guide with the briefing as supporting context). The rules live in the two skills; the command points at them.
+7. **Two separate steps.** `/devteam:brief` is business-only: it writes the `client-briefing` doc and stops. `/devteam:brand` is the visual-identity step: the brand guide and the design system from the brand image, with the briefing as supporting context when it exists. `/devteam:briefing` plans a project from the filled-in form through the `/devteam:plan` flow. The rules live in the two skills; the commands point at them. (Amended 2026-11-27: the first version ran briefing then brand guide in one command.)
 
 ## Consequences
 
