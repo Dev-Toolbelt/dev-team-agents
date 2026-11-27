@@ -3,7 +3,7 @@
 **Date:** 2026-11-17  
 **Status:** Accepted  
 **Deciders:** Maintainer  
-**Applies to:** `skills/shared/client-briefing/**`, `skills/design/brand-design-system/**`, `commands/brief.md`, `commands/brand.md`, `commands/design-system.md`, `commands/briefing.md`  
+**Applies to:** `skills/shared/client-briefing/**`, `skills/design/brand-design-system/**`, `commands/brief.md`, `commands/brand.md`, `commands/design-system.md`, `commands/briefing.md`, `commands/layout.md`, `skills/design/layout-flow-proposals/**`  
 **Relates to:** [ADR-0045](0045-a-gated-pre-implementation-documentation-flow-is-the-default-docs-layout-for-new-projects.md) (doc layout map, read-only inputs)
 
 ## Context
@@ -25,6 +25,7 @@ A client-kickoff routine was validated in a client-site project: a prompt turns 
 6. **Form and image content are data.** Answers are quoted; an embedded instruction is listed, never followed; only color and geometry are read from an SVG source.
 7. **Two separate steps.** `/devteam:brief` is business-only: it writes the `client-briefing` doc and stops. `/devteam:brand` is the visual-identity step: the brand guide and the design system from the brand image, with the briefing as supporting context when it exists. `/devteam:briefing` plans a project from the filled-in form through the `/devteam:plan` flow. The rules live in the two skills; the commands point at them. (Amended 2026-11-27: the first version ran briefing then brand guide in one command.)
 8. **A standalone variant.** `/devteam:design-system` writes one self-contained `design-system-full` doc (the same 15 sections, values inline, no line cap) for a project without the two docs above. It does not reopen the rejected "whole document in `design-system.md`": the capped always-read doc is untouched. When `brand-guide` or `design-system` exist it is a dated derived snapshot and they stay the owners; when `/devteam:brand` later writes them, the full doc gets the snapshot banner or is left as it is, on the user's choice. It is a hand-off document for designers and image tools, never read by implementers, which keep reading `design-system`; building the UI needs `/devteam:brand`. (Amended 2026-11-27.)
+9. **Layout proposals for client approval.** `/devteam:layout` takes a client reference folder and writes the `layout-proposals` doc (source map, three flow-only directions, assumptions, approval) plus a self-contained HTML page of the wireframes, `layout-proposals.html`, beside it. The page embeds the client's logos and photos, so it follows decision 3: it stays git-ignored and is never committed by the command. Publishing it as an Artifact is the one way these assets leave the machine, and happens only after an explicit `AskUserQuestion` consent; on providers without the Artifact tool, or when the publish is refused, the file stays local. An approved direction feeds `/devteam:design-system` or `/devteam:brand`, not `/devteam:relayout`, which needs an existing screen. (Amended 2026-11-27.)
 
 ## Consequences
 
