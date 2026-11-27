@@ -138,6 +138,11 @@ every implementable value — palette, CSS tokens, type and spacing scales; a co
 `brand-guide` owns the reasoning (logo analysis, roles, image direction, AI image layer, voice), naming tokens and linking
 here for their values. A value changes in `design-system` first; the guide never holds a copy.
 
+**`design-system-full`** — `docs/design/design-system-full.md`, no line cap. Written by `/devteam:design-system` from a brand
+image: one self-contained document (values, reasoning, AI image layer) for a project that has no `brand-guide` and
+`design-system` yet. When those docs exist it is a **derived snapshot**: it opens with a dated banner naming them as the
+owners (`design-tokens` in `gated`), and a value changes there first. It is a hand-off document for designers and image tools: never the always-read design doc, and implementers do not read it, so building the UI needs `/devteam:brand`. When split mode later writes `design-system` and this doc exists, ask with `AskUserQuestion`: add the snapshot banner to it, or leave it as it is.
+
 ---
 
 ## Task Closure Rule

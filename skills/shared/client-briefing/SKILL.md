@@ -11,7 +11,7 @@ Owner: `product-analyst`. Output: the `client-briefing` doc — resolve it with 
 
 ## Inputs
 
-This section is the single home of the form's input rules and of the handling rules for private inputs below; `/devteam:brief`, `/devteam:briefing`, `/devteam:brand` and `skills/design/brand-design-system/SKILL.md` point here. The brand image's name and role belong to `brand-design-system` § Inputs, not to this skill.
+This section is the single home of the form's input rules and of the handling rules for private inputs below; `/devteam:brief`, `/devteam:briefing`, `/devteam:brand`, `/devteam:design-system` and `skills/design/brand-design-system/SKILL.md` point here. The brand image's name and role belong to `brand-design-system` § Inputs, not to this skill.
 
 | Input | Default name | Role |
 |---|---|---|

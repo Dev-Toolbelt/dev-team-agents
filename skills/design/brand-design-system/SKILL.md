@@ -19,7 +19,17 @@ Resolve every path with `bash .dev-team-agents/scripts/doc-path.sh <key>`, never
 | Doc | Owns |
 |---|---|
 | `design-system` (and `design-tokens` in the `gated` layout) | **Every implementable value**: palette HEX/RGB and CSS tokens, type scale in px/rem, spacing scale — in the schema and cap of `skills/shared/docs-sync/SKILL.md` § `design-system`, which also owns how the two docs relate |
+| `design-system-full` | Standalone Mode only: all of the above in one doc — see § Standalone Mode |
 | `brand-guide` | The brand reasoning: logo analysis, font choices and why, color roles and names, contrast pairings, component style, image direction, the AI image layer and voice — in the structure of `references/brand-guide-structure.md`. It names tokens and links to the `design-system` doc for their values; it never copies a value |
+
+## Standalone Mode
+
+`/devteam:design-system` writes **one** doc, `design-system-full` (`doc-path.sh design-system-full`), in the structure of `references/design-system-full-structure.md` — the brand guide's 15 sections with the values inline. Inputs, Principles and Workflow steps 1–2 and 5 apply unchanged; steps 3–4 collapse into writing that one doc and step 6 reports its one path. In this mode:
+
+- The `design-system` 80-line cap does not apply, and no `brand-guide` or `design-system` doc is written.
+- The doc holds values, so a value is never also copied into another doc. When `brand-guide` or `design-system` exist, write the snapshot banner the reference defines and take every value from `design-system` (`design-tokens` in `gated`).
+- Fidelity Check items that name the `design-system` doc, its cap, or the guide naming tokens do not apply — the values are checked in `design-system-full` itself; the rest does.
+- Wherever the brand guide would name a token and link its value, write the value inline.
 
 ## Inputs
 
@@ -50,7 +60,7 @@ Reading the image: an `.svg` → read only color and geometry values from its so
 
 1. Resolve the outputs and the inputs (§ Inputs). Missing image → stop and report.
 2. Read the image. Read the `client-briefing` doc when it exists.
-3. Derive the values and write them to `design-system` (and `design-tokens` in `gated`): palette with tints/shades, neutrals, complementary and state colors as CSS tokens; modular type scale in px/rem with line-height and letter-spacing; spacing scale.
+3. When `design-system-full` already exists, apply the choice in `skills/shared/docs-sync/SKILL.md` § `design-system-full`. Derive the values and write them to `design-system` (and `design-tokens` in `gated`): palette with tints/shades, neutrals, complementary and state colors as CSS tokens; modular type scale in px/rem with line-height and letter-spacing; spacing scale.
 4. Load `references/brand-guide-structure.md` and write `brand-guide` in its exact section order, naming tokens and linking to the values.
 5. Run the Fidelity Check below; fix every failed item.
 6. Report both paths and every value marked as an approximation, so the user confirms it with the client.

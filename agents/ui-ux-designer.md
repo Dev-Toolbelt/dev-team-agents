@@ -49,7 +49,7 @@ Always load all four before acting:
 - `skills/design/web-design-guidelines/SKILL.md` — **required**; audits UI against Vercel's Web Interface Guidelines (design, accessibility, UX). Installed automatically by `scripts/install.sh`. Load at the start of every session.
 - `skills/design/third-party-design-skills/SKILL.md` — its routing table adds the vendored third-party design skill the task calls for
 
-When handed a brand reference image (logo, moodboard), also load `skills/design/brand-design-system/SKILL.md` — it writes the `brand-guide` doc and the `design-system` values from the image.
+When handed a brand reference image (logo, moodboard), also load `skills/design/brand-design-system/SKILL.md` — it writes the `brand-guide` doc and the `design-system` values from the image (`/devteam:design-system` uses its § Standalone Mode for one self-contained doc).
 
 ### Mobile Platform Design Skills
 
