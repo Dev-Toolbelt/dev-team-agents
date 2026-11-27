@@ -51,6 +51,8 @@ Always load all four before acting:
 
 When handed a brand reference image (logo, moodboard), also load `skills/design/brand-design-system/SKILL.md` — it writes the `brand-guide` doc and the `design-system` values from the image (`/devteam:design-system` uses its § Standalone Mode for one self-contained doc).
 
+When handed a client reference folder to propose layouts from, load `skills/design/layout-flow-proposals/SKILL.md` — three flow-only directions for client approval (`/devteam:layout`).
+
 ### Mobile Platform Design Skills
 
 When the project targets mobile, detect the platform and load the corresponding skill **before** creating any UI specification or reviewing any mobile interface. These skills are never loaded by default.
