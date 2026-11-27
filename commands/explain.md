@@ -7,7 +7,7 @@ Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for
 
 **This command does not load `current-context` and does not spawn agents.** Both follow from the same fact: the terms come from the conversation you are already in. A subagent receives only the prompt text, so it would lose exactly what makes the explanation worth asking for — the message where the term appeared, the file it was about, the decision it belonged to. Answer in the main context.
 
-**Direct, not exhaustive.** Someone hit a word they did not know and wants to get back to what they were doing. Every limit below is a ceiling, not a target, and a term that fits in less should take less.
+**Concept first, project second.** Someone hit a word they did not know and wants to understand it, not only to get past it. Teach the idea as it exists in the field: what the term means, where it comes from, how it works and what it gets confused with. The session and the project only decide which meaning to teach and add a short note at the end. Thorough is the goal; padding is not — every line must teach something the previous one did not.
 
 ---
 
@@ -21,15 +21,15 @@ Load `skills/shared/interaction-patterns/SKILL.md` and use `AskUserQuestion` for
 
 ---
 
-## Step 2 — Ground each term before writing anything
+## Step 2 — Pick the meaning
 
-For each term, resolve top-down and stop at the first match:
+For each term, decide which meaning to teach, top-down, and stop at the first match:
 
-1. **It appeared in this session** — find where, and let that reading win. If the user saw "middleware" in a review of their own HTTP pipeline, explain that middleware, not the generic idea.
-2. **It appears in the project** — `grep` for it. Use what you find as the example and cite `file:line`.
-3. **Neither** — explain it generally, and say so in one clause instead of inventing a link to the project.
+1. **It appeared in this session** — find where. The sense the session used is the one to teach first, but taught as a concept: "what is middleware", not "what is the middleware in this repo".
+2. **Several meanings exist** — a `tenant` in multi-tenancy against a domain entity named Tenant: give the session's reading first, then the other, each as its own concept.
+3. **No session context** — teach the general meaning.
 
-Never explain a term in a sense the session did not use. When a term carries more than one meaning in context — a `tenant` in multi-tenancy against a domain entity named Tenant — give both readings, the one the session used first.
+Optionally `grep` the project for the term; a hit feeds only the **In this project** note below. Never invent a link to the project, and never explain a term in a sense nobody used.
 
 ---
 
@@ -37,20 +37,24 @@ Never explain a term in a sense the session did not use. When a term carries mor
 
 ### `<term>` — `<expansion>`
 
-**Expand acronyms and initialisms on the heading line**, before anything else: `SPA — Single-Page Application`. A term borrowed from another language or another field gets its literal meaning the same way. When it is neither, drop the dash.
+**Heading line:** expand every acronym or initialism, and give the translation of the words in the user's language when it differs: `FAB — Floating Action Button (botão de ação flutuante)`. A term borrowed from another language or field gets its literal meaning the same way. When it is neither, drop the dash.
 
-**What it is** — two sentences; three only when the term genuinely has two halves. Never define jargon with more jargon: if the definition needs a second term the user did not ask about, explain that one in a subordinate clause or choose a different word.
+Then these parts, in order. Skip a part only when it truly has nothing to say; never pad one.
 
-**The problem it solves** — one or two sentences: what someone would be doing instead if it did not exist, and why that hurts. Never the definition restated in different words. If you cannot name what breaks without it, you have not found the problem yet.
+| Part | What it carries |
+|---|---|
+| **Where it comes from** | One or two sentences: who coined it or which field it belongs to, and the era or the problem that produced it. Say "origin unclear" instead of guessing |
+| **What it is** | Two to four sentences in plain language. Never define jargon with more jargon: a second term the user did not ask about gets a subordinate clause or a different word |
+| **The problem it solves** | What people did before it existed and why that hurt. Never the definition restated |
+| **How it works** | The mechanism, in three to six sentences or a short list: the parts, what triggers what, the rules that make it behave the way it does |
+| **Example** | The shortest thing that shows the point (see below) |
+| **Often confused with** | One to three neighbouring concepts and the line that separates them. This is where most misunderstandings are cleared up |
+| **When to use it, when not to** | One line each, with the deciding factor |
+| **In this project** | Only when a hit from Step 2 exists: one line with `file:line`. Drop the heading otherwise — an empty section reads as a failed lookup |
 
-**Example** — the shortest thing that shows the point.
+**Example.** A code concept: a fenced block in the language and framework detected from the repo (never defaulting to JavaScript), with every line the point does not need cut. Not a code concept: a concrete scenario with real names or numbers.
 
-- A code concept: a fenced block in the project's actual language and framework, detected from the repo — never defaulting to JavaScript. Cut every line the point does not need, imports and error handling included.
-- Not a code concept: one concrete scenario with real names or numbers, not an abstract restatement.
-
-**In this project** — only when Step 2 found it. One line with `file:line`. Drop the heading entirely when there is nothing to say; an empty section reads as a failed lookup.
-
-**Never write** an opening line about the question, a restatement of what was asked, a closing summary, an "in short" paragraph, or a caveat that the topic goes deeper than this. The quiz offer is the ending.
+**Never write** an opening line about the question, a restatement of what was asked, a closing summary, an "in short" paragraph, or a caveat that the topic goes deeper. The quiz offer is the ending.
 
 ---
 
@@ -73,8 +77,8 @@ A diagram earns its place when the term **is** a shape and prose would spend sen
 - A fenced code block tagged `mermaid`. It renders as a diagram where mermaid is supported and stays readable as text where it is not.
 - **Three to seven nodes.** A diagram that has to be studied has failed. If the concept needs more than seven, you are drawing the system instead of the term.
 - Label the edges with what actually moves — `request`, `token`, `retry after 3s` — never `next` or a bare line.
-- Use the project's real names when Step 2 found them: `AuthMiddleware` beats `Middleware 1`.
-- One diagram per term at most, placed after **The problem it solves** so the shape frames the example. Never a second diagram to explain the first.
+- Use generic names, or the project's real ones when Step 2 found a hit: `AuthMiddleware` beats `Middleware 1`.
+- One diagram per term at most, placed after **How it works** so the shape frames the example. Never a second diagram to explain the first.
 
 ````markdown
 ```mermaid
