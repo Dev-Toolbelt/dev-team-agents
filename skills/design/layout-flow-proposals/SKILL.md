@@ -7,7 +7,7 @@ description: Three flow-only layout proposals from a briefing and references, fo
 
 Turns a client's reference folder (briefing, visual references, logos, photos) into **three distinct layout directions**, each shown only as a **screen flow** for the client to approve. It is the step before any build: no site code, no implemented animation.
 
-Owner: `ui-ux-designer`, in Design Mode. Output: the `layout-proposals` doc (`bash .dev-team-agents/scripts/doc-path.sh layout-proposals`, never a literal path) plus one self-contained HTML page with the three flows. The page and the doc structure live in `references/layout-proposals-structure.md` — load it before writing.
+Owner: `ui-ux-designer`, in Design Mode. Output: the `layout-proposals` doc (`bash .dev-team-agents/scripts/doc-path.sh layout-proposals`, never a literal path) plus one self-contained HTML page with the three directions, each with a desktop flow and a full mobile flow. A new run archives the previous pair as `layout-proposals-v<N>`; the command owns that rule. The page and the doc structure live in `references/layout-proposals-structure.md` — load it before writing.
 
 ## Inputs
 
@@ -20,7 +20,7 @@ Read every file and give each one a role. Never treat all attachments as one kin
 | Content and requirements | `.md`, `.pdf` briefing, page lists, copy, flows | What the site must say and let the user do |
 | Visual inspiration | Screenshots of other sites, moodboards, type or color samples | How the experience is presented; principles only |
 | Official assets | Logos, product photos, the client's illustrations | Used as they are, never redrawn |
-| Supporting context | The `client-briefing` doc, the `brand-guide` and `design-system` docs, when they exist | Facts, palette, type; never overrides the folder's explicit requirements |
+| Supporting context | The project docs the command resolved: `client-briefing`, `brand-guide`, `design-system`, `design-system-full`, `design-tokens`, `prd`, `glossary`, when they exist | Facts, palette, type; never overrides the folder's explicit requirements |
 
 A screenshot of another site does not make that site's text, brand or features part of this project. Never crop a third party's logo, product or illustration out of a reference and present it as the client's.
 
@@ -57,7 +57,7 @@ Before drawing, name the site type the briefing asks for (landing page, institut
 |---|---|
 | Flow | The ordered screens (desktop) with how the user moves between them; the screen-level wireframe is low fidelity — boxes, labels and real copy, no styled UI |
 | Per screen | Its purpose, what it communicates, the main action, which official asset it uses, and the requirement it serves |
-| Mobile | The mobile version of each screen, or only what differs, adapted rather than shrunk |
+| Mobile | A **full mobile flow per direction**: every screen, in phone width, with its own navigation (menu, bottom bar, gestures), screen order, main action within thumb reach and touch-target sizes. Adapted to the phone, never the desktop flow shrunk. Same real content as the desktop flow |
 | Brand | The real logo placed where it appears, palette and type direction stated; an approximation of a font is marked as one with a free alternative |
 | Motion intent | One or two sentences per screen at most, in words: what moves and why. Never implemented, never claimed as observed from a static image |
 | Assumptions | What the client must confirm |
@@ -88,7 +88,8 @@ Optional, and only when it adds something concrete: look at the references the b
 - No code of the site, components, CSS design tokens or animation. The one HTML file is the presentation of the flows, not the product.
 - No real form, purchase or booking is simulated as completed.
 - Accessibility belongs to the flow: reading order, contrast direction and touch-target sizes are noted where a direction risks them; `skills/design/mobile-design/SKILL.md` is loaded for the mobile screens.
-- Embedded logos and photos are the client's; they leave the machine only through the publish step the command asks consent for.
+- Embedded logos and photos are the client's; they leave the machine only through the command's Artifact publish, which happens only when the user passes `--publish`.
+- Size: embed each logo and photo **once**: define it as a CSS custom property holding its data URI and use it through `background-image` in every direction and view, so the page grows with the number of assets, not of directions (a data-URI `<img>` cannot be reused); give each logo an `aria-label` or a visible label. Keep the wireframes low fidelity.
 
 ## Approval
 
@@ -101,5 +102,6 @@ The client picks one direction, a mix of named parts, or asks for changes. The c
 - [ ] Every screen cites the requirement it serves; nothing was invented
 - [ ] Real logos and assets are used; third-party material is absent
 - [ ] No site code and no implemented motion; motion exists only as intent
-- [ ] Mobile and desktop are both covered
+- [ ] Each direction has a full desktop flow and a full mobile flow with its own navigation
+- [ ] Each asset is embedded once
 - [ ] Assumptions and unreachable sources are listed

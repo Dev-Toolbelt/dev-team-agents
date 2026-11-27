@@ -143,7 +143,7 @@ image: one self-contained document (values, reasoning, AI image layer) for a pro
 `design-system` yet. When those docs exist it is a **derived snapshot**: it opens with a dated banner naming them as the
 owners (`design-tokens` in `gated`), and a value changes there first. It is a hand-off document for designers and image tools: never the always-read design doc, and implementers do not read it, so building the UI needs `/devteam:brand`. When split mode later writes `design-system` and this doc exists, ask with `AskUserQuestion`: add the snapshot banner to it, or leave it as it is.
 
-**`layout-proposals`** — `docs/design/layout-proposals.md`, written by `/devteam:layout`: the record of three flow-only layout proposals (source map, directions, assumptions, approval). The wireframe page sits beside it as `layout-proposals.html`; the doc never holds wireframe detail.
+**`layout-proposals`** — `docs/design/layout-proposals.md`, written by `/devteam:layout`: the record of three flow-only layout proposals (source map, directions, assumptions, approval). The wireframe page sits beside it as `layout-proposals.html`; each new run archives the previous pair as `layout-proposals-v<N>`. The doc never holds wireframe detail.
 
 ---
 
