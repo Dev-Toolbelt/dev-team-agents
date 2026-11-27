@@ -11,12 +11,11 @@ Owner: `product-analyst`. Output: the `client-briefing` doc — resolve it with 
 
 ## Inputs
 
-This section is the single home of the input rules; `/devteam:brief` and `skills/design/brand-design-system/SKILL.md` point here.
+This section is the single home of the form's input rules and of the handling rules for private inputs below; `/devteam:brief`, `/devteam:briefing`, `/devteam:brand` and `skills/design/brand-design-system/SKILL.md` point here. The brand image's name and role belong to `brand-design-system` § Inputs, not to this skill.
 
 | Input | Default name | Role |
 |---|---|---|
 | Filled-in form | `client-briefing-form.pdf`; also accepted: `briefing-cliente.pdf` (pt-BR locale example) or a path the user gives | Primary and only source of facts — read every page |
-| Brand reference image | `brand-reference.{png,jpg,jpeg,svg,webp}`; also accepted: `logo-referencia.*` (pt-BR locale example) or a path the user gives | Used by `brand-design-system`, not here |
 | Extra context the caller passes (domain availability, meeting notes) | — | Supporting; reported as informational, never promoted to a client answer |
 
 | Rule | Detail |
