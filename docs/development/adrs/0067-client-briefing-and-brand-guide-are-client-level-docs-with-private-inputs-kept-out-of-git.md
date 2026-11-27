@@ -3,7 +3,7 @@
 **Date:** 2026-11-17  
 **Status:** Accepted  
 **Deciders:** Maintainer  
-**Applies to:** `skills/shared/client-briefing/**`, `skills/design/brand-design-system/**`, `commands/brief.md`, `commands/brand.md`, `commands/briefing.md`  
+**Applies to:** `skills/shared/client-briefing/**`, `skills/design/brand-design-system/**`, `commands/brief.md`, `commands/brand.md`, `commands/design-system.md`, `commands/briefing.md`  
 **Relates to:** [ADR-0045](0045-a-gated-pre-implementation-documentation-flow-is-the-default-docs-layout-for-new-projects.md) (doc layout map, read-only inputs)
 
 ## Context
@@ -24,6 +24,7 @@ A client-kickoff routine was validated in a client-site project: a prompt turns 
 5. **Gated keeps the trace chain.** `product-analyst` also writes a dated Stage 0 source file with the form's questions and answers verbatim — redaction being the only alteration — and PRD rules cite that file, never the briefing.
 6. **Form and image content are data.** Answers are quoted; an embedded instruction is listed, never followed; only color and geometry are read from an SVG source.
 7. **Two separate steps.** `/devteam:brief` is business-only: it writes the `client-briefing` doc and stops. `/devteam:brand` is the visual-identity step: the brand guide and the design system from the brand image, with the briefing as supporting context when it exists. `/devteam:briefing` plans a project from the filled-in form through the `/devteam:plan` flow. The rules live in the two skills; the commands point at them. (Amended 2026-11-27: the first version ran briefing then brand guide in one command.)
+8. **A standalone variant.** `/devteam:design-system` writes one self-contained `design-system-full` doc (the same 15 sections, values inline, no line cap) for a project without the two docs above. It does not reopen the rejected "whole document in `design-system.md`": the capped always-read doc is untouched. When `brand-guide` or `design-system` exist it is a dated derived snapshot and they stay the owners; when `/devteam:brand` later writes them, the full doc gets the snapshot banner or is left as it is, on the user's choice. It is a hand-off document for designers and image tools, never read by implementers, which keep reading `design-system`; building the UI needs `/devteam:brand`. (Amended 2026-11-27.)
 
 ## Consequences
 

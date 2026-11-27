@@ -237,6 +237,7 @@ Os comandos de implementação também recebem uma tarefa de sprint (`/devteam:b
 | `/devteam:brief` | Kickoff de cliente, só negócio — briefing estratégico a partir do formulário preenchido pelo cliente (product-analyst) |
 | `/devteam:briefing` | Planeja um projeto usando o formulário de briefing preenchido pelo cliente como referência máxima |
 | `/devteam:brand` | Identidade visual — guia de marca e design system a partir da logo do cliente (ui-ux-designer) |
+| `/devteam:design-system` | Um documento de design system autocontido a partir da logo do cliente e, opcionalmente, de um briefing (ui-ux-designer) |
 | `/devteam:design` | Design UI/UX — ui-ux-designer |
 | `/devteam:relayout` | Refazer o layout de uma tela existente para corresponder a referências visuais — ui-ux-designer + frontend-developer, gate obrigatório de referência/tela alvo, worktree isolada, review automática pós-execução |
 | `/devteam:seo` | Quality gate de SEO — seo-specialist (técnico, on-page, Core Web Vitals, dados estruturados, busca por IA (AEO/GEO)) |
