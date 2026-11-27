@@ -100,3 +100,25 @@ Content is synthesized (not duplicated) into the target doc. Use `<!-- TODO: <ag
 **Supported trackers:** GitHub Projects, GitLab Issues, Jira, Linear, ClickUp, Trello, Asana, Monday.com, Notion, Azure DevOps Boards, Shortcut.
 
 Configure tokens in the active CLI's MCP settings — Claude Code: `~/.claude/settings.json` or `/mcp`; opencode: the `mcp` block of `opencode.json`; Codex CLI: its own MCP config. Never store credentials in project files. Agents read tasks but only write with explicit user consent.
+
+---
+
+## GitHub Repository Provisioning
+
+Runs when the user picks **GitHub** (Issues or Projects) as the tracker or backlog location. The user is never told to create the repository themselves: setup does it, after consent. Skip every step already true and say so. Steps 1–4 change only local state (step 2 behind its Command Run Plan); steps 5–8 touch GitHub and each waits for its own `AskUserQuestion` answer — one answer never covers another step.
+
+**Values.** Validate before use, re-asking on a mismatch and never normalizing silently: `owner` against `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$`, `name` against `^[A-Za-z0-9._-]{1,100}$`. Quote every value in a shell command, end options with `--` where the tool supports it, and take a remote's slug from `gh repo view --json nameWithOwner`, never from parsing the URL.
+
+| Step | Check | Action |
+|---|---|---|
+| 1. Git | `git rev-parse --is-inside-work-tree` | Not a repository → `git init` (the branch name follows `init.defaultBranch`; never rename it). Then re-run `skills/shared/client-briefing/SKILL.md` § Inputs "Kept out of git" on every private input present (the briefing form, the brand image), because that check was skipped while the folder was not a repository |
+| 2. CLI | `gh --version` | Missing → `gh` is outside the helper-tool set, so list the install command for the OS (`brew install gh`, `winget install GitHub.cli`, or the distro package) in a Command Run Plan and run it after approval; an install that needs `sudo` pauses for the user. Still missing → report it and stop this section, setup continues |
+| 3. Auth | `gh auth status` | Not signed in → interactive (browser sign-in): pause per `skills/shared/interaction-patterns/SKILL.md` § Command Run Plan, let the user run `gh auth login`, and continue once they confirm. Never read, ask for or store a token: no `gh auth token`, no `gh auth status --show-token`, no echo of `GH_TOKEN` / `GITHUB_TOKEN` |
+| 4. Remote | `git remote get-url origin` | Present → `gh repo view --json nameWithOwner,viewerPermission,visibility -- "<slug>"`. A GitHub remote that resolves goes to step 5b; anything else is reported and left untouched. Absent → step 5 |
+| 5. Create | `gh repo create` | Ask once with `AskUserQuestion`: **owner** (the signed-in account or one of its organizations, from `gh api user/orgs`), **name** (default: the project folder name, validated), **visibility** (**private** first and recommended, then public). State the exact command, then run it on the user's yes: `gh repo create "<owner>/<name>" --private\|--public --source=. --remote=origin`. Never `--push` an empty history |
+| 5b. Reuse | the step 4 result | Ask with `AskUserQuestion` whether this existing repository is the project's tracker, showing its owner and the user's `viewerPermission`. No → leave everything untouched and record no tracker. Yes → continue; step 6 needs `viewerPermission` to be `ADMIN` |
+| 6. Issues | `gh repo view --json hasIssuesEnabled` | Disabled → `gh repo edit --enable-issues -- "<slug>"` on a repository just created in step 5, or an existing one after the step 5b yes with `ADMIN`; otherwise report it and change nothing |
+| 7. Pre-push | `devteam tools` (gitleaks) | Before any push, scan the whole history for secrets with gitleaks (false positives are suppressed as ADR-0059 says: `.gitleaksignore` or an inline comment, never a bypass) and confirm no private input is tracked (`git ls-files --error-unmatch -- "<path>"`). A hit blocks step 8 and is reported |
+| 8. First push | `git log -1` | A commit exists and step 7 passed → ask with `AskUserQuestion` naming the branch, the remote slug, the visibility and the commit count (for a public repository: "this publishes N commits to a PUBLIC repository"), with **Don't push** as an option; on yes `git push -u origin -- "<branch>"`. No commit yet → say the first `/devteam:commit` comes before the push |
+
+Record `ISSUE_TRACKER: github-projects` or the matching backlog value as usual, and the repository slug in the report. A failed `gh` call is reported with its message and the manual command; it never fails the setup.
